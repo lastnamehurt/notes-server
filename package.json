@@ -9,7 +9,9 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test test/reminder-parse.test.ts test/log-action.test.ts test/setup.test.ts test/snapshot.test.ts",
     "setup": "node scripts/setup.mjs",
-    "test:mcp": "node test/e2e/mcp-acceptance.mjs"
+    "test:mcp": "node test/e2e/mcp-acceptance.mjs",
+    "test:e2e": "playwright test"
+
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "^1.0.0",
@@ -19,6 +21,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261006.1",
+    "@playwright/test": "^1.64.0",
     "tsx": "^4.23.15",
     "typescript": "^5.9.0",
     "wrangler": "^4.0.0"

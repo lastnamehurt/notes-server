@@ -1,0 +1,48 @@
+name: Playwright acceptance
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Deployed test Worker URL (leave blank for local smoke tests)
+        required: false
+        type: string
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NOTES_BASE_URL: ${{ inputs.base_url || 'http://127.0.0.1:8787' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium webkit
+      - name: Start local Worker
+        if: ${{ !inputs.base_url }}
+        run: |
+          printf 'PASSWORD=test-suite-secret-123456\n' > .dev.vars
+          npm run dev -- --ip 127.0.0.1 > /tmp/notes-worker.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8787/health; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/notes-worker.log
+          exit 1
+      - name: Run browser acceptance
+        run: npm run test:e2e
+      - name: Upload failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
