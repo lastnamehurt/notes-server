@@ -10,7 +10,7 @@ You'll need:
 ## 1. Open the app and sign in
 
 1. Open your app's address in Safari (iPhone) or Chrome (Android).
-2. Tap **Sign in with GitHub**, open the GitHub page it shows, enter the code, and approve. Use the GitHub account that owns your notes. Or open **Use your password instead** and enter your password.
+2. Before your notes are set up, enter the password you chose during setup. After that, the screen asks you to **Sign in with GitHub**: open the GitHub page it shows, enter the code, and approve. Use the GitHub account that owns your notes.
 
 After 10 wrong passwords in 15 minutes the app locks for a while. Wait 15 minutes and try again.
 
