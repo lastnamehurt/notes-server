@@ -975,17 +975,23 @@ function showDone(mcpUrl) {
 views.settings = views.setup;
 
 /* ---------- Lock ---------- */
-function showLock(message) {
+async function showLock(message) {
   closeSheet();
   $("#tabs").hidden = true; $("#composer").hidden = true; $("#lockbtn").hidden = true;
-  main.innerHTML = h`<div class="lock" id="lockview"><p>Your notes, logs and reminders. Sign in with the GitHub account that owns your notes.</p>
-    <button class="btn" type="button" id="ghbtn">Sign in with GitHub</button>
-    <div id="ghcode"></div>
-    <details class="lockalt"><summary>Use your password instead</summary>
-      <form id="lockform"><label for="key">Password</label><input id="key" type="password" autocomplete="current-password" required>
-      <button class="btn" type="submit">Unlock</button></form>
-    </details>${raw(message ? h`<p class="err" role="alert">${message}</p>` : "")}</div>`;
-  $("#ghbtn").onclick = startGithubLogin;
+  const info = await fetch("/app/login/info").then(r => r.json()).catch(() => ({ method: "password" }));
+  const err = raw(message ? h`<p class="err" role="alert">${message}</p>` : "");
+  if (info.method === "github") {
+    main.innerHTML = h`<div class="lock" id="lockview"><p>Sign in with the GitHub account that owns your notes.</p>
+      <button class="btn" type="button" id="ghbtn">Sign in with GitHub</button>
+      <div id="ghcode"></div>${err}</div>`;
+    $("#ghbtn").onclick = startGithubLogin;
+    return;
+  }
+  main.innerHTML = h`<form class="lock" id="lockform"><p>Enter the password you chose when you set up the app.</p>
+    <label for="key">Password</label><input id="key" type="password" autocomplete="current-password" required>
+    <button class="btn" type="submit">Unlock</button>${err}
+    <p class="hint">Forgot it? In the Cloudflare dashboard, open your Worker → Settings → Variables and Secrets, and set a new MCP_BEARER_TOKEN (or PASSWORD).</p></form>`;
+  $("#key").focus();
   $("#lockform").onsubmit = async e => {
     e.preventDefault();
     const res = await fetch("/app/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: $("#key").value }) });

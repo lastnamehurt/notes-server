@@ -49,6 +49,11 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
   // Mutating requests must come from this origin (SameSite=Strict already blocks cross-site cookies).
   if (request.method !== "GET" && request.headers.get("Origin") !== url.origin) return fail("Bad origin", 403);
 
+  // Which single sign-in the lock screen shows: GitHub once notes are set up, the password before that.
+  if (path === "/app/login/info" && request.method === "GET") {
+    const configured = await effectiveEnv(env);
+    return json({ method: configured.NOTES_REPO ? "github" : "password" });
+  }
   if (path === "/app/login" && request.method === "POST") {
     const { key } = await request.json<{ key?: string }>().catch(() => ({ key: "" }));
     const problem = await checkPassword(env, key ?? "");

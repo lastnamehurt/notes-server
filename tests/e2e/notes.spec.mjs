@@ -50,10 +50,13 @@ test('wrong-origin mutation is rejected', async ({ request, baseURL }) => {
   expect(response.status()).toBe(403);
 });
 
-test('lock screen offers sign-in with GitHub and keeps the password as a fallback', async ({ page }) => {
+test('lock screen shows one sign-in method: the password until notes are set up', async ({ page }) => {
+  // Unauthenticated smoke runs have no notes repository, so the password is the only method offered.
+  test.skip(Boolean(password), 'Notes are configured on the authenticated test Worker');
   await page.goto('/app');
-  await expect(page.getByRole('button', { name: 'Sign in with GitHub' })).toBeVisible();
-  await expect(page.getByText('Use your password instead')).toBeVisible();
+  await expect(page.getByText('Enter the password you chose when you set up the app.')).toBeVisible();
+  await expect(page.getByLabel('Password')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign in with GitHub' })).toHaveCount(0);
 });
 
 test('GitHub sign-in is refused until notes are set up (unauthenticated smoke)', async ({ request, baseURL }) => {
