@@ -7,7 +7,7 @@ Status means what we have actually checked. "Reported" means a third-party guide
 | Assistant | Status | Notes |
 |---|---|---|
 | Claude (claude.ai) | Confirmed | Connected through **Settings → Connectors**. Connectors belong to the Claude account you're signed into. |
-| ChatGPT | Reported, not tested | Needs Developer Mode, which some guides place under Settings → Connectors → Advanced. Plan requirements differ between sources. |
+| ChatGPT | Documented by OpenAI, not tested | Add a custom MCP server under Plugins. OpenAI recommends OAuth. Plan requirements not stated. |
 | Gemini (gemini.google.com) | Reported, not tested; likely unavailable | One guide describes Settings → Connected Apps → Add a custom app. Other reports say custom MCP is limited to Google AI Ultra on personal accounts, or not offered in the consumer app. |
 | Microsoft Copilot | Not evaluated | |
 | Perplexity | Not evaluated | |
@@ -20,15 +20,18 @@ Status means what we have actually checked. "Reported" means a third-party guide
 
 The Claude connector still asks for the password, even when the phone app uses GitHub sign-in.
 
-## Connecting ChatGPT (not yet tested)
+## Connecting ChatGPT (steps from OpenAI's docs, not yet tested)
 
-Steps as reported by third-party guides. Menus change often, so check OpenAI's current help for connecting custom MCP servers.
+Source: [OpenAI's MCP developer docs](https://developers.openai.com/api/docs/mcp). Older guides describe Developer Mode and a Connectors menu; OpenAI's current page doesn't mention those, so don't follow them.
 
-1. Turn on Developer Mode (Settings → Connectors → Advanced, in some versions).
-2. Under Connectors, choose **Create**, enter a name and a description, and paste your app's `/mcp` address.
-3. Start a new chat and select the connector from the tools menu.
+1. Go to **ChatGPT Plugins**, select the **+** button, then **Add custom MCP server**.
+2. Enter the server URL and authentication details. Your server uses OAuth, which OpenAI recommends.
+3. Review the risk warning, select **I understand and want to continue**, then **Create as a plugin**.
+4. Install the plugin and test it by running a prompt in chat.
 
 Before relying on this, check it end to end: sign-in completes, your notes are listed by a tool call, and a write such as "log: oatmeal" appears in the app.
+
+Open questions: OpenAI's example URL ends in `/sse/`, but this server serves MCP at `/mcp`. Check whether ChatGPT connects to `/mcp`. Plan requirements are not stated on the page.
 
 ## Connecting Gemini (not yet tested)
 
@@ -36,9 +39,10 @@ Only one third-party guide describes a consumer-app flow (Settings → Connected
 
 ## Sources
 
-Third-party guides, not official documentation. Verify against each vendor's current help page before relying on them.
+The OpenAI link is official developer documentation. The others are third-party guides; verify them against each vendor's current help page before relying on them.
 
-- [Auth0: add a remote MCP server to ChatGPT](https://auth0.com/blog/add-remote-mcp-server-chatgpt/)
-- [Zuplo: connect ChatGPT](https://zuplo.com/docs/mcp-gateway/connect-clients/chatgpt)
+- [OpenAI: MCP developer docs](https://developers.openai.com/api/docs/mcp) (ChatGPT steps)
+- [Auth0: add a remote MCP server to ChatGPT](https://auth0.com/blog/add-remote-mcp-server-chatgpt/) (older, third party)
+- [Zuplo: connect ChatGPT](https://zuplo.com/docs/mcp-gateway/connect-clients/chatgpt) (older, third party)
 - [Skills Playground: Gemini custom apps](https://skillsplayground.com/integrations/gemini/)
 - [Google Cloud: custom MCP servers for Gemini Enterprise](https://docs.cloud.google.com/gemini/enterprise/docs/connectors/custom-mcp-server/set-up-custom-mcp-server) (enterprise product, not the consumer app)
