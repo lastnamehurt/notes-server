@@ -93,7 +93,14 @@ Never deploy without both secrets. Protect the bearer token like a password. For
 - GitHub API updates are atomic and use blob SHAs for optimistic concurrency.
 - `sync_notes` rescans notes to rebuild reminders; changes are committed directly to GitHub, and local clients still run `note sync`.
 - Search, the reminder rescan, log views and goals read the whole repository as one gzipped archive (`src/snapshot.ts`): one GitHub call plus a redirect, whatever the number of notes. That keeps every request well under Cloudflare's limit of 50 outside calls per request on the free plan. Repositories over 50 MB are refused.
-- No deployment was performed by this PR. Deployment requires your Cloudflare account authentication and GitHub token.
+
+## Deploying
+
+- A push to `main` deploys automatically. The `Checks` workflow runs typecheck, unit tests, a dry-run deploy and the MCP acceptance test; if they pass, its `deploy` job runs `wrangler deploy` for the `personal-notes-mcp` Worker. Pull requests never deploy.
+- The job needs two repository secrets: `CLOUDFLARE_API_TOKEN` (a token with Workers Scripts: Edit and Workers KV Storage: Edit on the account) and `CLOUDFLARE_ACCOUNT_ID`. If the token expires or is revoked, the deploy job fails and the last deployed version keeps serving. Create a new token in Cloudflare and replace the secret.
+- Deploys run one at a time (the `deploy-production` concurrency group), so two merges never deploy together.
+- `keep_vars` keeps dashboard variables and secrets through a deploy, and the migration in `wrangler.jsonc` applies on the next deploy.
+- Don't connect Cloudflare Workers Builds to this Worker. A second deploy source can overwrite it with older code. Check the Worker's **Settings → Builds** in the dashboard.
 
 ## Tests
 
