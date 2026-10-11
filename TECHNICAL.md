@@ -20,7 +20,7 @@ Nothing owner-specific is in this repository, so one copy of the code serves any
 |---|---|---|
 | `NOTES_REPO` | setup page, secret or dashboard variable | `owner/repo` of the private notes repository (must have a `main` branch) |
 | `GITHUB_TOKEN` | setup page or secret | fine-grained token, that repository only, Contents read/write |
-| `MCP_BEARER_TOKEN` | secret | the owner's password for the connector sign-in page and `/app` |
+| `MCP_BEARER_TOKEN` | secret | the owner's password for the connector sign-in page, and the `/app` password fallback |
 | `NOTES_TIMEZONE` | setup page, secret or variable | IANA zone; default `America/Los_Angeles` |
 | `NOTES_BRANCH` | variable | default `main` |
 | `PUBLIC_URL` | variable | optional; defaults to the host requests arrive on. Set it if the Worker has more than one hostname |
@@ -70,7 +70,7 @@ Then call `sync_notes` once to schedule reminders already in your notes.
 
 ## Web app
 
-Open `https://<worker>/app` on your phone and unlock it with your `MCP_BEARER_TOKEN` (the same key the connector's sign-in page asks for). In Safari, Share then Add to Home Screen makes it an app icon.
+Open `https://<worker>/app` on your phone and sign in with GitHub, using the account that owns your notes. The password (`MCP_BEARER_TOKEN`, the same key the connector's sign-in page asks for) still works under "Use your password instead". In Safari, Share then Add to Home Screen makes it an app icon.
 
 - **Today**: a time rail of today's log with a line for the current time. Reminders due today sit on the same rail; ones that already went off stay as "Due" until you tap Done. Tap any log entry to change its text or time, or delete it. The box at the bottom logs with tag chips, and "Now" can be changed to log something from earlier.
 - **Notes**: notes grouped by folder, search, and new note. A note opens in a read view: tap it (or Edit) to change the title and text, tap a checkbox or its text to tick it, and use Add reminder for timed items. Leaving with unsaved changes asks first.

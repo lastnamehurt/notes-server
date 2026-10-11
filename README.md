@@ -60,6 +60,8 @@ Open your app's address on your phone (the page you bookmarked).
 - **iPhone:** tap **Share**, then **Add to Home Screen**.
 - **Android:** tap **⋮**, then **Add to Home screen**.
 
+For a quick tour of the app on your phone, see [QUICKSTART-MOBILE.md](QUICKSTART-MOBILE.md).
+
 ## Good to know
 
 - **Who can see my notes?** Only you. They live in your private GitHub repository, and the app runs in your own Cloudflare account. The person who shared this with you has no access to either.
