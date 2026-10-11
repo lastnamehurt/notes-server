@@ -3,39 +3,60 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#E6EBF3" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#141A31" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F6F5F2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#191A23" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Day book">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="/app/manifest.webmanifest">
 <title>Day book</title>
+<script>
+// Restore appearance before the first paint. Browsers may block local storage.
+function applyTheme(theme) {
+  if (theme !== "light" && theme !== "dark") theme = "system";
+  if (theme === "system") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = theme;
+  document.querySelectorAll('meta[name="theme-color"]').forEach(meta => {
+    const dark = theme === "dark" || (theme === "system" && meta.media.includes("dark"));
+    meta.content = dark ? "#191A23" : "#F6F5F2";
+  });
+}
+let initialTheme = document.documentElement.dataset.theme || "system";
+try { initialTheme = localStorage.getItem("daybook-theme") || initialTheme; } catch {}
+applyTheme(initialTheme);
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,600;0,800;1,400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
 <style>
 :root {
-  --paper: #E6EBF3;
-  --sheet: #F3F6FA;
-  --ink: #1F2B5E;
-  --ink-2: #5D6890;
-  --rule: #C9D2E3;
-  --mark: #E8457A;
+  --paper: #F6F5F2;
+  --sheet: #FFFFFF;
+  --ink: #242633;
+  --ink-2: #696A7A;
+  --rule: #DEDEE6;
+  --control: #8C8C9E;
+  --mark: #5453C6;
   --mark-ink: #FFFFFF;
-  --done: #3E7D63;
-  --shadow: 0 1px 0 #C9D2E3;
+  --done: #2F7659;
+  --danger: #B33D48;
+  --shadow: 0 2px 8px rgb(36 38 51 / .06), 0 1px 2px rgb(36 38 51 / .04);
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --paper: #141A31; --sheet: #1B2240; --ink: #DCE3F5; --ink-2: #8E99C2;
-    --rule: #2C3561; --mark: #FF6F9A; --mark-ink: #141A31; --done: #7CC4A2; --shadow: 0 1px 0 #2C3561;
+    --paper: #191A23; --sheet: #232530; --ink: #ECECF3; --ink-2: #AFB0C2;
+    --rule: #414353; --control: #73758A; --mark: #A6A5FF; --mark-ink: #191A23;
+    --done: #89CDA6; --danger: #FF9EA8;
+    --shadow: 0 2px 10px rgb(0 0 0 / .18);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --paper: #141A31; --sheet: #1B2240; --ink: #DCE3F5; --ink-2: #8E99C2;
-  --rule: #2C3561; --mark: #FF6F9A; --mark-ink: #141A31; --done: #7CC4A2; --shadow: 0 1px 0 #2C3561;
+  --paper: #191A23; --sheet: #232530; --ink: #ECECF3; --ink-2: #AFB0C2;
+  --rule: #414353; --control: #73758A; --mark: #A6A5FF; --mark-ink: #191A23;
+  --done: #89CDA6; --danger: #FF9EA8;
+  --shadow: 0 2px 10px rgb(0 0 0 / .18);
   color-scheme: dark;
 }
 
@@ -43,7 +64,7 @@
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0; background: var(--paper); color: var(--ink);
-  font: 400 17px/1.45 "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, sans-serif;
+  font: 400 16px/1.55 "DM Sans", system-ui, sans-serif;
   min-height: 100dvh;
 }
 button, input, textarea, select { font: inherit; color: inherit; }
@@ -51,28 +72,40 @@ button { cursor: pointer; }
 :focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; border-radius: 4px; }
 [hidden] { display: none !important; }
 
-.shell { max-width: 640px; margin: 0 auto; padding: env(safe-area-inset-top) 16px 0; }
+.shell { max-width: 680px; margin: 0 auto; padding: env(safe-area-inset-top) 20px 0; }
 
 /* Masthead: the date is the title of every page. */
-.mast { padding: 18px 0 6px; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
-.date { margin: 0; line-height: .9; }
-.date .dow { display: block; font-size: 17px; font-weight: 600; color: var(--ink-2); margin-bottom: 6px; }
-.date .day { font-size: clamp(56px, 18vw, 84px); font-weight: 800; letter-spacing: -0.04em; }
-.date .mon { font-size: 22px; font-weight: 600; margin-left: 6px; letter-spacing: -0.01em; }
-.lockbtn { background: none; border: 0; color: var(--ink-2); font-size: 15px; padding: 8px 0; }
+.mast { padding: 22px 0 14px; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.mastcopy { min-width: 0; }
+.mast-actions { display: flex; align-items: center; gap: 8px; }
+.appearance { position: relative; }
+.appearance summary { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--rule); border-radius: 50%; background: var(--sheet); color: var(--ink-2); cursor: pointer; list-style: none; box-shadow: var(--shadow); }
+.appearance summary::-webkit-details-marker { display: none; }
+.appearance svg { width: 20px; height: 20px; flex: none; }
+.theme-menu { position: absolute; z-index: 20; right: 0; top: calc(100% + 8px); width: 160px; padding: 6px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 14px; box-shadow: 0 8px 28px rgb(0 0 0 / .18); }
+.theme-menu button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 8px 10px; border: 0; border-radius: 9px; background: none; color: var(--ink); text-align: left; font-size: 14px; }
+.theme-menu button:hover, .theme-menu button[aria-pressed="true"] { background: var(--paper); }
+.theme-menu button[aria-pressed="true"]::after { content: "✓"; margin-left: auto; color: var(--mark); font-weight: 700; }
+.brand { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; color: var(--ink-2); font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.brandmark { width: 24px; height: 24px; display: inline-grid; place-items: center; border-radius: 8px; background: var(--mark); color: var(--mark-ink); font: 16px/1 "DM Serif Display", Georgia, serif; letter-spacing: 0; }
+.date { margin: 0; line-height: 1; }
+.date .dow { display: block; font-size: 15px; font-weight: 600; color: var(--ink-2); margin-bottom: 3px; }
+.date .day { font: 400 clamp(48px, 13vw, 66px)/.98 "DM Serif Display", Georgia, serif; letter-spacing: -.035em; }
+.date .mon { font: 400 20px/1 "DM Serif Display", Georgia, serif; margin-left: 7px; color: var(--ink-2); }
+.lockbtn { min-height: 44px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 999px; color: var(--ink-2); font-size: 14px; font-weight: 600; padding: 8px 15px; box-shadow: var(--shadow); }
 
-nav.tabs { display: flex; gap: 18px; border-bottom: 1px solid var(--rule); margin: 6px 0 0; overflow-x: auto; scrollbar-width: none; }
-nav.tabs a { padding: 12px 0 10px; color: var(--ink-2); text-decoration: none; font-weight: 600; border-bottom: 3px solid transparent; margin-bottom: -1px; white-space: nowrap; }
-nav.tabs a[aria-current="page"] { color: var(--ink); border-color: var(--ink); }
+nav.tabs { display: flex; gap: 4px; border: 1px solid var(--rule); border-radius: 14px; padding: 4px; margin: 0; overflow-x: auto; scrollbar-width: none; background: color-mix(in srgb, var(--sheet) 68%, transparent); }
+nav.tabs a { display: flex; min-height: 44px; align-items: center; padding: 8px 13px; color: var(--ink-2); text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 10px; white-space: nowrap; transition: background-color .15s ease, color .15s ease; }
+nav.tabs a[aria-current="page"] { color: var(--mark-ink); background: var(--mark); box-shadow: 0 1px 2px rgb(36 38 51 / .18); }
 
-main { padding: 18px 0 calc(150px + env(safe-area-inset-bottom)); }
+main { padding: 22px 0 calc(170px + env(safe-area-inset-bottom)); }
 .empty { color: var(--ink-2); padding: 28px 0; }
-.err { color: var(--mark); font-weight: 600; }
+.err { color: var(--danger); font-weight: 600; }
 
 /* Today: the time rail. */
 .rail { position: relative; margin: 0; padding: 0; list-style: none; }
 .rail::before { content: ""; position: absolute; left: 76px; top: 6px; bottom: 6px; width: 2px; background: var(--rule); }
-.ev { position: relative; display: grid; grid-template-columns: 64px 1fr; gap: 26px; padding: 9px 0; align-items: baseline; }
+.ev { position: relative; display: grid; grid-template-columns: 64px 1fr; gap: 26px; padding: 10px 0; align-items: baseline; }
 .ev time, .rem time { font-variant-numeric: tabular-nums; }
 .ev time { text-align: right; color: var(--ink-2); font-size: 15px; white-space: nowrap; }
 .ev::after { content: ""; position: absolute; left: 72px; top: 17px; width: 10px; height: 10px; border-radius: 50%; background: var(--ink); }
@@ -89,21 +122,21 @@ main { padding: 18px 0 calc(150px + env(safe-area-inset-bottom)); }
 .later { margin: 28px 0 8px; font-size: 15px; color: var(--ink-2); }
 
 /* Composer: thumb zone. */
-.composer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--paper); border-top: 1px solid var(--rule); padding: 10px 16px calc(12px + env(safe-area-inset-bottom)); }
+.composer { position: fixed; z-index: 8; left: 50%; right: auto; bottom: calc(12px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(calc(100% - 24px), 640px); background: color-mix(in srgb, var(--sheet) 92%, transparent); border: 1px solid var(--rule); border-radius: 20px; padding: 12px 14px; box-shadow: 0 12px 36px rgb(36 38 51 / .13); backdrop-filter: blur(18px); }
 .composer .in { max-width: 640px; margin: 0 auto; }
 .chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 8px; }
-.chip { flex: none; border: 1px solid var(--rule); background: var(--sheet); border-radius: 999px; padding: 5px 12px; font-size: 15px; color: var(--ink-2); }
+.chip { flex: none; min-height: 44px; border: 1px solid var(--rule); background: var(--sheet); border-radius: 999px; padding: 5px 12px; font-size: 15px; color: var(--ink-2); }
 .chip[aria-pressed="true"] { border-color: var(--ink); color: var(--ink); font-weight: 600; }
 .row { display: flex; gap: 8px; }
-.row input { flex: 1; min-width: 0; border: 1.5px solid var(--rule); background: var(--sheet); border-radius: 12px; padding: 12px 14px; }
+.row input { flex: 1; min-width: 0; border: 1.5px solid var(--control); background: var(--sheet); border-radius: 12px; padding: 12px 14px; }
 .row input:focus { border-color: var(--ink); outline: none; }
-.btn { border: 0; background: var(--ink); color: var(--paper); border-radius: 12px; padding: 12px 18px; font-weight: 600; }
+.btn { border: 0; background: var(--mark); color: var(--mark-ink); border-radius: 12px; padding: 12px 18px; font-weight: 700; }
 .btn:disabled { opacity: .5; }
-.btn.quiet { background: none; color: var(--ink); border: 1.5px solid var(--rule); }
-.btn.danger { background: none; color: var(--mark); border: 1.5px solid var(--mark); }
+.btn.quiet { background: none; color: var(--ink); border: 1.5px solid var(--control); }
+.btn.danger { background: none; color: var(--danger); border: 1.5px solid var(--danger); }
 
 /* Lists */
-.search { width: 100%; border: 1.5px solid var(--rule); background: var(--sheet); border-radius: 12px; padding: 11px 14px; margin-bottom: 14px; }
+.search { width: 100%; border: 1.5px solid var(--control); background: var(--sheet); border-radius: 12px; padding: 11px 14px; margin-bottom: 14px; }
 .bar { display: flex; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 h2.group { font-size: 15px; font-weight: 600; color: var(--ink-2); margin: 22px 0 4px; }
 h2.group b { color: var(--ink); }
@@ -113,8 +146,8 @@ h2.group b { color: var(--ink); }
 .list a .d { color: var(--ink-2); font-size: 15px; white-space: nowrap; }
 
 /* Goals */
-.goal { padding: 16px 0 18px; border-bottom: 1px solid var(--rule); }
-.goal h3 { margin: 0 0 4px; font-size: 21px; letter-spacing: -0.01em; }
+.goal { padding: 18px; border: 1px solid var(--rule); border-radius: 16px; background: var(--sheet); box-shadow: var(--shadow); margin: 0 0 12px; }
+.goal h3 { margin: 0 0 4px; font: 400 24px/1.2 "DM Serif Display", Georgia, serif; letter-spacing: -.01em; }
 .goal h3 a { color: inherit; text-decoration: none; }
 .goal .meta { color: var(--ink-2); font-size: 15px; }
 .meter { display: flex; gap: 3px; margin: 12px 0 10px; }
@@ -139,62 +172,62 @@ h2.group b { color: var(--ink); }
 .field { display: block; margin: 0 0 14px; }
 .field > span { display: block; font-weight: 600; font-size: 15px; margin-bottom: 6px; }
 .field input, .field textarea, .field select, .title-in, textarea.body-in {
-  width: 100%; border: 1.5px solid var(--rule); background: var(--sheet); border-radius: 12px; padding: 11px 14px; }
+  width: 100%; border: 1.5px solid var(--control); background: var(--sheet); border-radius: 12px; padding: 11px 14px; }
 .field input:focus, .field textarea:focus, .title-in:focus, textarea.body-in:focus { border-color: var(--ink); outline: none; }
 .title-in { font-size: 24px; font-weight: 800; letter-spacing: -0.01em; margin-bottom: 10px; }
 textarea.body-in { min-height: 40dvh; line-height: 1.55; resize: none; overflow: hidden; }
 .hint { font-size: 14px; color: var(--ink-2); margin: 8px 0 0; }
-.doc { background: var(--sheet); border-radius: 12px; padding: 4px 18px 14px; box-shadow: var(--shadow); overflow-wrap: anywhere; cursor: text; }
-.doc h1 { font-size: 28px; letter-spacing: -0.02em; line-height: 1.15; margin: 16px 0 8px; }
+.doc { background: var(--sheet); border: 1px solid var(--rule); border-radius: 18px; padding: 8px 20px 18px; box-shadow: var(--shadow); overflow-wrap: anywhere; cursor: text; }
+.doc h1 { font: 400 32px/1.15 "DM Serif Display", Georgia, serif; letter-spacing: -0.02em; margin: 16px 0 8px; }
 .doc h2 { font-size: 20px; margin: 20px 0 6px; }
 .doc h3 { font-size: 17px; margin: 16px 0 4px; }
 .doc ul { padding-left: 20px; margin: 8px 0; }
 .doc li.task { list-style: none; margin-left: -20px; padding: 3px 0; }
-.doc li.task label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.doc li.task label { display: flex; min-height: 44px; padding: 8px 0; gap: 10px; align-items: flex-start; cursor: pointer; }
 .doc li.task input { width: 22px; height: 22px; margin: 1px 0 0; accent-color: var(--ink); flex: none; cursor: pointer; }
 .doc li.task.checked span { color: var(--ink-2); text-decoration: line-through; }
 .doc .when { color: var(--mark); font-weight: 600; white-space: nowrap; }
 .doc code { background: var(--paper); padding: 1px 5px; border-radius: 4px; font-size: .92em; }
 .doc a { color: var(--ink); }
 .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
-.danger-link { display: block; margin: 36px 0 0; background: none; border: 0; padding: 8px 0; color: var(--mark); font-weight: 600; }
+.danger-link { display: block; margin: 36px 0 0; background: none; border: 0; padding: 8px 0; color: var(--danger); font-weight: 600; }
 
-/* Bottom sheets */
-dialog.sheet { border: 0; padding: 0; width: 100%; max-width: 640px; margin: auto auto 0; background: var(--paper); color: var(--ink); border-radius: 18px 18px 0 0; max-height: 92dvh; }
+/* Centered editors with room to scroll on short screens. */
+dialog.sheet { border: 1px solid var(--rule); padding: 0; width: calc(100% - 32px); max-width: 520px; margin: auto; background: var(--sheet); color: var(--ink); border-radius: 20px; max-height: calc(100dvh - 32px); overflow-y: auto; box-shadow: 0 24px 64px rgb(0 0 0 / .22); }
 dialog.sheet::backdrop { background: rgb(10 14 30 / .45); }
 dialog.sheet form { padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); }
 dialog.sheet h2 { margin: 0 0 14px; font-size: 21px; }
 .sheet-actions { display: flex; gap: 10px; justify-content: flex-end; align-items: center; margin-top: 6px; }
 .sheet-actions .spacer { flex: 1; }
-.seg { display: inline-flex; border: 1.5px solid var(--rule); border-radius: 10px; overflow: hidden; margin-bottom: 14px; }
+.seg { display: inline-flex; border: 1.5px solid var(--control); border-radius: 10px; overflow: hidden; margin-bottom: 14px; }
 .seg button { background: none; border: 0; padding: 8px 16px; color: var(--ink-2); font-weight: 600; }
 .seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
 .days { display: flex; gap: 6px; margin-bottom: 8px; }
-.days button { flex: 1; aspect-ratio: 1; max-width: 44px; border-radius: 50%; border: 1.5px solid var(--rule); background: var(--sheet); font-weight: 600; color: var(--ink-2); }
+.days button { flex: 1; aspect-ratio: 1; max-width: 44px; border-radius: 50%; border: 1.5px solid var(--control); background: var(--sheet); font-weight: 600; color: var(--ink-2); }
 .days button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 .repeat-say { font-size: 14px; color: var(--ink-2); margin: 0 0 14px; }
 .two { display: flex; gap: 10px; } .two .field { flex: 1; min-width: 0; }
-.formerr { color: var(--mark); font-weight: 600; margin: 0 0 10px; }
+.formerr { color: var(--danger); font-weight: 600; margin: 0 0 10px; }
 
 /* Log rows are tappable */
 .ev button.entry { all: unset; cursor: pointer; display: block; }
 .ev button.entry:focus-visible { outline: 2px solid var(--mark); outline-offset: 4px; border-radius: 4px; }
 .ev.due::after { background: var(--mark); }
 .ev.due .sub { color: var(--mark); }
-.timebtn { flex: none; border: 1.5px solid var(--rule); background: var(--sheet); border-radius: 12px; padding: 0 12px; font-weight: 600; color: var(--ink-2); min-width: 64px; }
+.timebtn { flex: none; min-height: 44px; border: 1.5px solid var(--control); background: var(--sheet); border-radius: 12px; padding: 0 12px; font-weight: 600; color: var(--ink-2); min-width: 64px; }
 .timebtn.set { color: var(--ink); border-color: var(--ink); }
 #when { flex: none; width: 112px; }
 .goal .next { display: flex; gap: 10px; align-items: flex-start; font-size: 16px; }
 .goal .next input { width: 22px; height: 22px; margin: 1px 0 0; accent-color: var(--ink); flex: none; }
 .goal .next .lbl { color: var(--ink-2); }
 .rem { grid-template-columns: 76px 1fr auto; align-items: start; }
-.rem .mk, .ev .mk { flex: none; background: none; border: 1.5px solid var(--mark); color: var(--mark); border-radius: 999px; padding: 3px 12px; font-size: 14px; font-weight: 600; }
+.rem .mk, .ev .mk { flex: none; min-height: 44px; background: none; border: 1.5px solid var(--mark); color: var(--mark); border-radius: 999px; padding: 8px 12px; font-size: 14px; font-weight: 600; }
 .rem a.what { color: inherit; text-decoration: none; }
 
 /* Lock */
 .lock { padding-top: 10dvh; }
 .lock p { color: var(--ink-2); max-width: 32ch; }
-.lock input { width: 100%; border: 1.5px solid var(--rule); background: var(--sheet); border-radius: 12px; padding: 13px 14px; margin: 8px 0 12px; }
+.lock input { width: 100%; border: 1.5px solid var(--control); background: var(--sheet); border-radius: 12px; padding: 13px 14px; margin: 8px 0 12px; }
 .lock label { font-weight: 600; }
 
 
@@ -209,7 +242,7 @@ dialog.sheet h2 { margin: 0 0 14px; font-size: 21px; }
 .step ol { padding-left: 20px; }
 .step li { margin: 4px 0; }
 .step .muted { color: var(--ink-2); font-size: 15px; }
-.step input[type=text], .step input[type=password], .step select { width: 100%; border: 1.5px solid var(--rule); background: var(--paper); border-radius: 12px; padding: 12px 14px; margin: 4px 0 10px; }
+.step input[type=text], .step input[type=password], .step select { width: 100%; border: 1.5px solid var(--control); background: var(--paper); border-radius: 12px; padding: 12px 14px; margin: 4px 0 10px; }
 .step label { font-weight: 600; display: block; }
 .btn.a-btn { display: inline-block; text-decoration: none; }
 .choices { list-style: none; padding: 0; margin: 6px 0 10px; }
@@ -219,8 +252,20 @@ dialog.sheet h2 { margin: 0 0 14px; font-size: 21px; }
 .ghcode { font-size: 28px !important; letter-spacing: .12em; text-align: center; font-weight: 600; }
 .gh-ok { color: var(--done); font-weight: 600; }
 .copyrow code { flex: 1; min-width: 0; overflow-wrap: anywhere; background: var(--paper); border-radius: 8px; padding: 10px 12px; font-size: 15px; }
-details.more summary { cursor: pointer; color: var(--ink-2); margin: 8px 0; }
-.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(140px + env(safe-area-inset-bottom)); background: var(--ink); color: var(--paper); padding: 9px 16px; border-radius: 10px; font-weight: 600; font-size: 15px; max-width: calc(100% - 32px); }
+details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color: var(--ink-2); margin: 4px 0; }
+.toast { position: fixed; z-index: 10; left: 50%; transform: translateX(-50%); bottom: calc(112px + env(safe-area-inset-bottom)); background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 12px; font-weight: 600; font-size: 14px; max-width: calc(100% - 32px); box-shadow: 0 8px 28px rgb(0 0 0 / .18); }
+@media (max-width: 480px) {
+  .shell { padding-left: 16px; padding-right: 16px; }
+  .mast { padding-top: 16px; }
+  nav.tabs { gap: 2px; }
+  nav.tabs a { padding: 8px 10px; font-size: 13px; }
+  .ev { grid-template-columns: 52px 1fr; gap: 20px; }
+  .rail::before { left: 64px; }
+  .ev::after { left: 60px; }
+  .composer { bottom: calc(10px + env(safe-area-inset-bottom)); padding: 10px; }
+  .chips { gap: 6px; }
+  .chip { padding-left: 10px; padding-right: 10px; }
+}
 @media (prefers-reduced-motion: no-preference) {
   .toast { animation: rise .18s ease-out; }
   @keyframes rise { from { opacity: 0; transform: translate(-50%, 6px); } }
@@ -230,8 +275,21 @@ details.more summary { cursor: pointer; color: var(--ink-2); margin: 8px 0; }
 <body>
 <div class="shell">
   <header class="mast">
-    <h1 class="date" id="date"></h1>
-    <button class="lockbtn" id="lockbtn" hidden>Lock</button>
+    <div class="mastcopy">
+      <p class="brand"><span class="brandmark" aria-hidden="true">d</span> Daybook</p>
+      <h1 class="date" id="date"></h1>
+    </div>
+    <div class="mast-actions">
+      <details class="appearance" id="appearance">
+        <summary id="theme-toggle" aria-label="Appearance: System" title="Appearance: System"></summary>
+        <div class="theme-menu" role="group" aria-label="Appearance">
+          <button type="button" data-theme-choice="system" aria-pressed="true">System</button>
+          <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+          <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+        </div>
+      </details>
+      <button class="lockbtn" id="lockbtn" hidden>Lock</button>
+    </div>
   </header>
   <nav class="tabs" id="tabs" hidden aria-label="Sections">
     <a href="#today">Today</a>
@@ -265,6 +323,34 @@ const DAYS = ["S", "M", "T", "W", "T", "F", "S"];
 const DAY_IDS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 const DAY_NAMES = ["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"];
 const $ = (s, el = document) => el.querySelector(s);
+const appearance = $("#appearance"), themeToggle = $("#theme-toggle");
+const themeIcons = {
+  system: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/>',
+  light: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>',
+  dark: '<path d="M20.8 13A9 9 0 0 1 11 3.2 9 9 0 1 0 20.8 13Z"/>'
+};
+const themeIcon = theme => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${themeIcons[theme]}</svg>`;
+function drawThemeChoice() {
+  const theme = document.documentElement.dataset.theme || "system";
+  const label = "Appearance: " + theme[0].toUpperCase() + theme.slice(1);
+  themeToggle.innerHTML = themeIcon(theme);
+  themeToggle.setAttribute("aria-label", label); themeToggle.title = label;
+  appearance.querySelectorAll("[data-theme-choice]").forEach(button => {
+    button.setAttribute("aria-pressed", String(button.dataset.themeChoice === theme));
+    button.innerHTML = themeIcon(button.dataset.themeChoice) + button.dataset.themeChoice[0].toUpperCase() + button.dataset.themeChoice.slice(1);
+  });
+}
+drawThemeChoice();
+appearance.addEventListener("click", e => {
+  const button = e.target.closest("[data-theme-choice]"); if (!button) return;
+  applyTheme(button.dataset.themeChoice);
+  try { localStorage.setItem("daybook-theme", button.dataset.themeChoice); } catch {}
+  drawThemeChoice(); appearance.open = false; themeToggle.focus();
+});
+document.addEventListener("click", e => { if (!appearance.contains(e.target)) appearance.open = false; });
+appearance.addEventListener("keydown", e => {
+  if (e.key === "Escape") { appearance.open = false; themeToggle.focus(); e.preventDefault(); }
+});
 const main = $("#main");
 const sheet = $("#sheet");
 let cfg = { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, categories: [], push: true };
@@ -587,6 +673,8 @@ views.today = async () => {
   });
   main.querySelectorAll("button.entry").forEach(b => b.onclick = () => {
     const m = /^- (\d{2}:\d{2}) (.*)$/.exec(b.dataset.line);
+    // Safari does not focus clicked buttons; give the dialog a return target.
+    b.focus({ preventScroll: true });
     logEntrySheet(today, b.dataset.line, m[1], m[2]);
   });
 };

@@ -8,6 +8,6 @@ export const MANIFEST = JSON.stringify({
   start_url: "/app#today",
   scope: "/app",
   display: "standalone",
-  background_color: "#E6EBF3",
-  theme_color: "#E6EBF3"
+  background_color: "#F6F5F2",
+  theme_color: "#F6F5F2"
 });
