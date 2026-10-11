@@ -37,12 +37,11 @@ Tap this button:
 
 Enter your password on the page that opened.
 
-The app walks you through the rest, with a button for each part:
+The app walks you through the rest:
 
-1. **Make a private place for your notes** on GitHub.
-2. **Give the app a key to it.** GitHub opens a form that's already filled in. You only pick your notes under *Repository access*, then copy and paste the key back.
-3. **Check your time zone.**
-4. **Turn on phone reminders** with the free ntfy app (optional).
+1. **Connect your GitHub.** Tap **Connect GitHub**, then **Copy code and open GitHub**. On GitHub, paste the code, tap **Continue**, then **Authorize**. Come back to the app: it makes a private place for your notes by itself.
+2. **Check your time zone.**
+3. **Turn on phone reminders** with the free ntfy app (optional).
 
 When it says **You're set up**, it shows the last two steps.
 

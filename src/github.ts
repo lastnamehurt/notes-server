@@ -5,6 +5,9 @@ export interface Env extends ReminderEnv {
   GITHUB_TOKEN: string;
   /** Override for tests only; defaults to https://api.github.com. */
   GITHUB_API_URL?: string;
+  /** Overrides for tests, and for using a different "Connect GitHub" OAuth app. */
+  GITHUB_LOGIN_URL?: string;
+  GITHUB_CLIENT_ID?: string;
   MCP_BEARER_TOKEN: string;
   /** Friendlier name for MCP_BEARER_TOKEN, used by the Deploy to Cloudflare form. */
   PASSWORD?: string;

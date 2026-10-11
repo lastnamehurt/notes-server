@@ -5,7 +5,7 @@ import { GithubNotes, CATEGORIES, type Category, type Env } from "./github";
 import { appendLog, recentLogs, editLog } from "./log";
 import { scheduler, scheduleNote, loadSettings, saveSettings, rescan, checkPassword, completeReminder, addReminder, startOfToday } from "./core";
 import { applySettings, notesConfigured, type Settings } from "./settings";
-import { listRepos, prepareRepo } from "./setup";
+import { listRepos, prepareRepo, startDeviceFlow, pollDeviceFlow, ensureNotesRepo, githubClientId } from "./setup";
 import { sendPush } from "./reminders";
 import { signSession, verifySession } from "./action";
 import { APP_HTML, MANIFEST } from "./ui";
@@ -68,7 +68,7 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
     switch (route) {
       case "GET /config": return json({
         timeZone: env.NOTES_TIMEZONE || "America/Los_Angeles", categories: CATEGORIES, push: pushConfigured(env),
-        configured: notesConfigured(env), canSetup: !env.DEPLOY_CONFIGURED
+        configured: notesConfigured(env), canSetup: !env.DEPLOY_CONFIGURED, githubConnect: Boolean(githubClientId(env))
       });
       case "GET /settings": {
         const s = (await loadSettings(env, true)) ?? {};
@@ -81,6 +81,33 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
         const key = token?.trim() || (await loadSettings(env, true))?.githubToken;
         if (!key) return fail("Paste your GitHub access key first.");
         return json(await listRepos(env, key));
+      }
+      case "POST /setup/github/start": {
+        if (env.DEPLOY_CONFIGURED) return fail("This server's notes are set in its deployment settings.", 409);
+        const flow = await startDeviceFlow(env);
+        await scheduler(env).setDeviceFlow({ deviceCode: flow.deviceCode, expiresAt: flow.expiresAt });
+        return json({ userCode: flow.userCode, verificationUri: flow.verificationUri, interval: flow.interval, expiresAt: flow.expiresAt });
+      }
+      case "POST /setup/github/poll": {
+        if (env.DEPLOY_CONFIGURED) return fail("This server's notes are set in its deployment settings.", 409);
+        const s = scheduler(env);
+        const pending = await s.getDeviceFlow();
+        if (!pending || pending.expiresAt < Date.now()) return json({ state: "failed", message: "The code expired. Tap Connect GitHub to get a new one." });
+        const result = await pollDeviceFlow(env, pending.deviceCode);
+        if (result.state !== "done") {
+          if (result.state === "failed") await s.setDeviceFlow(null);
+          return json(result);
+        }
+        await s.setDeviceFlow(null);
+        // Connected: find or create a private "notes" repository and save it right away.
+        const { repo, created } = await ensureNotesRepo(env, result.token);
+        const { branch } = await prepareRepo(env, result.token, repo);
+        const { timezone } = await request.json<{ timezone?: string }>().catch(() => ({ timezone: undefined }));
+        const prev = (await loadSettings(env, true)) ?? {};
+        let tz = prev.timezone || "America/Los_Angeles";
+        if (timezone) try { new Intl.DateTimeFormat("en-US", { timeZone: timezone }); tz = timezone; } catch { /* keep */ }
+        await saveSettings(env, { ...prev, githubToken: result.token, notesRepo: repo, notesBranch: branch, timezone: tz });
+        return json({ state: "done", repo, created });
       }
       case "POST /setup": {
         if (env.DEPLOY_CONFIGURED) return fail("This server's notes are set in its deployment settings.", 409);

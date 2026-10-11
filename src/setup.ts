@@ -18,7 +18,8 @@ async function gh(env: GhEnv, token: string, path: string, init: RequestInit = {
   });
 }
 
-const KEY_FORMAT = /^(github_pat_|ghp_)[A-Za-z0-9_]{20,}$/;
+// Fine-grained and classic personal access tokens, and OAuth tokens from "Connect GitHub".
+const KEY_FORMAT = /^(github_pat_|ghp_|gho_)[A-Za-z0-9_]{20,}$/;
 
 /** Repositories the access key can see, newest first. */
 export async function listRepos(env: GhEnv, token: string): Promise<{ login: string; repos: RepoChoice[] }> {
@@ -63,4 +64,78 @@ export async function prepareRepo(env: GhEnv, token: string, repo: string): Prom
   const created = await gh(env, token, "/repos/" + repo);
   const after = created.ok ? (await created.json<{ default_branch?: string }>()).default_branch : undefined;
   return { branch: after || branch, initialized: true };
+}
+
+/* ---------- Connect GitHub: OAuth device flow ----------
+ * The person taps Connect, enters a short code at github.com/login/device and approves. GitHub then gives
+ * the token to this server only (the OAuth app's owner never sees it). Device flow needs only the app's
+ * public client ID, no client secret, so each copy of this server can share one registered app.
+ */
+
+/** Public client ID of the "Notes server" OAuth app (device flow enabled). Override with GITHUB_CLIENT_ID. */
+export const DEFAULT_GITHUB_CLIENT_ID = "Ov23li3YrfKrPKDz7Bwq";
+export const githubClientId = (env: { GITHUB_CLIENT_ID?: string }) => env.GITHUB_CLIENT_ID?.trim() || DEFAULT_GITHUB_CLIENT_ID;
+
+type LoginEnv = GhEnv & { GITHUB_CLIENT_ID?: string; GITHUB_LOGIN_URL?: string };
+const loginUrl = (env: LoginEnv) => (env.GITHUB_LOGIN_URL || "https://github.com").replace(/\/+$/, "");
+
+async function login(env: LoginEnv, path: string, params: Record<string, string>): Promise<Record<string, any>> {
+  const res = await fetch(loginUrl(env) + path, {
+    method: "POST",
+    headers: { "Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "personal-notes-mcp" },
+    body: new URLSearchParams(params)
+  });
+  if (!res.ok) throw new Error(`GitHub isn't answering right now (${res.status}). Try again in a minute.`);
+  return res.json();
+}
+
+export interface DeviceStart { deviceCode: string; userCode: string; verificationUri: string; interval: number; expiresAt: number; }
+
+export async function startDeviceFlow(env: LoginEnv): Promise<DeviceStart> {
+  const clientId = githubClientId(env);
+  if (!clientId) throw new Error("Connect GitHub isn't available on this server. Use an access key instead.");
+  const r = await login(env, "/login/device/code", { client_id: clientId, scope: "repo" });
+  if (r.error) throw new Error(r.error === "device_flow_disabled"
+    ? "Connect GitHub isn't switched on for this server. Use an access key instead."
+    : "GitHub couldn't start connecting (" + r.error + "). Try again, or use an access key instead.");
+  return { deviceCode: r.device_code, userCode: r.user_code, verificationUri: r.verification_uri || "https://github.com/login/device",
+    interval: Math.max(5, Number(r.interval) || 5), expiresAt: Date.now() + (Number(r.expires_in) || 900) * 1000 };
+}
+
+export type DevicePoll = { state: "pending"; interval?: number } | { state: "done"; token: string } | { state: "failed"; message: string };
+
+export async function pollDeviceFlow(env: LoginEnv, deviceCode: string): Promise<DevicePoll> {
+  const r = await login(env, "/login/oauth/access_token", {
+    client_id: githubClientId(env), device_code: deviceCode, grant_type: "urn:ietf:params:oauth:grant-type:device_code"
+  });
+  if (r.access_token) return { state: "done", token: r.access_token };
+  switch (r.error) {
+    case "authorization_pending": return { state: "pending" };
+    case "slow_down": return { state: "pending", interval: Number(r.interval) || 10 };
+    case "expired_token": return { state: "failed", message: "The code expired. Tap Connect GitHub to get a new one." };
+    case "access_denied": return { state: "failed", message: "GitHub says you chose Cancel. Tap Connect GitHub to try again." };
+    default: return { state: "failed", message: "Couldn't connect (" + (r.error || "unknown") + "). Tap Connect GitHub to try again." };
+  }
+}
+
+/** Find or create a private repository for notes: "notes", or the next free name if "notes" is taken by a public one. */
+export async function ensureNotesRepo(env: GhEnv, token: string): Promise<{ repo: string; created: boolean }> {
+  const user = await gh(env, token, "/user");
+  if (!user.ok) throw new Error(`GitHub isn't answering right now (${user.status}). Try again in a minute.`);
+  const { login: owner } = await user.json<{ login: string }>();
+  for (const name of ["notes", "my-notes", "private-notes"]) {
+    const existing = await gh(env, token, `/repos/${owner}/${name}`);
+    if (existing.ok) {
+      if ((await existing.json<{ private: boolean }>()).private) return { repo: `${owner}/${name}`, created: false };
+      continue;
+    }
+    if (existing.status !== 404) throw new Error(`GitHub isn't answering right now (${existing.status}). Try again in a minute.`);
+    const made = await gh(env, token, "/user/repos", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, private: true, auto_init: true, description: "My private notes" })
+    });
+    if (made.ok) return { repo: `${owner}/${name}`, created: true };
+    if (made.status !== 422) throw new Error(`Couldn't create your notes repository (${made.status}). Try again in a minute.`);
+  }
+  throw new Error("Couldn't find a free name for your notes repository. Use an access key instead.");
 }

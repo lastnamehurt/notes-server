@@ -216,6 +216,8 @@ dialog.sheet h2 { margin: 0 0 14px; font-size: 21px; }
 .choices label { display: flex; gap: 10px; align-items: center; font-weight: 400; padding: 8px 0; border-bottom: 1px solid var(--rule); }
 .choices input { width: 20px; height: 20px; accent-color: var(--ink); }
 .copyrow { display: flex; gap: 8px; align-items: center; }
+.ghcode { font-size: 28px !important; letter-spacing: .12em; text-align: center; font-weight: 600; }
+.gh-ok { color: var(--done); font-weight: 600; }
 .copyrow code { flex: 1; min-width: 0; overflow-wrap: anywhere; background: var(--paper); border-radius: 8px; padding: 10px 12px; font-size: 15px; }
 details.more summary { cursor: pointer; color: var(--ink-2); margin: 8px 0; }
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(140px + env(safe-area-inset-bottom)); background: var(--ink); color: var(--paper); padding: 9px 16px; border-radius: 10px; font-weight: 600; font-size: 15px; max-width: calc(100% - 32px); }
@@ -801,18 +803,15 @@ views.setup = async () => {
   const topic = prev.ntfyTopic || randomTopic();
   const mcpUrl = location.origin + "/mcp";
   let chosenRepo = prev.notesRepo || "";
+  const connect = cfg.githubConnect;
+  // Step numbers: with Connect GitHub, one step covers the repository and its key.
+  const n = connect ? { tz: 2, push: 3 } : first ? { tz: 3, push: 4 } : { tz: 2, push: 3 };
 
-  main.innerHTML = h`<div class="setup">
-    <h2>${first ? "Let's set up your notes" : "Settings"}</h2>
-    <p class="lede">${first ? "About 5 minutes. Your notes are saved to your own private GitHub repository; nobody else can see them." : "Change where notes are saved, your time zone, or phone notifications."}</p>
-
-    ${raw(first ? h`<section class="step" id="s1"><h3><span class="n">1</span>Make a private place for your notes</h3>
+  const createRepoStep = (num) => h`<section class="step" id="s1"><h3><span class="n">${num}</span>Make a private place for your notes</h3>
       <p>This opens GitHub with a private repository called <b>notes</b> ready to create. Check <b>Private</b> is selected, then tap <b>Create repository</b>.</p>
       <a class="btn quiet a-btn" href="${GH_NEW_REPO}" target="_blank" rel="noopener">Create notes repository</a>
-      <p class="muted">Already have one? Skip this.</p></section>` : "")}
-
-    <section class="step" id="s2"><h3><span class="n">${first ? 2 : 1}</span>Give this app a key to it</h3>
-      <ol>
+      <p class="muted">Already have one? Skip this.</p></section>`;
+  const keyFields = h`<ol>
         <li>Tap the button. GitHub opens a key form, already filled in.</li>
         <li>Under <b>Repository access</b>, choose <b>Only select repositories</b> and pick <b>notes</b>.</li>
         <li>Scroll down, tap <b>Generate token</b>, then <b>copy</b> it (it starts with <code>github_pat_</code>).</li>
@@ -821,15 +820,32 @@ views.setup = async () => {
       <label for="tok" style="margin-top:14px">Paste the key here</label>
       <input id="tok" type="password" autocomplete="off" spellcheck="false" placeholder="${prev.hasToken ? "Key saved (paste to replace)" : "github_pat_…"}">
       <button class="btn" id="check" type="button">Check key</button>
-      <div id="repos"></div></section>
+      <div id="repos"></div>`;
+  const githubBlock = connect
+    ? h`<section class="step" id="s2"><h3><span class="n">1</span>Connect your GitHub</h3>
+      <p>Your notes are saved in a private repository on your GitHub. Only you can see it.</p>
+      <div id="gh-flow">${raw(prev.hasToken && prev.notesRepo
+        ? h`<p class="gh-ok">✓ Connected. Notes are saved in <b>${prev.notesRepo}</b>.</p><button class="btn quiet" id="gh-start" type="button">Connect again</button>`
+        : `<button class="btn" id="gh-start" type="button">Connect GitHub</button>`)}</div>
+      <details class="more"><summary>Use an access key instead</summary>
+        <p class="muted">Only if Connect GitHub doesn't work for you.${first ? " First create a private repository called notes:" : ""}</p>
+        ${raw(first ? h`<p><a class="btn quiet a-btn" href="${GH_NEW_REPO}" target="_blank" rel="noopener">Create notes repository</a></p>` : "")}
+        ${raw(keyFields)}</details></section>`
+    : (first ? createRepoStep(1) : "") + h`<section class="step" id="s2"><h3><span class="n">${first ? 2 : 1}</span>Give this app a key to it</h3>${raw(keyFields)}</section>`;
 
-    <section class="step" id="s3"><h3><span class="n">${first ? 3 : 2}</span>Your time zone</h3>
+  main.innerHTML = h`<div class="setup">
+    <h2>${first ? "Let's set up your notes" : "Settings"}</h2>
+    <p class="lede">${first ? "About 5 minutes. Your notes are saved to your own private GitHub repository; nobody else can see them." : "Change where notes are saved, your time zone, or phone notifications."}</p>
+
+    ${raw(githubBlock)}
+
+    <section class="step" id="s3"><h3><span class="n">${n.tz}</span>Your time zone</h3>
       <p class="muted">Reminders and your daily log use it.</p>
       <label for="tz" style="position:absolute;left:-9999px">Time zone</label>
       <select id="tz">${raw(zones().map(z => h`<option ${z === tz ? "selected" : ""}>${z}</option>`).join(""))}</select></section>
 
-    <section class="step" id="s4"><h3><span class="n">${first ? 4 : 3}</span>Reminders on your phone</h3>
-      <p class="muted">Optional and free. You can do this later in Settings.</p>
+    <section class="step" id="s4"><h3><span class="n">${n.push}</span>Reminders on your phone</h3>
+      <p class="muted">Optional and free. You can do this later in Setup.</p>
       <ol>
         <li>Install the free <b>ntfy</b> app: <a href="${NTFY_IOS}" target="_blank" rel="noopener">iPhone</a> or <a href="${NTFY_ANDROID}" target="_blank" rel="noopener">Android</a>. Allow notifications when it asks.</li>
         <li>In ntfy, tap <b>+</b> and paste this name. It's long so nobody can guess it; keep it private.</li>
@@ -861,7 +877,52 @@ views.setup = async () => {
     catch (e) { if (e instanceof Locked) return showLock(); $("#repos").innerHTML = h`<p class="err">${e.message}</p>`; }
     b.disabled = false; b.textContent = "Check key";
   };
-  isDirty = () => Boolean($("#tok") && $("#tok").value.trim());
+  // Connect GitHub: show a code, she approves it on GitHub, and this page notices on its own.
+  let ghActive = false, ghTimer = null, ghBusy = false, ghInterval = 5;
+  const ghConnected = (repo, created) => {
+    ghActive = false; clearTimeout(ghTimer); chosenRepo = repo;
+    $("#gh-flow").innerHTML = h`<p class="gh-ok">✓ Connected. ${created ? "Made" : "Using"} <b>${repo}</b> (private) for your notes.</p>`;
+    $("#s2").classList.add("ok");
+  };
+  const ghFailed = msg => {
+    ghActive = false; clearTimeout(ghTimer);
+    $("#gh-flow").innerHTML = h`<p class="err">${msg}</p><button class="btn" id="gh-start" type="button">Connect GitHub</button>`;
+    $("#gh-start").onclick = ghStart;
+  };
+  const ghPoll = async () => {
+    if (!ghActive || ghBusy) return;
+    ghBusy = true; clearTimeout(ghTimer);
+    try {
+      const r = await api("/setup/github/poll", { method: "POST", body: { timezone: $("#tz").value } });
+      if (r.state === "done") ghConnected(r.repo, r.created);
+      else if (r.state === "failed") ghFailed(r.message);
+      else { if (r.interval) ghInterval = r.interval; ghTimer = setTimeout(ghPoll, ghInterval * 1000); }
+    } catch (e) { if (e instanceof Locked) { ghBusy = false; return showLock(); } ghFailed(e.message); }
+    ghBusy = false;
+  };
+  async function ghStart() {
+    const b = $("#gh-start"); if (b) { b.disabled = true; b.textContent = "Starting…"; }
+    try {
+      const f = await api("/setup/github/start", { method: "POST" });
+      ghInterval = f.interval;
+      $("#gh-flow").innerHTML = h`<p>Your code:</p>
+        <div class="copyrow"><code class="ghcode" id="gh-code">${f.userCode}</code></div>
+        <a class="btn a-btn" id="gh-open" href="${f.verificationUri}" target="_blank" rel="noopener" style="margin-top:10px">Copy code and open GitHub</a>
+        <ol style="margin-top:12px"><li>Paste the code on GitHub and tap <b>Continue</b>.</li><li>Tap <b>Authorize</b>.</li><li>Come back here. This page carries on by itself.</li></ol>
+        <p class="muted" id="gh-wait" role="status">Waiting for you to approve on GitHub…</p>`;
+      $("#gh-open").addEventListener("click", () => { navigator.clipboard && navigator.clipboard.writeText(f.userCode).catch(() => {}); });
+      ghActive = true; ghTimer = setTimeout(ghPoll, ghInterval * 1000);
+    } catch (e) { if (e instanceof Locked) return showLock(); ghFailed(e.message); }
+  }
+  if (connect) {
+    $("#gh-start").onclick = ghStart;
+    // Coming back from GitHub: check straight away instead of waiting for the next poll.
+    const onBack = () => { if (!document.hidden && ghActive && $("#gh-flow")) { clearTimeout(ghTimer); setTimeout(ghPoll, 300); } };
+    document.addEventListener("visibilitychange", onBack);
+    window.addEventListener("focus", onBack);
+  }
+
+  isDirty = () => ghActive || Boolean($("#tok") && $("#tok").value.trim());
   $("#check").onclick = check;
   $("#tok").addEventListener("paste", () => setTimeout(check, 50));
   if (prev.hasToken) check();
@@ -871,9 +932,9 @@ views.setup = async () => {
     const b = $("#save"); b.disabled = true; b.textContent = "Saving…"; $("#saveerr").textContent = "";
     const pushoverUser = $("#pouser").value.trim(), pushoverToken = $("#potoken").value.trim();
     try {
-      if (!chosenRepo) throw new Error("Check your key in step 2 and pick where to save notes.");
+      if (!chosenRepo) throw new Error(connect ? "Connect GitHub in step 1 first." : "Check your key and pick where to save notes.");
       await api("/setup", { method: "POST", body: {
-        token: $("#tok").value.trim(), repo: chosenRepo, timezone: $("#tz").value,
+        token: $("#tok") ? $("#tok").value.trim() : "", repo: chosenRepo, timezone: $("#tz").value,
         ntfyTopic: $("#usentfy").checked && !(pushoverUser && pushoverToken) ? topic : "",
         pushoverUser, pushoverToken } });
       cfg = await api("/config"); drawDate(); $("#tabs").hidden = false; $("#settingsTab").hidden = !cfg.canSetup;

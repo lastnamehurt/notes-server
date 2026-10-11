@@ -55,6 +55,7 @@ const RETRY_MS = 5 * 60 * 1000;
 const LAST_ERROR = "status:lastError";
 const ORIGIN = "status:origin";
 const SETTINGS = "settings";
+const DEVICE_FLOW = "status:deviceFlow";
 const FAILS = "status:passwordFailures";
 const MAX_FAILS = 10;
 const FAIL_WINDOW_MS = 15 * 60 * 1000;
@@ -130,6 +131,16 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
 
   async putSettings(settings: Settings): Promise<void> {
     await this.ctx.storage.put(SETTINGS, settings);
+  }
+
+  /** A "Connect GitHub" sign-in in progress (the device code never leaves the server). */
+  async getDeviceFlow(): Promise<{ deviceCode: string; expiresAt: number } | undefined> {
+    return this.ctx.storage.get(DEVICE_FLOW);
+  }
+
+  async setDeviceFlow(flow: { deviceCode: string; expiresAt: number } | null): Promise<void> {
+    if (flow) await this.ctx.storage.put(DEVICE_FLOW, flow);
+    else await this.ctx.storage.delete(DEVICE_FLOW);
   }
 
   /** Public origin of the Worker, recorded from incoming requests so notifications can link back to /done. */

@@ -85,3 +85,41 @@ test("deployment settings win over setup-page settings", () => {
   assert.equal(merged.NTFY_TOPIC, undefined, "a deployed push provider isn't mixed with a chosen one");
   assert.ok(deployConfigured(deployed));
 });
+
+test("Connect GitHub: device flow outcomes are explained plainly", async () => {
+  const { pollDeviceFlow } = await import("../src/setup.ts");
+  const answers: Record<string, unknown>[] = [
+    { error: "authorization_pending" }, { error: "slow_down", interval: 10 }, { error: "access_denied" },
+    { error: "expired_token" }, { access_token: "gho_" + "c".repeat(36) }
+  ];
+  globalThis.fetch = (async () => Response.json(answers.shift())) as typeof fetch;
+  const e = { GITHUB_CLIENT_ID: "id", GITHUB_LOGIN_URL: "https://login.test" };
+  assert.deepEqual(await pollDeviceFlow(e, "d"), { state: "pending" });
+  assert.deepEqual(await pollDeviceFlow(e, "d"), { state: "pending", interval: 10 });
+  assert.match(JSON.stringify(await pollDeviceFlow(e, "d")), /chose Cancel/);
+  assert.match(JSON.stringify(await pollDeviceFlow(e, "d")), /expired/);
+  assert.equal((await pollDeviceFlow(e, "d")).state, "done");
+  const { githubClientId } = await import("../src/setup.ts");
+  assert.equal(githubClientId({}), "Ov23li3YrfKrPKDz7Bwq", "Connect GitHub is on by default");
+  assert.equal(githubClientId({ GITHUB_CLIENT_ID: "other" }), "other");
+});
+
+test("Connect GitHub: uses a private notes repo, never a public one", async () => {
+  const { ensureNotesRepo, listRepos } = await import("../src/setup.ts");
+  const TOKEN = "gho_" + "c".repeat(36);
+  const made: string[] = [];
+  const have: Record<string, boolean> = { "jane/notes": false, "jane/my-notes": true };
+  globalThis.fetch = (async (input: string | URL | Request, init: RequestInit = {}) => {
+    const p = new URL(String(input)).pathname;
+    if (p === "/user") return Response.json({ login: "jane" });
+    if (p === "/user/repos" && init.method === "POST") { made.push(JSON.parse(String(init.body)).name); return Response.json({}, { status: 201 }); }
+    if (p === "/user/repos") return Response.json([]);
+    const m = /^\/repos\/(.+)$/.exec(p);
+    return m && m[1] in have ? Response.json({ private: have[m[1]] }) : new Response("{}", { status: 404 });
+  }) as typeof fetch;
+  assert.deepEqual(await ensureNotesRepo(env, TOKEN), { repo: "jane/my-notes", created: false });
+  delete have["jane/my-notes"];
+  assert.deepEqual(await ensureNotesRepo(env, TOKEN), { repo: "jane/my-notes", created: true });
+  assert.deepEqual(made, ["my-notes"]);
+  assert.equal((await listRepos(env, TOKEN)).login, "jane", "OAuth tokens are accepted as keys");
+});
