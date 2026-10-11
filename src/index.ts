@@ -1,0 +1,206 @@
+import OAuthProvider, { AuthorizationError, CimdFetchError } from "@cloudflare/workers-oauth-provider";
+import { McpServer } from "@modelcontextprotocol/server";
+import { createMcpHandler } from "agents/mcp/server";
+import { z } from "zod";
+import { GithubNotes, CATEGORIES, type Env } from "./github";
+import { appendLog, recentLogs } from "./log";
+import { scheduler, fmt, scheduleNote, rescan, effectiveEnv, checkPassword } from "./core";
+import { notesConfigured } from "./settings";
+import { handleApp } from "./web";
+import { DEFAULT_TIMEZONE } from "./reminder-parse";
+import { verifyAction } from "./action";
+export { ReminderScheduler } from "./reminders";
+
+const INSTRUCTIONS = `The owner's personal notes and life tracking, stored as Markdown in GitHub. Times are in the owner's time zone (America/Los_Angeles unless configured).
+
+REMINDERS push a notification to the owner's phone. Any unchecked task line with an @schedule in a note is a reminder:
+  - [ ] Renew car registration @2026-10-14 9am     one-off; time optional (9am default)
+  - [ ] Take meds @daily 8am, 8pm                  repeating; also @weekdays, @weekends, @mon,wed,fri
+Times: 9am, 5:30pm or 17:30; several separated by commas. Checking the box ([x]), removing the line or deleting the note stops it. Past one-off times are ignored. Notifications have a Done button that records the item in that day's log.
+
+LOG (log / get_logs tools): timestamped entries in one note per day (journal/log/YYYY-MM-DD.md). Tag each entry: #food #drink #med #exercise #sleep #mood #goal, or another short tag that fits. Example: log("burrito and a beer #food #drink"). Pass date/time when the owner describes something earlier ("had eggs at 8" → time "08:00"). Items completed from a reminder's Done button appear as "✓ <reminder text> #done".
+
+GOALS go in the goals category, one note each:
+  # <goal>
+  Why: ...  Measure: ...  Target: YYYY-MM-DD
+  ## Next steps
+  - [ ] <step> @<date>
+  ## Progress
+  - YYYY-MM-DD: <update>
+Use update_note to add progress lines and next steps.
+
+How to help:
+- When the owner mentions eating, drinking, taking medication, exercise, sleep or mood, log it with a tag and confirm in a few words. They asked for this tracking.
+- When a conversation surfaces action items or follow-ups, offer to save them as reminder lines (ask for a time if none is obvious). After saving, confirm the times the tool returns.
+- For recurring obligations (medication, habits), suggest a repeating reminder.
+- For reviews or check-ins, read the goals notes and get_logs, then summarize what moved, what slipped and patterns worth noticing.`;
+
+function serverFor(env: Env): McpServer {
+  const server = new McpServer({ name: "personal-notes", version: "0.4.0" }, { instructions: INSTRUCTIONS });
+  const notes = new GithubNotes(env);
+  const result = async (fn: () => Promise<unknown>) => {
+    try { return { content: [{ type: "text" as const, text: JSON.stringify(await fn()) }] }; }
+    catch (e) { return { isError: true, content: [{ type: "text" as const, text: e instanceof Error ? e.message : "Operation failed" }] }; }
+  };
+  server.registerTool("save_note", { description: "Create a Markdown note and commit it to GitHub. Lines like '- [ ] task @2026-10-14 9am' become phone reminders.", inputSchema: { content: z.string(), category: z.enum(CATEGORIES).default("inbox") } },
+    ({ content, category }) => result(async () => scheduleNote(env, await notes.save(content, category), content)));
+  server.registerTool("search_notes", { description: "Find notes containing all search words", inputSchema: { query: z.string() } },
+    ({ query }) => result(() => notes.search(query)));
+  server.registerTool("list_notes", { description: "List Markdown note paths", inputSchema: {} },
+    () => result(() => notes.list()));
+  server.registerTool("get_note", { description: "Read a Markdown note", inputSchema: { name: z.string() } },
+    ({ name }) => result(async () => (await notes.get(name)).content));
+  server.registerTool("update_note", { description: "Replace note contents and commit", inputSchema: { name: z.string(), content: z.string() } },
+    ({ name, content }) => result(async () => scheduleNote(env, await notes.update(name, content), content)));
+  server.registerTool("delete_note", { description: "Delete a note and commit", inputSchema: { name: z.string() } },
+    ({ name }) => result(async () => { await notes.delete(name); await scheduler(env).removeNote(name); return name; }));
+  server.registerTool("log", { description: "Add a timestamped entry to today's log (food, drink, meds, exercise, mood...). Tag with #food #drink #med etc. Optional date YYYY-MM-DD and time HH:MM for past items.", inputSchema: { entry: z.string(), date: z.string().optional(), time: z.string().optional() } },
+    ({ entry, date, time }) => result(() => appendLog(notes, entry, { date, time, timeZone: env.NOTES_TIMEZONE })));
+  server.registerTool("get_logs", { description: "Read daily logs from the last N days (default 7, max 90), newest first", inputSchema: { days: z.number().int().min(1).max(90).default(7) } },
+    ({ days }) => result(() => recentLogs(notes, days, env.NOTES_TIMEZONE)));
+  server.registerTool("list_reminders", { description: "List upcoming phone reminders from notes", inputSchema: {} },
+    () => result(async () => {
+      const s = scheduler(env);
+      const now = Date.now();
+      const reminders = (await s.upcoming()).map(r => ({ note: r.note, ...fmt(env, r), ...(r.at <= now ? { overdue: true } : {}) }));
+      const err = await s.lastError();
+      if (!err) return reminders;
+      const when = new Date(err.at).toLocaleString("en-US", { timeZone: env.NOTES_TIMEZONE || DEFAULT_TIMEZONE, dateStyle: "medium", timeStyle: "short" });
+      return { pushError: `Last push failed at ${when} (${err.reminder}): ${err.message}. Overdue reminders retry every 5 minutes.`, reminders };
+    }));
+  server.registerTool("sync_notes", { description: "Rescan all notes and rebuild phone reminders (picks up edits made outside this server)", inputSchema: {} },
+    () => result(async () => ({ message: "Remote repository is current; run note sync on local devices to pull changes", upcomingReminders: await rescan(env) })));
+  return server;
+}
+
+
+const escapeHtml = (value: string) => value.replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
+
+
+/** "Done" button on a reminder notification: verify the signed link, then log the item. */
+const donePage = (body: string, status = 200) => new Response(
+  `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Reminder</title></head><body style="font:18px system-ui;max-width:28rem;margin:3rem auto;padding:1rem">${body}</body></html>`,
+  { status, headers: { "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'" } });
+
+async function done(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "GET" && request.method !== "POST") return new Response("Method not allowed", { status: 405 });
+  if (!env.MCP_BEARER_TOKEN || !env.GITHUB_TOKEN) return new Response("Server not configured", { status: 503 });
+  const action = await verifyAction(env.MCP_BEARER_TOKEN, new URL(request.url).searchParams.get("a") ?? "");
+  if (!action) return new Response("Invalid link", { status: 403 });
+  // GET (a tapped notification link) only shows a confirm button, so link previews never log anything.
+  if (request.method === "GET")
+    return donePage(`<p>${escapeHtml(action.text)}</p><form method="post"><button style="font:inherit;padding:.75rem 1.5rem">Mark done</button></form>`);
+  await appendLog(new GithubNotes(env), "✓ " + action.text + " #done", { timeZone: env.NOTES_TIMEZONE });
+  const fromForm = (request.headers.get("Content-Type") ?? "").includes("form");
+  return fromForm ? donePage(`<p>✓ Logged: ${escapeHtml(action.text)}</p>`) : new Response("Logged");
+}
+
+const defaultHandler = {
+  async fetch(request: Request, env: Env & { OAUTH_PROVIDER: any }): Promise<Response> {
+    const path = new URL(request.url).pathname;
+    if (path === "/health") return new Response("ok");
+    // Cloudflare's "Visit" link after deploying opens the root: send people to the app.
+    if (path === "/" && request.method === "GET") return Response.redirect(new URL("/app", request.url).toString(), 302);
+    if (path === "/done") return done(request, env);
+    if (path === "/app" || path.startsWith("/app/")) return handleApp(request, env);
+    if (path !== "/authorize") return new Response("Not found", { status: 404 });
+    // Connecting Claude only needs the password; notes can be set up before or after in the app.
+    if (!env.MCP_BEARER_TOKEN) return new Response("Server not configured: set MCP_BEARER_TOKEN (your password)", { status: 503 });
+    const oauth = env.OAUTH_PROVIDER;
+    try {
+      if (request.method === "GET") {
+        const authRequest = await oauth.parseAuthRequest(request);
+        const details = await oauth.describeConsent(authRequest);
+        const consent = await oauth.beginConsent(authRequest);
+        const client = escapeHtml(details.clientName);
+        const host = escapeHtml(details.redirectHost);
+        const scopes = details.scope.map((s: string) => escapeHtml(s)).join(", ");
+        consent.headers.set("Content-Type", "text/html; charset=utf-8");
+        consent.headers.set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'");
+        return new Response(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Authorize notes</title></head><body style="font:16px system-ui;max-width:32rem;margin:3rem auto;padding:1rem"><h1>Authorize ${client}?</h1><p>Access to your private notes: ${scopes}</p><p>Authorization will be sent to <strong>${host}</strong>.</p>${details.clientDomain ? `<p>Client domain: ${escapeHtml(details.clientDomain)}</p>` : "<p>Client identity is not independently verified.</p>"}${details.redirectIsLoopback ? "<p><strong>This client redirects to your local computer.</strong></p>" : ""}<form method="post"><input type="hidden" name="handle" value="${escapeHtml(consent.handle)}"><label>Enter your notes password to allow this:<br><input type="password" name="password" required autocomplete="off" style="width:100%;padding:.5rem"></label><p><button name="decision" value="approve">Allow</button> <button name="decision" value="deny">Deny</button></p></form></body></html>`, { headers: consent.headers });
+      }
+      if (request.method === "POST") {
+        const form = await request.formData();
+        const handle = String(form.get("handle") ?? "");
+        if (form.get("decision") === "deny") {
+          const denied = await oauth.denyConsent(request, handle);
+          return new Response(null, { status: 302, headers: denied.headers });
+        }
+        const problem = await checkPassword(env, String(form.get("password") ?? ""));
+        if (problem) return new Response(problem + " Then start connecting again from Claude.", { status: 403 });
+        const approved = await oauth.approveConsent(request, handle, { scope: ["notes:read", "notes:write"] });
+        const { redirectTo } = await oauth.completeAuthorization({
+          request: approved.request, userId: "notes-owner", metadata: {},
+          scope: approved.request.scope, props: { userId: "notes-owner" }
+        });
+        approved.headers.set("Location", redirectTo);
+        return new Response(null, { status: 302, headers: approved.headers });
+      }
+      return new Response("Method not allowed", { status: 405 });
+    } catch (error) {
+      if (error instanceof AuthorizationError && error.redirectTo) return Response.redirect(error.redirectTo, 302);
+      if (error instanceof AuthorizationError || error instanceof CimdFetchError)
+        return new Response("Invalid or expired authorization request", { status: 400 });
+      throw error;
+    }
+  }
+};
+
+// Tools report "finish setup" themselves when notes aren't configured yet, so Claude can tell the person.
+const apiHandler = {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    return createMcpHandler(() => serverFor(env))(request, env, ctx);
+  }
+};
+
+/** The Worker's public origin: PUBLIC_URL when set, otherwise the host the request arrived on. */
+export function publicOrigin(env: { PUBLIC_URL?: string }, request: Request): string {
+  const url = new URL(env.PUBLIC_URL?.trim() || request.url);
+  // Cloudflare serves the Worker over HTTPS; plain http is only real on a local `wrangler dev`.
+  if (url.protocol === "http:" && !/^(localhost|127\.0\.0\.1|\[::1\])$/.test(url.hostname)) url.protocol = "https:";
+  return url.origin;
+}
+
+// OAuth metadata names this server's own URL, so build the provider per origin instead of hardcoding one deployment.
+const providers = new Map<string, OAuthProvider>();
+function providerFor(origin: string): OAuthProvider {
+  let provider = providers.get(origin);
+  if (!provider) {
+    provider = new OAuthProvider({
+      apiRoute: "/mcp",
+      apiHandler,
+      defaultHandler,
+      authorizeEndpoint: "/authorize",
+      tokenEndpoint: "/oauth/token",
+      scopesSupported: ["notes:read", "notes:write"],
+      resourceMetadata: { resource: origin + "/mcp", authorization_servers: [origin] },
+      requiredScopes: ["notes:read"],
+      clientIdMetadataDocumentEnabled: true
+    });
+    providers.set(origin, provider);
+  }
+  return provider;
+}
+
+// Reminder "Done" links are built by the Durable Object, which never sees a request; tell it this Worker's origin once per isolate.
+let recordedOrigin: string | undefined;
+
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    // The Deploy to Cloudflare form asks for PASSWORD; it is the same secret as MCP_BEARER_TOKEN.
+    if (!env.MCP_BEARER_TOKEN && env.PASSWORD) env = { ...env, MCP_BEARER_TOKEN: env.PASSWORD };
+    const origin = publicOrigin(env, request);
+    let merged: Env = env;
+    try { merged = await effectiveEnv(env); } catch (e) { console.error("settings unavailable", e); }
+    if (!env.PUBLIC_URL && recordedOrigin !== origin) {
+      recordedOrigin = origin;
+      ctx.waitUntil(scheduler(env).setOrigin(origin).catch(e => { recordedOrigin = undefined; console.error("setOrigin failed", e); }));
+    }
+    return providerFor(origin).fetch(request, merged as Env & { OAUTH_PROVIDER: any }, ctx);
+  },
+  // Hourly rescan catches notes edited outside the MCP server (CLI pushes, GitHub web edits).
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
+    const merged = await effectiveEnv(env);
+    if (notesConfigured(merged)) ctx.waitUntil(rescan(merged));
+  }
+} satisfies ExportedHandler<Env>;

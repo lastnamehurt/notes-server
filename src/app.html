@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#E6EBF3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141A31" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Day book">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="/app/manifest.webmanifest">
+<title>Day book</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,600;0,800;1,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --paper: #E6EBF3;
+  --sheet: #F3F6FA;
+  --ink: #1F2B5E;
+  --ink-2: #5D6890;
+  --rule: #C9D2E3;
+  --mark: #E8457A;
+  --mark-ink: #FFFFFF;
+  --done: #3E7D63;
+  --shadow: 0 1px 0 #C9D2E3;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #141A31; --sheet: #1B2240; --ink: #DCE3F5; --ink-2: #8E99C2;
+    --rule: #2C3561; --mark: #FF6F9A; --mark-ink: #141A31; --done: #7CC4A2; --shadow: 0 1px 0 #2C3561;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #141A31; --sheet: #1B2240; --ink: #DCE3F5; --ink-2: #8E99C2;
+  --rule: #2C3561; --mark: #FF6F9A; --mark-ink: #141A31; --done: #7CC4A2; --shadow: 0 1px 0 #2C3561;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font: 400 17px/1.45 "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, sans-serif;
+  min-height: 100dvh;
+}
+button, input, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; border-radius: 4px; }
+[hidden] { display: none !important; }
+
+.shell { max-width: 640px; margin: 0 auto; padding: env(safe-area-inset-top) 16px 0; }
+
+/* Masthead: the date is the title of every page. */
+.mast { padding: 18px 0 6px; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.date { margin: 0; line-height: .9; }
+.date .dow { display: block; font-size: 17px; font-weight: 600; color: var(--ink-2); margin-bottom: 6px; }
+.date .day { font-size: clamp(56px, 18vw, 84px); font-weight: 800; letter-spacing: -0.04em; }
+.date .mon { font-size: 22px; font-weight: 600; margin-left: 6px; letter-spacing: -0.01em; }
+.lockbtn { background: none; border: 0; color: var(--ink-2); font-size: 15px; padding: 8px 0; }
+
+nav.tabs { display: flex; gap: 18px; border-bottom: 1px solid var(--rule); margin: 6px 0 0; overflow-x: auto; scrollbar-width: none; }
+nav.tabs a { padding: 12px 0 10px; color: var(--ink-2); text-decoration: none; font-weight: 600; border-bottom: 3px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+nav.tabs a[aria-current="page"] { color: var(--ink); border-color: var(--ink); }
+
+main { padding: 18px 0 calc(150px + env(safe-area-inset-bottom)); }
+.empty { color: var(--ink-2); padding: 28px 0; }
+.err { color: var(--mark); font-weight: 600; }
+
+/* Today: the time rail. */
+.rail { position: relative; margin: 0; padding: 0; list-style: none; }
+.rail::before { content: ""; position: absolute; left: 76px; top: 6px; bottom: 6px; width: 2px; background: var(--rule); }
+.ev { position: relative; display: grid; grid-template-columns: 64px 1fr; gap: 26px; padding: 9px 0; align-items: baseline; }
+.ev time, .rem time { font-variant-numeric: tabular-nums; }
+.ev time { text-align: right; color: var(--ink-2); font-size: 15px; white-space: nowrap; }
+.ev::after { content: ""; position: absolute; left: 72px; top: 17px; width: 10px; height: 10px; border-radius: 50%; background: var(--ink); }
+.ev.done-ev::after { background: var(--done); }
+.ev.up::after { background: var(--paper); box-shadow: inset 0 0 0 2px var(--mark); }
+.ev .what { overflow-wrap: anywhere; }
+.ev .tags { color: var(--ink-2); font-size: 15px; }
+.ev.up .what { font-weight: 600; }
+.ev .sub { display: block; font-size: 14px; color: var(--ink-2); }
+.ev .body { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; }
+.ev .mk { flex: none; background: none; border: 1.5px solid var(--mark); color: var(--mark); border-radius: 999px; padding: 3px 12px; font-size: 14px; font-weight: 600; }
+.now { position: relative; height: 0; margin: 14px 0; border-top: 2px solid var(--mark); }
+.now span { position: absolute; left: 0; top: -12px; background: var(--mark); color: var(--mark-ink); font-size: 13px; font-weight: 800; padding: 2px 7px; border-radius: 4px; }
+.later { margin: 28px 0 8px; font-size: 15px; color: var(--ink-2); }
+
+/* Composer: thumb zone. */
+.composer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--paper); border-top: 1px solid var(--rule); padding: 10px 16px calc(12px + env(safe-area-inset-bottom)); }
+.composer .in { max-width: 640px; margin: 0 auto; }
+.chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 8px; }
+.chip { flex: none; border: 1px solid var(--rule); background: var(--sheet); border-radius: 999px; padding: 5px 12px; font-size: 15px; color: var(--ink-2); }
+.chip[aria-pressed="true"] { border-color: var(--ink); color: var(--ink); font-weight: 600; }
+.row { display: flex; gap: 8px; }
+.row input { flex: 1; min-width: 0; border: 1.5px solid var(--rule); background: var(--sheet); border-radius: 12px; padding: 12px 14px; }
+.row input:focus { border-color: var(--ink); outline: none; }
+.btn { border: 0; background: var(--ink); color: var(--paper); border-radius: 12px; padding: 12px 18px; font-weight: 600; }
+.btn:disabled { opacity: .5; }
+.btn.quiet { background: none; color: var(--ink); border: 1.5px solid var(--rule); }
+.btn.danger { background: none; color: var(--mark); border: 1.5px solid var(--mark); }
+
+/* Lists */
+.search { width: 100%; border: 1.5px solid var(--rule); background: var(--sheet); border-radius: 12px; padding: 11px 14px; margin-bottom: 14px; }
+.bar { display: flex; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+h2.group { font-size: 15px; font-weight: 600; color: var(--ink-2); margin: 22px 0 4px; }
+h2.group b { color: var(--ink); }
+.list { list-style: none; margin: 0; padding: 0; }
+.list a { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--rule); color: inherit; text-decoration: none; }
+.list a .t { font-weight: 600; overflow-wrap: anywhere; }
+.list a .d { color: var(--ink-2); font-size: 15px; white-space: nowrap; }
+
+/* Goals */
+.goal { padding: 16px 0 18px; border-bottom: 1px solid var(--rule); }
+.goal h3 { margin: 0 0 4px; font-size: 21px; letter-spacing: -0.01em; }
+.goal h3 a { color: inherit; text-decoration: none; }
+.goal .meta { color: var(--ink-2); font-size: 15px; }
+.meter { display: flex; gap: 3px; margin: 12px 0 10px; }
+.meter i { flex: 1; height: 8px; border-radius: 2px; background: var(--rule); }
+.meter i.on { background: var(--ink); }
+.goal .next { font-size: 16px; }
+.goal .next span { color: var(--ink-2); }
+
+/* Reminders */
+.rem { display: grid; grid-template-columns: 76px 1fr; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--rule); }
+.rem time { color: var(--ink-2); }
+.rem .sub { display: block; font-size: 14px; color: var(--ink-2); }
+.rem .sub a { color: inherit; }
+
+/* Editor */
+.ed-top { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+.ed-top .path { flex: 1 1 100%; color: var(--ink-2); font-size: 14px; overflow-wrap: anywhere; }
+.seg { display: inline-flex; border: 1.5px solid var(--rule); border-radius: 10px; overflow: hidden; }
+.seg button { background: none; border: 0; padding: 8px 14px; color: var(--ink-2); font-weight: 600; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+textarea.src { width: 100%; min-height: 55dvh; border: 1.5px solid var(--rule); background: var(--sheet); border-radius: 12px; padding: 14px; line-height: 1.55; resize: vertical; }
+textarea.src:focus { border-color: var(--ink); outline: none; }
+.hint { font-size: 14px; color: var(--ink-2); margin: 8px 0 0; }
+.doc { background: var(--sheet); border-radius: 12px; padding: 4px 18px 14px; box-shadow: var(--shadow); overflow-wrap: anywhere; }
+.doc h1 { font-size: 28px; letter-spacing: -0.02em; line-height: 1.15; margin: 16px 0 8px; }
+.doc h2 { font-size: 20px; margin: 20px 0 6px; }
+.doc h3 { font-size: 17px; margin: 16px 0 4px; }
+.doc ul { padding-left: 20px; margin: 8px 0; }
+.doc li.task { list-style: none; margin-left: -20px; display: flex; gap: 10px; align-items: flex-start; padding: 3px 0; }
+.doc li.task input { width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--ink); flex: none; }
+.doc li.task.checked span { color: var(--ink-2); text-decoration: line-through; }
+.doc .when { color: var(--mark); font-weight: 600; white-space: nowrap; }
+.doc code { background: var(--paper); padding: 1px 5px; border-radius: 4px; font-size: .92em; }
+.doc a { color: var(--ink); }
+.ed-actions { display: flex; gap: 10px; margin-top: 14px; }
+.ed-actions .grow { flex: 1; }
+select.cat { border: 1.5px solid var(--rule); background: var(--sheet); border-radius: 10px; padding: 8px 10px; }
+
+/* Lock */
+.lock { padding-top: 10dvh; }
+.lock p { color: var(--ink-2); max-width: 32ch; }
+.lock input { width: 100%; border: 1.5px solid var(--rule); background: var(--sheet); border-radius: 12px; padding: 13px 14px; margin: 8px 0 12px; }
+.lock label { font-weight: 600; }
+
+
+/* Setup */
+.setup h2 { font-size: 24px; letter-spacing: -0.01em; margin: 6px 0 4px; }
+.setup .lede { color: var(--ink-2); margin: 0 0 18px; }
+.step { background: var(--sheet); border-radius: 14px; padding: 16px 16px 18px; margin: 0 0 14px; box-shadow: var(--shadow); }
+.step h3 { margin: 0 0 6px; font-size: 18px; display: flex; gap: 10px; align-items: baseline; }
+.step h3 .n { flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--ink); color: var(--paper); font-size: 14px; display: inline-grid; place-items: center; }
+.step.ok h3 .n { background: var(--done); }
+.step p, .step ol { margin: 6px 0 10px; }
+.step ol { padding-left: 20px; }
+.step li { margin: 4px 0; }
+.step .muted { color: var(--ink-2); font-size: 15px; }
+.step input[type=text], .step input[type=password], .step select { width: 100%; border: 1.5px solid var(--rule); background: var(--paper); border-radius: 12px; padding: 12px 14px; margin: 4px 0 10px; }
+.step label { font-weight: 600; display: block; }
+.btn.link { display: inline-block; text-decoration: none; }
+.choices { list-style: none; padding: 0; margin: 6px 0 10px; }
+.choices label { display: flex; gap: 10px; align-items: center; font-weight: 400; padding: 8px 0; border-bottom: 1px solid var(--rule); }
+.choices input { width: 20px; height: 20px; accent-color: var(--ink); }
+.copyrow { display: flex; gap: 8px; align-items: center; }
+.copyrow code { flex: 1; min-width: 0; overflow-wrap: anywhere; background: var(--paper); border-radius: 8px; padding: 10px 12px; font-size: 15px; }
+details.more summary { cursor: pointer; color: var(--ink-2); margin: 8px 0; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(140px + env(safe-area-inset-bottom)); background: var(--ink); color: var(--paper); padding: 9px 16px; border-radius: 10px; font-weight: 600; font-size: 15px; max-width: calc(100% - 32px); }
+@media (prefers-reduced-motion: no-preference) {
+  .toast { animation: rise .18s ease-out; }
+  @keyframes rise { from { opacity: 0; transform: translate(-50%, 6px); } }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="mast">
+    <h1 class="date" id="date"></h1>
+    <button class="lockbtn" id="lockbtn" hidden>Lock</button>
+  </header>
+  <nav class="tabs" id="tabs" hidden aria-label="Sections">
+    <a href="#today">Today</a>
+    <a href="#notes">Notes</a>
+    <a href="#goals">Goals</a>
+    <a href="#reminders">Reminders</a>
+    <a href="#settings" id="settingsTab" hidden>Setup</a>
+  </nav>
+  <main id="main" aria-live="polite"></main>
+</div>
+
+<form class="composer" id="composer" hidden autocomplete="off">
+  <div class="in">
+    <div class="chips" id="chips" role="group" aria-label="Tags"></div>
+    <div class="row">
+      <label for="entry" style="position:absolute;left:-9999px">Log something</label>
+      <input id="entry" name="entry" placeholder="Log something: coffee, meds, a walk" enterkeyhint="send">
+      <button class="btn" id="logbtn" type="submit">Log</button>
+    </div>
+  </div>
+</form>
+
+<script>
+"use strict";
+const TAGS = ["food", "drink", "med", "exercise", "sleep", "mood"];
+const $ = (s, el = document) => el.querySelector(s);
+const main = $("#main");
+let cfg = { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, categories: [], push: true };
+
+const esc = s => String(s).replace(/[&<>"']/g, c => "&#" + c.charCodeAt(0) + ";");
+const h = (strings, ...vals) => strings.reduce((out, s, i) => out + s + (i < vals.length ? (vals[i] && vals[i].__html !== undefined ? vals[i].__html : esc(vals[i] ?? "")) : ""), "");
+const raw = html => ({ __html: html });
+
+// Dates in the owner's time zone, not the phone's.
+const parts = (ms = Date.now()) => Object.fromEntries(new Intl.DateTimeFormat("en-US", {
+  timeZone: cfg.timeZone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", weekday: "short"
+}).formatToParts(new Date(ms)).map(p => [p.type, p.value]));
+const dayKey = ms => { const p = parts(ms); return p.year + "-" + p.month + "-" + p.day; };
+const hhmm = ms => { const p = parts(ms); return p.hour + ":" + p.minute; };
+const fmt12 = t => { let [H, M] = t.split(":").map(Number); const ap = H >= 12 ? "pm" : "am"; H = H % 12 || 12; return H + (M ? ":" + String(M).padStart(2, "0") : "") + ap; };
+const longDay = ms => new Intl.DateTimeFormat("en-US", { timeZone: cfg.timeZone, weekday: "short", month: "short", day: "numeric" }).format(new Date(ms));
+
+function drawDate() {
+  const now = new Date();
+  const f = o => new Intl.DateTimeFormat("en-US", { timeZone: cfg.timeZone, ...o }).format(now);
+  $("#date").innerHTML = h`<span class="dow">${f({ weekday: "long" })}</span><span class="day">${f({ day: "numeric" })}</span><span class="mon">${f({ month: "short" })}</span>`;
+}
+
+let toastTimer, nextToast = null;
+function toast(msg) {
+  document.querySelectorAll(".toast").forEach(t => t.remove());
+  const t = document.createElement("div");
+  t.className = "toast"; t.role = "status"; t.textContent = msg;
+  document.body.append(t);
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.remove(), 2600);
+}
+
+class Locked extends Error {}
+async function api(path, opts = {}) {
+  const res = await fetch("/app/api" + path, {
+    ...opts, credentials: "same-origin",
+    headers: opts.body ? { "Content-Type": "application/json" } : {},
+    body: opts.body ? JSON.stringify(opts.body) : undefined
+  });
+  if (res.status === 401) throw new Locked();
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Request failed (" + res.status + ")");
+  return data;
+}
+
+/* ---------- Note names and Markdown ---------- */
+function titleFrom(name, content) {
+  const head = content && /^#\s+(.+)$/m.exec(content);
+  if (head) return head[1].trim();
+  const file = name.split("/").pop().replace(/\.md$/, "");
+  const m = /^\d{4}-\d{2}-\d{2}-(.+)$/.exec(file);
+  const slug = m ? m[1] : file;
+  if (/^\d{8}T\d{6}Z?-[0-9a-f]{8}$/.test(slug)) return "Untitled note";
+  return slug.replace(/-\d+$/, "").replace(/-/g, " ").replace(/^./, c => c.toUpperCase());
+}
+function dateFrom(name) {
+  const m = /(\d{4})-?(\d{2})-?(\d{2})/.exec(name.split("/").pop());
+  if (!m) return "";
+  return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], 12)).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+const folderName = c => ({ inbox: "Inbox", goals: "Goals", projects: "Projects", decisions: "Decisions", runbooks: "Runbooks", reference: "Reference", journal: "Journal" }[c] || c);
+
+function inline(s) {
+  return esc(s)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" rel="noopener noreferrer" target="_blank">$1</a>');
+}
+const SCHED = /\s+@((?:\d{4}-\d{2}-\d{2}|daily|everyday|weekdays|weekends|[a-z]{3,9}(?:,[a-z]{3,9})*)(?:\s+[\d:apm, ]+)?)\s*$/i;
+const shortDate = iso => new Date(iso + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+function niceSched(spec) {
+  const [when, ...times] = spec.trim().split(/\s+/);
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(when) ? shortDate(when) : when.replace(/,/g, ", ");
+  return day + (times.length ? ", " + times.join(" ") : "");
+}
+function render(md) {
+  const out = []; let list = false; let para = [];
+  const flush = () => { if (para.length) { out.push("<p>" + para.map(inline).join("<br>") + "</p>"); para = []; } };
+  const close = () => { if (list) { out.push("</ul>"); list = false; } };
+  md.split("\n").forEach((line, i) => {
+    let m;
+    if ((m = /^(#{1,3})\s+(.*)$/.exec(line))) { flush(); close(); out.push(`<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`); return; }
+    if ((m = /^\s*[-*]\s+\[( |x|X)\]\s+(.*)$/.exec(line))) {
+      flush(); if (!list) { out.push("<ul>"); list = true; }
+      const checked = m[1] !== " ";
+      const s = SCHED.exec(m[2]);
+      const text = s ? m[2].slice(0, s.index) : m[2];
+      out.push(`<li class="task${checked ? " checked" : ""}"><input type="checkbox" data-line="${i}" ${checked ? "checked" : ""} aria-label="Done"><span>${inline(text)}${s ? ` <span class="when">${esc(niceSched(s[1]))}</span>` : ""}</span></li>`);
+      return;
+    }
+    if ((m = /^\s*[-*]\s+(.*)$/.exec(line))) { flush(); if (!list) { out.push("<ul>"); list = true; } out.push("<li>" + inline(m[1]) + "</li>"); return; }
+    if (!line.trim()) { flush(); close(); return; }
+    close(); para.push(line);
+  });
+  flush(); close();
+  return out.join("");
+}
+
+/* ---------- Views ---------- */
+const views = {};
+
+views.today = async () => {
+  main.innerHTML = '<p class="empty">Loading today…</p>';
+  const [logs, rems] = await Promise.all([api("/logs?days=1"), api("/reminders")]);
+  const today = dayKey(Date.now());
+  const entries = [];
+  const log = logs.find(l => l.date === today);
+  if (log) for (const line of log.content.split("\n")) {
+    const m = /^- (\d{2}:\d{2}) (.*)$/.exec(line);
+    if (m) entries.push({ t: m[1], text: m[2] });
+  }
+  // A reminder already marked done today (via the app or the notification's Done button) isn't upcoming.
+  const doneToday = new Set(entries.map(e => (/^✓ (.*?)(\s+#[\w-]+)*$/.exec(e.text) || [])[1]).filter(Boolean));
+  const upcoming = rems.filter(r => dayKey(r.at) === today && !doneToday.has(r.text));
+  const later = rems.filter(r => dayKey(r.at) !== today).slice(0, 3);
+  const nowT = hhmm(Date.now());
+
+  const logRow = e => {
+    const tags = (e.text.match(/#[\w-]+/g) || []).join(" ");
+    const what = e.text.replace(/\s*#[\w-]+/g, "").trim();
+    const done = /^✓/.test(what);
+    return h`<li class="ev${done ? " done-ev" : ""}"><time>${fmt12(e.t)}</time><div><span class="what">${what}</span> <span class="tags">${tags}</span></div></li>`;
+  };
+  const remRow = r => h`<li class="ev up"><time>${fmt12(hhmm(r.at))}</time><div class="body"><div><span class="what">${r.text}</span>
+      <span class="sub"><a href="#note/${r.note}" style="color:inherit">${titleFrom(r.note)}</a>${r.repeat ? ", repeats" : ""}</span></div>
+      <button class="mk" data-done="${r.text}" aria-label="Mark ${r.text} done">Done</button></div></li>`;
+
+  let html = "";
+  if (!entries.length && !upcoming.length) {
+    html = `<p class="empty">Nothing logged yet today. Use the box below to log a meal, a drink, your meds or how you're feeling.</p>`;
+  } else {
+    html = '<ol class="rail">' + entries.filter(e => e.t <= nowT).map(logRow).join("") + "</ol>";
+    html += `<div class="now" role="separator" aria-label="Now"><span>${esc(fmt12(nowT))}</span></div>`;
+    html += '<ol class="rail">' + entries.filter(e => e.t > nowT).map(logRow).join("") + upcoming.map(remRow).join("") + "</ol>";
+  }
+  if (later.length) {
+    html += '<p class="later">Coming up</p><ol class="rail">' + later.map(r =>
+      h`<li class="ev up"><time>${longDay(r.at).replace(/^\w+, /, "")}</time><div><span class="what">${r.text}</span><span class="sub">${fmt12(hhmm(r.at))}</span></div></li>`).join("") + "</ol>";
+  }
+  if (!cfg.push) html += `<p class="hint">Reminders are saved, but phone notifications aren't set up yet.</p>`;
+  main.innerHTML = html;
+  main.querySelectorAll("[data-done]").forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    try { await api("/log", { method: "POST", body: { entry: "✓ " + b.dataset.done + " #done" } }); toast("Logged as done"); views.today(); }
+    catch (e) { handle(e); b.disabled = false; }
+  });
+};
+
+let allNotes = null;
+views.notes = async () => {
+  main.innerHTML = h`<div class="bar"><input class="search" id="q" type="search" placeholder="Search notes" aria-label="Search notes" style="margin:0"><a class="btn" href="#new" style="text-decoration:none;white-space:nowrap">New note</a></div><div id="nl"><p class="empty">Loading notes…</p></div>`;
+  allNotes = await api("/notes");
+  const draw = names => {
+    const byFolder = {};
+    for (const n of names) {
+      if (n.startsWith("journal/log/")) continue;
+      (byFolder[n.split("/")[0]] ||= []).push(n);
+    }
+    const folders = Object.keys(byFolder).sort((a, b) => (a === "inbox" ? -1 : b === "inbox" ? 1 : a.localeCompare(b)));
+    $("#nl").innerHTML = folders.length ? folders.map(f => h`<h2 class="group"><b>${folderName(f)}</b> ${byFolder[f].length}</h2><ul class="list">${raw(byFolder[f].map(n =>
+      h`<li><a href="#note/${n}"><span class="t">${titleFrom(n)}</span><span class="d">${dateFrom(n)}</span></a></li>`).join(""))}</ul>`).join("")
+      : `<p class="empty">No notes match. Try fewer words.</p>`;
+  };
+  draw(allNotes);
+  let timer;
+  $("#q").oninput = e => {
+    clearTimeout(timer);
+    const q = e.target.value.trim();
+    if (!q) return draw(allNotes);
+    const quick = allNotes.filter(n => n.toLowerCase().includes(q.toLowerCase()));
+    draw(quick);
+    timer = setTimeout(async () => { try { draw(await api("/search?q=" + encodeURIComponent(q))); } catch (err) { handle(err); } }, 450);
+  };
+};
+
+views.goals = async () => {
+  main.innerHTML = '<p class="empty">Loading goals…</p>';
+  const goals = await api("/goals");
+  if (!goals.length) {
+    main.innerHTML = `<p class="empty">No goals yet. Start one with why it matters, how you'll measure it and the first step.</p><a class="btn" href="#new/goals" style="text-decoration:none;display:inline-block">New goal</a>`;
+    return;
+  }
+  const today = dayKey(Date.now());
+  main.innerHTML = goals.map(g => {
+    const c = g.content;
+    const steps = [...c.matchAll(/^\s*[-*]\s+\[( |x|X)\]\s+(.*)$/gm)];
+    const done = steps.filter(s => s[1] !== " ").length;
+    const next = steps.find(s => s[1] === " ");
+    const target = (/Target:\s*(\d{4}-\d{2}-\d{2})/i.exec(c) || [])[1];
+    const days = target ? Math.round((Date.parse(target) - Date.parse(today)) / 86400000) : null;
+    const progress = [...c.matchAll(/^- (\d{4}-\d{2}-\d{2}): (.*)$/gm)].pop();
+    const meta = [target ? (days >= 0 ? days + " days left, due " + shortDate(target) : Math.abs(days) + " days past " + shortDate(target)) : "",
+                  steps.length ? done + " of " + steps.length + " steps done" : ""].filter(Boolean).join(", ");
+    return h`<article class="goal"><h3><a href="#note/${g.name}">${titleFrom(g.name, c)}</a></h3>
+      <div class="meta">${meta || "No steps yet"}</div>
+      ${raw(steps.length ? '<div class="meter" aria-hidden="true">' + steps.map(s => `<i class="${s[1] !== " " ? "on" : ""}"></i>`).join("") + "</div>" : "")}
+      ${raw(next ? h`<div class="next"><span>Next:</span> ${next[2].replace(SCHED, "")}</div>` : "")}
+      ${raw(progress ? h`<div class="meta" style="margin-top:6px">Last update ${shortDate(progress[1])}: ${progress[2]}</div>` : "")}</article>`;
+  }).join("") + `<p style="margin-top:20px"><a class="btn quiet" href="#new/goals" style="text-decoration:none;display:inline-block">New goal</a></p>`;
+};
+
+views.reminders = async () => {
+  main.innerHTML = '<p class="empty">Loading reminders…</p>';
+  const rems = await api("/reminders");
+  if (!rems.length) {
+    main.innerHTML = `<p class="empty">No reminders scheduled. Add a line like <code>- [ ] Take meds @daily 8am</code> to any note.</p>`;
+    return;
+  }
+  const today = dayKey(Date.now()), tomorrow = dayKey(Date.now() + 86400000);
+  let html = "", last = "";
+  for (const r of rems) {
+    const k = dayKey(r.at);
+    if (k !== last) { html += (last ? "</div>" : "") + h`<h2 class="group"><b>${k === today ? "Today" : k === tomorrow ? "Tomorrow" : longDay(r.at)}</b></h2><div>`; last = k; }
+    html += h`<div class="rem"><time>${fmt12(hhmm(r.at))}</time><div>${r.text}<span class="sub"><a href="#note/${r.note}">${titleFrom(r.note)}</a>${r.repeat ? ", repeats" : ""}</span></div></div>`;
+  }
+  main.innerHTML = html + "</div>";
+};
+
+/* Editor: read view with tickable boxes, or Markdown source. */
+async function editor(name, category) {
+  const isNew = !name;
+  let content = "", mode = isNew ? "edit" : "read";
+  if (!isNew) {
+    main.innerHTML = '<p class="empty">Opening note…</p>';
+    content = (await api("/note?name=" + encodeURIComponent(name))).content;
+  } else if (category === "goals") {
+    content = "# \n\nWhy: \nMeasure: \nTarget: \n\n## Next steps\n- [ ] \n\n## Progress\n";
+  }
+  const cats = cfg.categories.filter(c => c !== "journal" || isNew);
+  const draw = () => {
+    main.innerHTML = h`<div class="ed-top">
+        <div class="path">${isNew ? "New note" : "In " + folderName(name.split("/")[0]) + (dateFrom(name) ? ", created " + dateFrom(name) : "")}</div>
+        <div class="seg" role="group" aria-label="View"><button data-m="read" aria-pressed="${mode === "read"}">Read</button><button data-m="edit" aria-pressed="${mode === "edit"}">Edit</button></div>
+        ${raw(isNew ? h`<select class="cat" id="cat" aria-label="Folder">${raw(cats.map(c => h`<option value="${c}" ${c === (category || "inbox") ? "selected" : ""}>${folderName(c)}</option>`).join(""))}</select>` : "")}
+      </div>
+      ${raw(mode === "read"
+        ? `<div class="doc">${content.trim() ? render(content) : '<p class="empty">This note is empty.</p>'}</div>`
+        : h`<label for="src" style="position:absolute;left:-9999px">Note text</label><textarea class="src" id="src" spellcheck="true">${content}</textarea>
+           <p class="hint">Start with a # title. Add a reminder with <code>- [ ] Call the pharmacy @2026-10-14 9am</code> or <code>@daily 8am</code>.</p>`)}
+      <div class="ed-actions">
+        <button class="btn grow" id="save" ${mode === "read" ? "hidden" : ""}>Save</button>
+        ${raw(!isNew ? '<button class="btn danger" id="del">Delete</button>' : "")}
+      </div>`;
+    main.querySelectorAll("[data-m]").forEach(b => b.onclick = () => { if (mode === "edit") content = $("#src").value; mode = b.dataset.m; draw(); });
+    main.querySelectorAll("input[data-line]").forEach(cb => cb.onchange = async () => {
+      const lines = content.split("\n"); const i = +cb.dataset.line;
+      lines[i] = lines[i].replace(/\[( |x|X)\]/, cb.checked ? "[x]" : "[ ]");
+      const prev = content; content = lines.join("\n"); draw();
+      try { await api("/note", { method: "PUT", body: { name, content } }); toast(cb.checked ? "Checked off" : "Unchecked"); }
+      catch (e) { content = prev; draw(); handle(e); }
+    });
+    const save = $("#save");
+    if (save) save.onclick = async () => {
+      content = $("#src").value;
+      if (!content.trim()) return toast("Write something before saving");
+      save.disabled = true;
+      try {
+        const res = isNew ? await api("/note", { method: "POST", body: { content, category: $("#cat").value } })
+                          : await api("/note", { method: "PUT", body: { name, content } });
+        const n = res.reminders ? res.reminders.length : 0;
+        const msg = "Saved" + (n ? ", " + n + " reminder" + (n > 1 ? "s" : "") + " set" : "") +
+          (res.warning ? (/NTFY_TOPIC/.test(res.warning) ? ". Phone notifications aren't set up yet (Settings)." : ". " + res.warning) : "");
+        allNotes = null;
+        if (isNew) { nextToast = msg; location.hash = "#note/" + res.name; } else { mode = "read"; draw(); toast(msg); }
+      } catch (e) { handle(e); save.disabled = false; }
+    };
+    const del = $("#del");
+    if (del) del.onclick = async () => {
+      if (!confirm("Delete this note? Its reminders stop too.")) return;
+      try { await api("/note?name=" + encodeURIComponent(name), { method: "DELETE" }); nextToast = "Deleted"; location.hash = "#notes"; }
+      catch (e) { handle(e); }
+    };
+  };
+  draw();
+}
+
+
+/* ---------- Setup (first run, and Settings later) ---------- */
+const GH_NEW_REPO = "https://github.com/new?name=notes&visibility=private&description=" + encodeURIComponent("My private notes");
+const GH_NEW_KEY = "https://github.com/settings/personal-access-tokens/new?name=" + encodeURIComponent("Notes server") +
+  "&description=" + encodeURIComponent("Lets my notes server read and save my notes") + "&expires_in=none&contents=write";
+const NTFY_IOS = "https://apps.apple.com/app/ntfy/id1625396347";
+const NTFY_ANDROID = "https://play.google.com/store/apps/details?id=io.heckel.ntfy";
+const randomTopic = () => "notes-" + [...crypto.getRandomValues(new Uint8Array(15))].map(b => b.toString(36).padStart(2, "0")).join("").slice(0, 24);
+const zones = () => { try { return Intl.supportedValuesOf("timeZone"); } catch { return [Intl.DateTimeFormat().resolvedOptions().timeZone]; } };
+async function copy(text, btn) {
+  try { await navigator.clipboard.writeText(text); btn.textContent = "Copied"; setTimeout(() => (btn.textContent = "Copy"), 1500); }
+  catch { toast("Press and hold to copy"); }
+}
+
+views.setup = async () => {
+  $("#composer").hidden = true;
+  const prev = await api("/settings");
+  const first = !cfg.configured;
+  const tz = prev.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const topic = prev.ntfyTopic || randomTopic();
+  const mcpUrl = location.origin + "/mcp";
+  let chosenRepo = prev.notesRepo || "";
+
+  main.innerHTML = h`<div class="setup">
+    <h2>${first ? "Let's set up your notes" : "Settings"}</h2>
+    <p class="lede">${first ? "About 5 minutes. Your notes are saved to your own private GitHub repository; nobody else can see them." : "Change where notes are saved, your time zone, or phone notifications."}</p>
+
+    ${raw(first ? h`<section class="step" id="s1"><h3><span class="n">1</span>Make a private place for your notes</h3>
+      <p>This opens GitHub with a private repository called <b>notes</b> ready to create. Check <b>Private</b> is selected, then tap <b>Create repository</b>.</p>
+      <a class="btn quiet link" href="${GH_NEW_REPO}" target="_blank" rel="noopener">Create notes repository</a>
+      <p class="muted">Already have one? Skip this.</p></section>` : "")}
+
+    <section class="step" id="s2"><h3><span class="n">${first ? 2 : 1}</span>Give this app a key to it</h3>
+      <ol>
+        <li>Tap the button. GitHub opens a key form, already filled in.</li>
+        <li>Under <b>Repository access</b>, choose <b>Only select repositories</b> and pick <b>notes</b>.</li>
+        <li>Scroll down, tap <b>Generate token</b>, then <b>copy</b> it (it starts with <code>github_pat_</code>).</li>
+      </ol>
+      <a class="btn quiet link" href="${GH_NEW_KEY}" target="_blank" rel="noopener">Create access key</a>
+      <label for="tok" style="margin-top:14px">Paste the key here</label>
+      <input id="tok" type="password" autocomplete="off" spellcheck="false" placeholder="${prev.hasToken ? "Key saved (paste to replace)" : "github_pat_…"}">
+      <button class="btn" id="check" type="button">Check key</button>
+      <div id="repos"></div></section>
+
+    <section class="step" id="s3"><h3><span class="n">${first ? 3 : 2}</span>Your time zone</h3>
+      <p class="muted">Reminders and your daily log use it.</p>
+      <label for="tz" style="position:absolute;left:-9999px">Time zone</label>
+      <select id="tz">${raw(zones().map(z => h`<option ${z === tz ? "selected" : ""}>${z}</option>`).join(""))}</select></section>
+
+    <section class="step" id="s4"><h3><span class="n">${first ? 4 : 3}</span>Reminders on your phone</h3>
+      <p class="muted">Optional and free. You can do this later in Settings.</p>
+      <ol>
+        <li>Install the free <b>ntfy</b> app: <a href="${NTFY_IOS}" target="_blank" rel="noopener">iPhone</a> or <a href="${NTFY_ANDROID}" target="_blank" rel="noopener">Android</a>. Allow notifications when it asks.</li>
+        <li>In ntfy, tap <b>+</b> and paste this name. It's long so nobody can guess it; keep it private.</li>
+      </ol>
+      <div class="copyrow"><code id="topic">${topic}</code><button class="btn quiet" id="copytopic" type="button">Copy</button></div>
+      <label class="choices" style="border:0"><input type="checkbox" id="usentfy" ${prev.notify === "pushover" ? "" : "checked"}> Send my reminders to ntfy</label>
+      <details class="more"><summary>Use Pushover instead</summary>
+        <p class="muted">Pushover is a paid app ($5 once). Enter your user key and an application token from pushover.net.</p>
+        <input type="text" id="pouser" placeholder="User key" autocomplete="off">
+        <input type="text" id="potoken" placeholder="Application API token" autocomplete="off"></details></section>
+
+    <button class="btn" id="save" type="button" style="width:100%;padding:15px">Save and finish</button>
+    <p class="err" id="saveerr" role="alert"></p>
+    <div id="after"></div>
+  </div>`;
+
+  const drawRepos = (repos) => {
+    const priv = repos.filter(r => r.private);
+    if (!chosenRepo) chosenRepo = (priv.find(r => /(^|\/)notes/i.test(r.fullName)) || priv[0] || {}).fullName || "";
+    $("#repos").innerHTML = repos.length
+      ? h`<p style="margin-top:14px"><b>Save notes in:</b></p><div class="choices">${raw(repos.map(r => h`<label><input type="radio" name="repo" value="${r.fullName}" ${r.fullName === chosenRepo ? "checked" : ""}> ${r.fullName}${r.private ? "" : " (public, can't use)"}</label>`).join(""))}</div>`
+      : `<p class="err">The key works but can't see any repositories. On GitHub, edit the key and add your notes repository under Repository access.</p>`;
+    $("#repos").querySelectorAll("input[name=repo]").forEach(i => i.onchange = () => (chosenRepo = i.value));
+    $("#s2").classList.toggle("ok", repos.length > 0);
+  };
+  const check = async () => {
+    const b = $("#check"); b.disabled = true; b.textContent = "Checking…";
+    try { drawRepos((await api("/setup/repos", { method: "POST", body: { token: $("#tok").value.trim() } })).repos); }
+    catch (e) { if (e instanceof Locked) return showLock(); $("#repos").innerHTML = h`<p class="err">${e.message}</p>`; }
+    b.disabled = false; b.textContent = "Check key";
+  };
+  $("#check").onclick = check;
+  $("#tok").addEventListener("paste", () => setTimeout(check, 50));
+  if (prev.hasToken) check();
+  $("#copytopic").onclick = e => copy(topic, e.target);
+
+  $("#save").onclick = async () => {
+    const b = $("#save"); b.disabled = true; b.textContent = "Saving…"; $("#saveerr").textContent = "";
+    const pushoverUser = $("#pouser").value.trim(), pushoverToken = $("#potoken").value.trim();
+    try {
+      if (!chosenRepo) throw new Error("Check your key in step 2 and pick where to save notes.");
+      await api("/setup", { method: "POST", body: {
+        token: $("#tok").value.trim(), repo: chosenRepo, timezone: $("#tz").value,
+        ntfyTopic: $("#usentfy").checked && !(pushoverUser && pushoverToken) ? topic : "",
+        pushoverUser, pushoverToken } });
+      cfg = await api("/config"); drawDate(); $("#tabs").hidden = false; $("#settingsTab").hidden = !cfg.canSetup;
+      showDone(mcpUrl);
+    } catch (e) { if (e instanceof Locked) return showLock(); $("#saveerr").textContent = e.message; }
+    b.disabled = false; b.textContent = "Save and finish";
+  };
+};
+
+function showDone(mcpUrl) {
+  main.innerHTML = h`<div class="setup">
+    <h2>You're set up</h2>
+    <section class="step ok"><h3><span class="n">✓</span>Notes are saving to your private repository</h3>
+      ${raw(cfg.push ? `<p>Send yourself a test reminder to check your phone gets it.</p><button class="btn quiet" id="test" type="button">Send test notification</button>` : `<p class="muted">Phone notifications are off. You can turn them on in Settings.</p>`)}</section>
+    <section class="step"><h3><span class="n">2</span>Connect Claude</h3>
+      <ol>
+        <li>In Claude, open <b>Settings → Connectors</b> and choose <b>Add custom connector</b>.</li>
+        <li>Name it <b>Notes</b> and paste this address:</li>
+      </ol>
+      <div class="copyrow"><code>${mcpUrl}</code><button class="btn quiet" id="copymcp" type="button">Copy</button></div>
+      <ol start="3"><li>A sign-in page opens. Enter the same password you use here and tap <b>Allow</b>.</li>
+        <li>Try it: ask Claude <i>"remind me to drink water at 3pm"</i>.</li></ol></section>
+    <section class="step"><h3><span class="n">3</span>Put this app on your home screen</h3>
+      <p>iPhone: tap <b>Share</b>, then <b>Add to Home Screen</b>. Android: tap <b>⋮</b>, then <b>Add to Home screen</b>.</p></section>
+    <a class="btn link" href="#today" style="width:100%;text-align:center;padding:15px">Open my notes</a></div>`;
+  $("#copymcp").onclick = e => copy(mcpUrl, e.target);
+  const t = $("#test");
+  if (t) t.onclick = async () => {
+    t.disabled = true; t.textContent = "Sending…";
+    try { await api("/test-push", { method: "POST" }); toast("Sent. Check your phone"); t.textContent = "Send again"; }
+    catch (e) { toast("Didn't send: " + e.message); t.textContent = "Try again"; }
+    t.disabled = false;
+  };
+}
+views.settings = views.setup;
+
+/* ---------- Lock ---------- */
+function showLock(message) {
+  $("#tabs").hidden = true; $("#composer").hidden = true; $("#lockbtn").hidden = true;
+  main.innerHTML = h`<form class="lock" id="lockform"><p>Your notes, logs and reminders. Unlock with your password (the same one Claude asks for).</p>
+    <label for="key">Password</label><input id="key" type="password" autocomplete="current-password" required>
+    <button class="btn" type="submit">Unlock</button>${raw(message ? h`<p class="err" role="alert">${message}</p>` : "")}</form>`;
+  $("#key").focus();
+  $("#lockform").onsubmit = async e => {
+    e.preventDefault();
+    const res = await fetch("/app/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: $("#key").value }) });
+    if (res.ok) { await start(); route(); }
+    else showLock((await res.json().catch(() => ({}))).error || "Couldn't unlock. Try again.");
+  };
+}
+function handle(e) {
+  if (e instanceof Locked) return showLock();
+  toast(e.message || String(e));
+}
+
+/* ---------- Router ---------- */
+async function route() {
+  document.querySelectorAll(".toast").forEach(t => t.remove());
+  const hash = decodeURIComponent(location.hash.slice(1)) || "today";
+  const [view, ...rest] = hash.split("/");
+  const arg = rest.join("/");
+  document.querySelectorAll("#tabs a").forEach(a => a.toggleAttribute("aria-current", false));
+  const tab = view === "note" || view === "new" ? (arg.startsWith("goals") ? "goals" : "notes") : view;
+  const link = $(`#tabs a[href="#${tab}"]`);
+  if (link) link.setAttribute("aria-current", "page");
+  $("#composer").hidden = view !== "today";
+  try {
+    if (!cfg.configured) { $("#tabs").hidden = true; $("#composer").hidden = true; await views.setup(); window.scrollTo(0, 0); return; }
+    if (view === "note") await editor(arg);
+    else if (view === "new") await editor(null, arg || "inbox");
+    else await (views[view] || views.today)();
+  } catch (e) { if (e instanceof Locked) showLock(); else main.innerHTML = h`<p class="err">${e.message}</p>`; }
+  window.scrollTo(0, 0);
+  if (nextToast) { toast(nextToast); nextToast = null; }
+}
+
+async function start() {
+  cfg = await api("/config");
+  drawDate();
+  $("#tabs").hidden = !cfg.configured; $("#lockbtn").hidden = false;
+  $("#settingsTab").hidden = !cfg.canSetup;
+}
+
+const chips = $("#chips");
+chips.innerHTML = TAGS.map(t => `<button type="button" class="chip" aria-pressed="false" data-tag="${t}">#${t}</button>`).join("");
+chips.onclick = e => {
+  const b = e.target.closest(".chip"); if (!b) return;
+  b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") === "true" ? "false" : "true");
+  $("#entry").focus();
+};
+$("#composer").onsubmit = async e => {
+  e.preventDefault();
+  const input = $("#entry");
+  const tags = [...chips.querySelectorAll('[aria-pressed="true"]')].map(b => "#" + b.dataset.tag);
+  const entry = [input.value.trim(), ...tags.filter(t => !input.value.includes(t))].join(" ").trim();
+  if (!input.value.trim()) return input.focus();
+  $("#logbtn").disabled = true;
+  try {
+    await api("/log", { method: "POST", body: { entry } });
+    input.value = ""; chips.querySelectorAll(".chip").forEach(b => b.setAttribute("aria-pressed", "false"));
+    toast("Logged"); await views.today();
+  } catch (err) { handle(err); }
+  $("#logbtn").disabled = false;
+};
+$("#lockbtn").onclick = async () => { await fetch("/app/logout", { method: "POST" }); showLock(); };
+window.addEventListener("hashchange", route);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) drawDate(); });
+
+drawDate();
+start().then(route).catch(e => (e instanceof Locked ? showLock() : (main.innerHTML = h`<p class="err">${e.message}</p>`)));
+</script>
+</body>
+</html>

@@ -1,0 +1,2 @@
+# The only setting the Deploy to Cloudflare form asks for. Everything else is set up in the app at /app.
+PASSWORD=make-up-a-long-password
