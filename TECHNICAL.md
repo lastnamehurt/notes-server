@@ -1,6 +1,6 @@
 # Notes server: technical notes
 
-This Cloudflare Worker provides eleven MCP tools backed by GitHub's Contents API. It does not require a filesystem or Git executable. The existing Python CLI and local MCP server remain unchanged.
+This Cloudflare Worker provides eleven MCP tools backed by GitHub's Contents API. It does not require a filesystem or Git executable. This repository also ships the Bash `note` / `notes` CLI and its Python browsing/local MCP backend; see [CLI.md](CLI.md). The CLI works with a local clone of the same private notes repository.
 
 ## Authentication
 
@@ -44,7 +44,7 @@ Times are in `NOTES_TIMEZONE` (default `America/Los_Angeles`) and may be listed 
 
 Each notification has a **Done** button. It POSTs to `/done` with a link signed by `MCP_BEARER_TOKEN` (HMAC), and the Worker records `✓ <text> #done` in that day's log. Rotating `MCP_BEARER_TOKEN` invalidates buttons on notifications already sent.
 
-How it works: `save_note`/`update_note` parse the note and store upcoming reminders in a single `ReminderScheduler` Durable Object, which sets an alarm for the next one and posts it to [Pushover](https://pushover.net) or [ntfy](https://ntfy.sh) when it fires (failed sends retry every 5 minutes; `list_reminders` reports the last failure). An hourly cron rescans the whole notes repository so edits made outside the Worker (the Python CLI, GitHub's web editor) are picked up; `sync_notes` does the same rescan on demand. `list_reminders` shows what's scheduled. The server's MCP instructions tell Claude the syntax and to offer saving action items as reminders.
+How it works: `save_note`/`update_note` parse the note and store upcoming reminders in a single `ReminderScheduler` Durable Object, which sets an alarm for the next one and posts it to [Pushover](https://pushover.net) or [ntfy](https://ntfy.sh) when it fires (failed sends retry every 5 minutes; `list_reminders` reports the last failure). An hourly cron rescans the whole notes repository so edits made outside the Worker (the local CLI, GitHub's web editor) are picked up; `sync_notes` does the same rescan on demand. `list_reminders` shows what's scheduled. The server's MCP instructions tell Claude the syntax and to offer saving action items as reminders.
 
 Setup:
 

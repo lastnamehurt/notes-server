@@ -1,0 +1,279 @@
+#!/usr/bin/env bash
+# note - capture a note into ~/notes/inbox from anywhere, commit, and push.
+#? Save a note when asked to remember or jot something; never put SSNs, candidate data, tokens or .env contents in one, because it commits and pushes. Browse with `note ls`, `note find <words>` and `note show <name>`. After switching machines, or if a push failed, run `note sync`.
+#
+#   note "text of the note"          quick note
+#   echo "text" | note               from stdin
+#   note -f path/to/file.md          copy an existing file into the inbox
+#   note -t "title" "text"           set a title (default: first line)
+#   note --no-push ...               commit only
+#   note sync                        pull what other machines pushed, push what is pending
+#                                    (never forces; stops cleanly on a conflict)
+#
+# Browse (needs python3):
+#   note                             on a terminal: pick, below
+#   note pick [query]                fzf over every note, search by title, tag or body, preview
+#                                    beside it; Enter opens the note in your editor
+#   note ls [folder] [-n N] [-t tag] newest first; --ids for plain output, -n 0 for all
+#   note find words... [-t tag]      every word must match; best match first
+#   note show <id or part of name>   print one note
+#   note edit <id or part of name>   open it in $VISUAL/$EDITOR; a change is committed and pushed
+#   note rm [-y] <id or part>        delete one note (asks first); the result names the undo
+#
+# The commands above are words, so quote text that starts with one ("find the keys") or use
+# note -- sync. Also accepted: list, search, view/open/cat, remove/delete/del, browse. A name that
+# matches several notes opens a picker on a terminal. `notes` is the same command.
+#
+# Text that includes the path of an existing note is refused as a mistyped command; use note -- <text>.
+#
+# Provenance (repo@branch of the directory you ran it from) goes in frontmatter.
+set -euo pipefail
+
+NOTES_DIR="${NOTES_DIR:-$HOME/notes}"
+export NOTES_DIR
+push=1
+title=""
+file=""
+forced=0
+
+# note sync: bring this clone level with origin, in both directions, without ever forcing.
+if [[ $# -eq 1 && "$1" == "sync" ]]; then
+  [[ -d "$NOTES_DIR/.git" ]] || { echo "note: $NOTES_DIR is not a git repo" >&2; exit 1; }
+  cd "$NOTES_DIR"
+  branch="$(git branch --show-current)"
+  [[ -n "$branch" ]] || { echo "note: detached HEAD, check out a branch first" >&2; exit 1; }
+  if ! out="$(git fetch -q origin 2>&1)"; then
+    echo "note: could not reach origin; nothing changed" >&2; echo "$out" | sed 's/^/    /' >&2; exit 1
+  fi
+  remote_ref="origin/$branch"
+  git rev-parse -q --verify "$remote_ref" >/dev/null || remote_ref=""
+  pulled=0
+  if [[ -n "$remote_ref" ]]; then
+    pulled="$(git rev-list --count "HEAD..$remote_ref")"
+    if [[ "$pulled" -gt 0 ]] && ! out="$(git pull --rebase --autostash -q origin "$branch" 2>&1)"; then
+      git rebase --abort >/dev/null 2>&1 || true
+      echo "note: conflict while pulling; nothing was changed. Resolve it by hand:" >&2
+      echo "$out" | sed 's/^/    /' >&2
+      echo "    git -C $NOTES_DIR pull --rebase" >&2
+      exit 1
+    fi
+    ahead="$(git rev-list --count "$remote_ref..HEAD")"
+  else
+    ahead="$(git rev-list --count HEAD)"
+  fi
+  if [[ "$ahead" -gt 0 ]]; then
+    if ! out="$(git push -q origin HEAD 2>&1)"; then
+      echo "note: pulled $pulled but the push failed:" >&2; echo "$out" | sed 's/^/    /' >&2; exit 1
+    fi
+  fi
+  if [[ "$pulled" -eq 0 && "$ahead" -eq 0 ]]; then echo "already in sync with origin"
+  else echo "synced: pulled $pulled, pushed $ahead"; fi
+  exit 0
+fi
+
+# ---- browsing: ls, find, show, edit, rm, pick. Listing and search live in mcp/note-mcp so the
+# command line and the AI tools share one implementation.
+SELF="${BASH_SOURCE[0]}"
+while [[ -L "$SELF" ]]; do
+  dir="$(cd -P "$(dirname "$SELF")" && pwd)"; SELF="$(readlink "$SELF")"
+  [[ "$SELF" != /* ]] && SELF="$dir/$SELF"
+done
+BACKEND="$(cd -P "$(dirname "$SELF")/.." && pwd)/mcp/note-mcp"
+
+backend() {
+  command -v python3 >/dev/null 2>&1 || { echo "note: browsing needs python3" >&2; exit 1; }
+  python3 "$BACKEND" "$@"
+}
+is_tty() { [[ -t 0 && -t 1 ]]; }
+# stdin and stderr, because this runs inside $(...) where stdout is a pipe.
+can_ask() { [[ -t 0 && -t 2 ]] && command -v fzf >/dev/null 2>&1; }
+
+# One id for a fragment. If several notes match and there is a terminal, let the user choose.
+resolve_or_die() {
+  local q="${1:-}" id cands err
+  err="$(mktemp)"
+  if id="$(backend resolve "$q" 2>"$err")"; then rm -f "$err"; printf '%s\n' "$id"; return 0; fi
+  cands="$(backend matches "$q")"
+  if [[ "$(printf '%s\n' "$cands" | grep -c .)" -gt 1 ]] && can_ask; then
+    id="$(printf '%s\n' "$cands" | fzf --height 40% --reverse --prompt "which '$q'> " \
+      --preview "if command -v bat >/dev/null 2>&1; then bat --style=plain --color=always --language=markdown -- \"\$NOTES_DIR\"/{}; else cat \"\$NOTES_DIR\"/{}; fi" \
+      --preview-window 'right:55%:wrap')" || { rm -f "$err"; exit 1; }
+    rm -f "$err"; printf '%s\n' "$id"; return 0
+  fi
+  cat "$err" >&2; rm -f "$err"; exit 1
+}
+
+push_or_hint() {
+  git -C "$NOTES_DIR" push -q origin HEAD 2>&1 || echo "note: push failed; committed locally, retry with: note sync" >&2
+}
+
+cmd_show() {
+  local id f; id="$(resolve_or_die "${1:-}")"; f="$NOTES_DIR/$id"
+  if [[ -t 1 ]] && command -v bat >/dev/null 2>&1; then
+    bat --style=plain --language=markdown --paging=never -- "$f"
+  else
+    cat -- "$f"
+  fi
+}
+
+cmd_edit() {
+  local do_push=1 id f editor before after title
+  if [[ "${1:-}" == "--no-push" ]]; then do_push=0; shift; fi
+  id="$(resolve_or_die "${1:-}")"; f="$NOTES_DIR/$id"
+  editor="${VISUAL:-${EDITOR:-}}"
+  if [[ -z "$editor" ]]; then
+    is_tty || { echo "note: edit needs a terminal or \$EDITOR; nothing changed" >&2; exit 3; }
+    editor=vi
+  fi
+  before="$(shasum < "$f")"
+  # $editor may carry arguments ("code -w"), so let a shell split it.
+  bash -c "$editor \"\$1\"" _ "$f" || { echo "note: the editor exited with an error; not committing" >&2; exit 1; }
+  after="$(shasum < "$f")"
+  [[ "$before" != "$after" ]] || { echo "no changes to $id"; exit 0; }
+  title="$(backend title "$id")"
+  git -C "$NOTES_DIR" add -- "$id"
+  if ! git -C "$NOTES_DIR" commit -q -m "note: edit $title" -- "$id"; then
+    git -C "$NOTES_DIR" reset -q -- "$id"
+    git -C "$NOTES_DIR" checkout -- "$id"
+    echo "note: commit refused (see above); $id restored, nothing saved" >&2
+    exit 1
+  fi
+  echo "saved $id"
+  [[ $do_push -eq 0 ]] || push_or_hint
+}
+
+cmd_rm() {
+  local yes=0 do_push=1 id title answer sha
+  while [[ "${1:-}" == -* ]]; do
+    case "$1" in
+      -y|--yes) yes=1 ;;
+      --no-push) do_push=0 ;;
+      *) echo "note: rm: unknown flag $1" >&2; exit 2 ;;
+    esac
+    shift
+  done
+  id="$(resolve_or_die "${1:-}")"
+  title="$(backend title "$id")"
+  if [[ $yes -ne 1 ]]; then
+    is_tty || { echo "note: rm needs a terminal to confirm (or pass -y); nothing deleted" >&2; exit 3; }
+    read -r -p "delete $id ($title)? [y/N] " answer
+    [[ "$answer" =~ ^[Yy]$ ]] || { echo "not deleted"; exit 1; }
+  fi
+  git -C "$NOTES_DIR" rm -q -- "$id" || { echo "note: could not remove $id; is it tracked by git?" >&2; exit 1; }
+  if ! git -C "$NOTES_DIR" commit -q -m "note: delete $title" -- "$id"; then
+    git -C "$NOTES_DIR" reset -q HEAD -- "$id"
+    git -C "$NOTES_DIR" checkout -- "$id"
+    echo "note: commit refused; $id is still there" >&2
+    exit 1
+  fi
+  sha="$(git -C "$NOTES_DIR" rev-parse --short HEAD)"
+  echo "deleted $id"
+  echo "undo with: git -C $NOTES_DIR revert $sha"
+  [[ $do_push -eq 0 ]] || push_or_hint
+}
+
+cmd_pick() {
+  local sel id
+  is_tty || { echo "note: pick needs a terminal. Use 'note ls' or 'note find <words>'." >&2; exit 3; }
+  command -v fzf >/dev/null 2>&1 || { echo "note: pick needs fzf. Use 'note ls' or 'note find <words>'." >&2; exit 1; }
+  sel="$(backend ls --fzf | fzf --height 80% --reverse --ansi --delimiter $'\t' --with-nth 2.. \
+    --prompt 'notes> ' --query "${1:-}" --header 'enter: edit   esc: quit' \
+    --preview "if command -v bat >/dev/null 2>&1; then bat --style=plain --color=always --language=markdown -- \"\$NOTES_DIR\"/{1}; else cat \"\$NOTES_DIR\"/{1}; fi" \
+    --preview-window 'right:55%:wrap')" || exit 0
+  id="${sel%%$'\t'*}"
+  [[ -n "$id" ]] || exit 0
+  exec "$SELF" edit "$id"
+}
+
+if [[ $# -eq 0 ]] && is_tty; then set -- pick; fi
+case "${1:-}" in
+  ls|list)                     shift; backend ls "$@"; exit $? ;;
+  find|search)                 shift; backend find "$@"; exit $? ;;
+  show|view|open|cat)          shift; cmd_show "$@"; exit $? ;;
+  edit)                        shift; cmd_edit "$@"; exit $? ;;
+  rm|remove|delete|del)        shift; cmd_rm "$@"; exit $? ;;
+  pick|browse)                 shift; cmd_pick "$@"; exit $? ;;
+esac
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -f) file="$2"; shift 2 ;;
+    -t) title="$2"; shift 2 ;;
+    --no-push) push=0; shift ;;
+    -h|--help) awk 'NR==1{next} /^#\?/{next} /^#/{sub(/^# ?/,""); print; next} {exit}' "$0"; exit 0 ;;
+    --) forced=1; shift; break ;;
+    -*) echo "note: unknown flag $1" >&2; exit 2 ;;
+    *) break ;;
+  esac
+done
+
+[[ -d "$NOTES_DIR/.git" ]] || { echo "note: $NOTES_DIR is not a git repo" >&2; exit 1; }
+
+# A bare word followed by a path to an existing note is a mistyped command ("note remove inbox/x.md"),
+# not text to save. Refuse unless the text came after "--".
+if [[ $forced -eq 0 && $# -gt 0 ]]; then
+  for arg in "$@"; do
+    if [[ "$arg" == *.md && ( -f "$NOTES_DIR/$arg" || ( "$arg" == "$NOTES_DIR"/* && -f "$arg" ) ) ]]; then
+      {
+        echo "note: '$arg' is an existing note, so this looks like a mistyped command. Nothing was saved."
+        echo "    note show <name> | note edit <name> | note rm <name>   (see: note --help)"
+        echo "    To save this text anyway: note -- <text>"
+      } >&2
+      exit 2
+    fi
+  done
+fi
+
+source_ref="local"
+if root=$(git rev-parse --show-toplevel 2>/dev/null); then
+  source_ref="$(basename "$root")@$(git branch --show-current 2>/dev/null || echo detached)"
+fi
+
+if [[ -n "$file" ]]; then
+  [[ -f "$file" ]] || { echo "note: no such file $file" >&2; exit 1; }
+  body="$(cat "$file")"
+  base="$(basename "$file" .md)"
+elif [[ $# -gt 0 ]]; then
+  body="$*"
+  base=""
+elif [[ ! -t 0 ]]; then
+  body="$(cat)"
+  base=""
+else
+  echo "note: nothing to save (pass text, -f FILE, or pipe stdin)" >&2
+  exit 2
+fi
+
+[[ -n "${body//[[:space:]]/}" ]] || { echo "note: nothing to save (the text is empty)" >&2; exit 2; }
+
+[[ -n "$title" ]] || title="$(printf '%s' "$body" | sed -n '1{s/^#* *//;p;q;}' | cut -c1-80)"
+[[ -n "$base" ]] || base="$(printf '%s' "$title" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed 's/^-//;s/-$//' | cut -c1-50)"
+[[ -n "$base" ]] || base="note"
+
+mkdir -p "$NOTES_DIR/inbox"
+stamp="$(date +%Y-%m-%d)"
+out="$NOTES_DIR/inbox/$stamp-$base.md"
+n=2
+while [[ -e "$out" ]]; do out="$NOTES_DIR/inbox/$stamp-$base-$n.md"; n=$((n+1)); done
+
+{
+  if [[ "$body" != ---* ]]; then
+    printf -- '---\ntitle: %s\ndate: %s\nsource: %s\ntags: []\n---\n\n' "$title" "$stamp" "$source_ref"
+  fi
+  printf '%s\n' "$body"
+} > "$out"
+
+cd "$NOTES_DIR"
+rel="inbox/$(basename "$out")"
+git add -- "$rel"
+if ! git commit -q -m "note: $title" -- "$rel"; then
+  git reset -q -- "$rel"
+  rm -f -- "$rel"
+  echo "note: commit refused (see above); nothing saved" >&2
+  exit 1
+fi
+echo "saved $rel"
+
+if [[ $push -eq 1 ]]; then
+  git push -q origin HEAD 2>&1 || echo "note: push failed; committed locally, retry with: note sync" >&2
+fi
