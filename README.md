@@ -64,7 +64,7 @@ For a quick tour of the app on your phone, see [QUICKSTART-MOBILE.md](QUICKSTART
 
 ## Good to know
 
-- **Who can see my notes?** Only you. They live in your private GitHub repository, and the app runs in your own Cloudflare account. The person who shared this with you has no access to either.
+- **Who can see my notes?** Only people who can sign in to your GitHub or Cloudflare account. Your notes are not end-to-end encrypted: they are stored as plain text in your private GitHub repository, and your own Cloudflare Worker reads them to answer your requests. The person who shared this with you has no access to either account.
 - **Forgot your password?** Open the app and tap **Sign in with GitHub**, using the GitHub account that owns your notes. Claude still asks for the password, so to set a new one, open your Worker in Cloudflare → **Settings** → **Variables and Secrets**, edit **MCP_BEARER_TOKEN** (or **PASSWORD** if there's no MCP_BEARER_TOKEN), and save. Then reconnect Claude.
 - **Typed the wrong password too many times?** Wait 15 minutes; the app locks briefly to stop guessing.
 - **Change reminders or time zone later:** open the app and tap **Setup**.

@@ -81,6 +81,8 @@ export class GithubNotes {
       }
     });
     if (!response.ok) {
+      if (response.status === 401) throw new Error("GitHub no longer accepts the connection to your notes. Open the app's Setup and reconnect GitHub, or if your GitHub token is set in Cloudflare, replace it there.");
+      if (response.status === 403) throw new Error("GitHub refused access to your notes repository. Check that it is still private and that your GitHub connection can read and write it, then reconnect GitHub in Setup (or update the token in Cloudflare).");
       if (response.status === 404) throw new Error("Note or notes repository not found");
       if (response.status === 409 || response.status === 422) throw new Error("GitHub conflict; refresh and retry");
       throw new Error("GitHub request failed (" + response.status + ")");
