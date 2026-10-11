@@ -296,6 +296,7 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
     <a href="#notes">Notes</a>
     <a href="#goals">Goals</a>
     <a href="#reminders">Reminders</a>
+    <a href="#connect" id="connectTab" hidden>Connect</a>
     <a href="#settings" id="settingsTab" hidden>Setup</a>
   </nav>
   <main id="main" aria-live="polite"></main>
@@ -905,13 +906,27 @@ const assistantBlock = (mcpUrl) => {
       <button class="btn quiet" id="copycursor" type="button">Copy</button></details></section>`;
 };
 
+function wireAssistant(mcpUrl) {
+  const cursorJson = JSON.stringify({ mcpServers: { notes: { url: mcpUrl } } }, null, 2);
+  $("#copymcp2").onclick = e => copy(mcpUrl, e.target);
+  $("#copycursor").onclick = e => copy(cursorJson, e.target);
+}
+
+views.connect = async () => {
+  $("#composer").hidden = true;
+  const mcpUrl = location.origin + "/mcp";
+  main.innerHTML = h`<div class="setup"><h2>Connect an assistant</h2>
+    <p class="lede">Connect Claude, ChatGPT, Gemini or Cursor to your notes. Come back here any time to connect another one.</p>
+    ${raw(assistantBlock(mcpUrl))}</div>`;
+  wireAssistant(mcpUrl);
+};
+
 views.setup = async () => {
   $("#composer").hidden = true;
   const prev = await api("/settings");
   const first = !cfg.configured;
   const tz = prev.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
   const topic = prev.ntfyTopic || randomTopic();
-  const mcpUrl = location.origin + "/mcp";
   let chosenRepo = prev.notesRepo || "";
   const connect = cfg.githubConnect;
   // Step numbers: with Connect GitHub, one step covers the repository and its key.
@@ -966,8 +981,6 @@ views.setup = async () => {
         <p class="muted">Pushover is a paid app ($5 once). Enter your user key and an application token from pushover.net.</p>
         <input type="text" id="pouser" placeholder="User key" autocomplete="off">
         <input type="text" id="potoken" placeholder="Application API token" autocomplete="off"></details></section>
-
-    ${raw(first ? "" : assistantBlock(mcpUrl))}
 
     <button class="btn" id="save" type="button" style="width:100%;padding:15px">Save and finish</button>
     <p class="err" id="saveerr" role="alert"></p>
@@ -1039,11 +1052,7 @@ views.setup = async () => {
   $("#tok").addEventListener("paste", () => setTimeout(check, 50));
   if (prev.hasToken) check();
   $("#copytopic").onclick = e => copy(topic, e.target);
-  if (!first) {
-    const cursorJson = JSON.stringify({ mcpServers: { notes: { url: mcpUrl } } }, null, 2);
-    $("#copymcp2").onclick = e => copy(mcpUrl, e.target);
-    $("#copycursor").onclick = e => copy(cursorJson, e.target);
-  }
+
 
   $("#save").onclick = async () => {
     const b = $("#save"); b.disabled = true; b.textContent = "Saving…"; $("#saveerr").textContent = "";
@@ -1054,7 +1063,7 @@ views.setup = async () => {
         token: $("#tok") ? $("#tok").value.trim() : "", repo: chosenRepo, timezone: $("#tz").value,
         ntfyTopic: $("#usentfy").checked && !(pushoverUser && pushoverToken) ? topic : "",
         pushoverUser, pushoverToken } });
-      cfg = await api("/config"); drawDate(); $("#tabs").hidden = false; $("#settingsTab").hidden = !cfg.canSetup;
+      cfg = await api("/config"); drawDate(); $("#tabs").hidden = false; $("#settingsTab").hidden = !cfg.canSetup; $("#connectTab").hidden = !cfg.configured;
       showDone(mcpUrl);
     } catch (e) { if (e instanceof Locked) return showLock(); $("#saveerr").textContent = e.message; }
     b.disabled = false; b.textContent = "Save and finish";
@@ -1188,7 +1197,7 @@ async function start() {
   cfg = await api("/config");
   drawDate();
   $("#tabs").hidden = !cfg.configured; $("#lockbtn").hidden = false;
-  $("#settingsTab").hidden = !cfg.canSetup;
+  $("#settingsTab").hidden = !cfg.canSetup; $("#connectTab").hidden = !cfg.configured;
 }
 
 /* ---------- Composer ---------- */
