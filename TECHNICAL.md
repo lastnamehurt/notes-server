@@ -20,7 +20,7 @@ Nothing owner-specific is in this repository, so one copy of the code serves any
 |---|---|---|
 | `NOTES_REPO` | setup page, secret or dashboard variable | `owner/repo` of the private notes repository (must have a `main` branch) |
 | `GITHUB_TOKEN` | setup page or secret | fine-grained token, that repository only, Contents read/write |
-| `MCP_BEARER_TOKEN` | secret | the owner's password for the connector sign-in page and `/app` |
+| `MCP_BEARER_TOKEN` | secret | the owner's password for the connector sign-in page, and the `/app` password fallback |
 | `NOTES_TIMEZONE` | setup page, secret or variable | IANA zone; default `America/Los_Angeles` |
 | `NOTES_BRANCH` | variable | default `main` |
 | `PUBLIC_URL` | variable | optional; defaults to the host requests arrive on. Set it if the Worker has more than one hostname |
@@ -70,7 +70,7 @@ Then call `sync_notes` once to schedule reminders already in your notes.
 
 ## Web app
 
-Open `https://<worker>/app` on your phone and unlock it with your `MCP_BEARER_TOKEN` (the same key the connector's sign-in page asks for). In Safari, Share then Add to Home Screen makes it an app icon.
+Open `https://<worker>/app` on your phone and sign in with GitHub, using the account that owns your notes. The password (`MCP_BEARER_TOKEN`, the same key the connector's sign-in page asks for) still works under "Use your password instead". In Safari, Share then Add to Home Screen makes it an app icon.
 
 - **Today**: a time rail of today's log with a line for the current time. Reminders due today sit on the same rail; ones that already went off stay as "Due" until you tap Done. Tap any log entry to change its text or time, or delete it. The box at the bottom logs with tag chips, and "Now" can be changed to log something from earlier.
 - **Notes**: notes grouped by folder, search, and new note. A note opens in a read view: tap it (or Edit) to change the title and text, tap a checkbox or its text to tick it, and use Add reminder for timed items. Leaving with unsaved changes asks first.
@@ -93,7 +93,14 @@ Never deploy without both secrets. Protect the bearer token like a password. For
 - GitHub API updates are atomic and use blob SHAs for optimistic concurrency.
 - `sync_notes` rescans notes to rebuild reminders; changes are committed directly to GitHub, and local clients still run `note sync`.
 - Search, the reminder rescan, log views and goals read the whole repository as one gzipped archive (`src/snapshot.ts`): one GitHub call plus a redirect, whatever the number of notes. That keeps every request well under Cloudflare's limit of 50 outside calls per request on the free plan. Repositories over 50 MB are refused.
-- No deployment was performed by this PR. Deployment requires your Cloudflare account authentication and GitHub token.
+
+## Deploying
+
+- A push to `main` deploys automatically. The `Checks` workflow runs typecheck, unit tests, a dry-run deploy and the MCP acceptance test; if they pass, its `deploy` job runs `wrangler deploy` for the `personal-notes-mcp` Worker. Pull requests never deploy.
+- The job needs two repository secrets: `CLOUDFLARE_API_TOKEN` (a token with Workers Scripts: Edit and Workers KV Storage: Edit on the account) and `CLOUDFLARE_ACCOUNT_ID`. If the token expires or is revoked, the deploy job fails and the last deployed version keeps serving. Create a new token in Cloudflare and replace the secret.
+- Deploys run one at a time (the `deploy-production` concurrency group), so two merges never deploy together.
+- `keep_vars` keeps dashboard variables and secrets through a deploy, and the migration in `wrangler.jsonc` applies on the next deploy.
+- Don't connect Cloudflare Workers Builds to this Worker. A second deploy source can overwrite it with older code. Check the Worker's **Settings → Builds** in the dashboard.
 
 ## Tests
 
