@@ -120,7 +120,7 @@ const defaultHandler = {
         const scopes = details.scope.map((s: string) => escapeHtml(s)).join(", ");
         consent.headers.set("Content-Type", "text/html; charset=utf-8");
         consent.headers.set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'");
-        return new Response(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Authorize notes</title></head><body style="font:16px system-ui;max-width:32rem;margin:3rem auto;padding:1rem"><h1>Authorize ${client}?</h1><p>Access to your private notes: ${scopes}</p><p>Authorization will be sent to <strong>${host}</strong>.</p>${details.clientDomain ? `<p>Client domain: ${escapeHtml(details.clientDomain)}</p>` : "<p>Client identity is not independently verified.</p>"}${details.redirectIsLoopback ? "<p><strong>This client redirects to your local computer.</strong></p>" : ""}<form method="post"><input type="hidden" name="handle" value="${escapeHtml(consent.handle)}"><label>Enter your notes password to allow this:<br><input type="password" name="password" required autocomplete="off" style="width:100%;padding:.5rem"></label><p><button name="decision" value="approve">Allow</button> <button name="decision" value="deny">Deny</button></p></form></body></html>`, { headers: consent.headers });
+        return new Response(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Authorize notes</title></head><body style="font:16px system-ui;max-width:32rem;margin:3rem auto;padding:1rem"><h1>Authorize ${client}?</h1><p>Access to your private notes: ${scopes}</p><p>Authorization will be sent to <strong>${host}</strong>.</p>${details.clientDomain ? `<p>Client domain: ${escapeHtml(details.clientDomain)}</p>` : "<p>Client identity is not independently verified.</p>"}${details.redirectIsLoopback ? "<p><strong>This client redirects to your local computer.</strong></p>" : ""}<form method="post"><input type="hidden" name="handle" value="${escapeHtml(consent.handle)}"><input type="hidden" name="scope" value="${escapeHtml(details.scope.join(" "))}"><label>Enter your notes password to allow this:<br><input type="password" name="password" required autocomplete="off" style="width:100%;padding:.5rem"></label><p><button name="decision" value="approve">Allow</button> <button name="decision" value="deny">Deny</button></p></form></body></html>`, { headers: consent.headers });
       }
       if (request.method === "POST") {
         const form = await request.formData();
@@ -131,7 +131,12 @@ const defaultHandler = {
         }
         const problem = await checkPassword(env, String(form.get("password") ?? ""));
         if (problem) return new Response(problem + " Then start connecting again from Claude.", { status: 403 });
-        const approved = await oauth.approveConsent(request, handle, { scope: ["notes:read", "notes:write"] });
+        // Grant exactly what the consent page showed, so the screen and the token match.
+        // Grant exactly the scopes the consent page showed, and only ones this server supports.
+        const shown = String(form.get("scope") ?? "").split(" ").filter(Boolean);
+        const scope = shown.filter(s => SCOPES_SUPPORTED.includes(s));
+        if (scope.length === 0) return new Response("No supported access was requested. Start connecting again from the app.", { status: 400 });
+        const approved = await oauth.approveConsent(request, handle, { scope });
         const { redirectTo } = await oauth.completeAuthorization({
           request: approved.request, userId: "notes-owner", metadata: {},
           scope: approved.request.scope, props: { userId: "notes-owner" }
@@ -171,6 +176,8 @@ const providers = new Map<string, OAuthProvider>();
  * document instead, so this stays off unless ALLOW_CLIENT_REGISTRATION=true (used by the local MCP acceptance test,
  * whose client can't publish a metadata document on public HTTPS).
  */
+const SCOPES_SUPPORTED = ["notes:read", "notes:write"];
+
 function providerFor(origin: string, allowRegistration = false): OAuthProvider {
   const cacheKey = origin + (allowRegistration ? "#reg" : "");
   let provider = providers.get(cacheKey);
@@ -181,9 +188,9 @@ function providerFor(origin: string, allowRegistration = false): OAuthProvider {
       defaultHandler,
       authorizeEndpoint: "/authorize",
       tokenEndpoint: "/oauth/token",
-      scopesSupported: ["notes:read", "notes:write"],
+      scopesSupported: SCOPES_SUPPORTED,
       resourceMetadata: { resource: origin + "/mcp", authorization_servers: [origin] },
-      requiredScopes: ["notes:read"],
+      requiredScopes: ["notes:read", "notes:write"],
       clientIdMetadataDocumentEnabled: true,
       ...(allowRegistration ? { clientRegistrationEndpoint: "/oauth/register" } : {})
     });

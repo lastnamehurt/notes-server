@@ -75,14 +75,14 @@ try {
     const r = await fetch(authUrl, { redirect: "manual" });
     const html = await r.text();
     const cookies = (r.headers.getSetCookie?.() || []).map(c => c.split(";")[0]).join("; ");
-    return { status: r.status, html, cookies, handle: (/name="handle" value="([^"]+)"/.exec(html) || [])[1] };
+    return { status: r.status, html, cookies, handle: (/name="handle" value="([^"]+)"/.exec(html) || [])[1], scope: (/name="scope" value="([^"]*)"/.exec(html) || [])[1] };
   };
   const first = await consentPage();
   check(first.status === 200 && first.html.includes("MCP acceptance test") && Boolean(first.handle), "Sign-in page names the client and asks for the password");
   const approve = (page, password) => fetch(asUrl + "/authorize", {
     method: "POST", redirect: "manual",
     headers: { "Content-Type": "application/x-www-form-urlencoded", ...(page.cookies ? { Cookie: page.cookies } : {}), Origin: asUrl },
-    body: new URLSearchParams({ handle: page.handle, password, decision: "approve" })
+    body: new URLSearchParams({ handle: page.handle, scope: page.scope ?? "", password, decision: "approve" })
   });
   const wrong = await approve(first, "not-the-password");
   check(wrong.status === 403, "Wrong password is refused");
