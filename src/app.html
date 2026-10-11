@@ -883,6 +883,28 @@ async function copy(text, btn) {
   catch { toast("Press and hold to copy"); }
 }
 
+/* Connect an AI assistant (Settings only). The address is the only thing shared: never put the password in a snippet. */
+const assistantBlock = (mcpUrl) => {
+  const cursor = JSON.stringify({ mcpServers: { notes: { url: mcpUrl } } }, null, 2);
+  return h`<section class="step" id="s6"><h3>Connect an AI assistant</h3>
+    <p class="muted">Use this address in your assistant. You'll enter your password on its sign-in page, never in a config file.</p>
+    <div class="copyrow"><code>${mcpUrl}</code><button class="btn quiet" id="copymcp2" type="button">Copy</button></div>
+    <details class="more"><summary>Claude</summary>
+      <ol><li>Open <b>Settings → Connectors</b> and choose <b>Add custom connector</b>.</li>
+        <li>Name it <b>Notes</b> and paste the address above.</li>
+        <li>Enter your password on the sign-in page and tap <b>Allow</b>.</li></ol></details>
+    <details class="more"><summary>ChatGPT</summary>
+      <ol><li>Go to <b>Plugins</b>, select <b>+</b>, then <b>Add custom MCP server</b>.</li>
+        <li>Paste the address above and choose <b>OAuth</b>.</li>
+        <li>Choose <b>Create as a plugin</b>, then enter your password when asked.</li></ol></details>
+    <details class="more"><summary>Gemini</summary>
+      <p class="muted">Gemini's custom apps are for personal Google accounts in the US (18+), and may ask for credentials this server doesn't issue yet.</p></details>
+    <details class="more"><summary>Cursor</summary>
+      <p class="muted">Add this to <code>~/.cursor/mcp.json</code>:</p>
+      <pre class="snippet" style="overflow:auto;white-space:pre">${cursor}</pre>
+      <button class="btn quiet" id="copycursor" type="button">Copy</button></details></section>`;
+};
+
 views.setup = async () => {
   $("#composer").hidden = true;
   const prev = await api("/settings");
@@ -944,6 +966,8 @@ views.setup = async () => {
         <p class="muted">Pushover is a paid app ($5 once). Enter your user key and an application token from pushover.net.</p>
         <input type="text" id="pouser" placeholder="User key" autocomplete="off">
         <input type="text" id="potoken" placeholder="Application API token" autocomplete="off"></details></section>
+
+    ${raw(first ? "" : assistantBlock(mcpUrl))}
 
     <button class="btn" id="save" type="button" style="width:100%;padding:15px">Save and finish</button>
     <p class="err" id="saveerr" role="alert"></p>
@@ -1015,6 +1039,11 @@ views.setup = async () => {
   $("#tok").addEventListener("paste", () => setTimeout(check, 50));
   if (prev.hasToken) check();
   $("#copytopic").onclick = e => copy(topic, e.target);
+  if (!first) {
+    const cursorJson = JSON.stringify({ mcpServers: { notes: { url: mcpUrl } } }, null, 2);
+    $("#copymcp2").onclick = e => copy(mcpUrl, e.target);
+    $("#copycursor").onclick = e => copy(cursorJson, e.target);
+  }
 
   $("#save").onclick = async () => {
     const b = $("#save"); b.disabled = true; b.textContent = "Saving…"; $("#saveerr").textContent = "";
