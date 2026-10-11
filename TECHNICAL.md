@@ -66,7 +66,7 @@ Then call `sync_notes` once to schedule reminders already in your notes.
 - `log` appends a timestamped line to `journal/log/YYYY-MM-DD.md` (one note per day, lines kept in time order), e.g. `- 12:40 burrito and a beer #food #drink`. Optional `date` and `time` backfill earlier items. `get_logs` returns the last N days.
 - The `goals` category holds one note per goal (why, measure, target date, next steps as reminder lines, progress entries).
 - The MCP server instructions tell Claude the formats and to log food, drinks, medication, exercise, sleep and mood when they come up, offer reminders for action items, and use goals plus logs for check-ins.
-- Daily logs are skipped by the reminder rescan. `search_notes` still reads every note and stops at 300, which logs will reach in under a year; an index is the next step there.
+- Daily logs are skipped by the reminder rescan. Search, logs and goals read the repository as one archive, so they have no note-count limit.
 
 ## Web app
 
@@ -92,5 +92,10 @@ Never deploy without both secrets. Protect the bearer token like a password. For
 
 - GitHub API updates are atomic and use blob SHAs for optimistic concurrency.
 - `sync_notes` rescans notes to rebuild reminders; changes are committed directly to GitHub, and local clients still run `note sync`.
-- Search reads up to 300 Markdown files and can be slow; an index is recommended for larger stores.
+- Search, the reminder rescan, log views and goals read the whole repository as one gzipped archive (`src/snapshot.ts`): one GitHub call plus a redirect, whatever the number of notes. That keeps every request well under Cloudflare's limit of 50 outside calls per request on the free plan. Repositories over 50 MB are refused.
 - No deployment was performed by this PR. Deployment requires your Cloudflare account authentication and GitHub token.
+
+## Tests
+
+- `npm test`: unit tests (reminder parsing, logs, signed links, setup, archive reading at 600+ notes).
+- `npm run test:mcp`: MCP acceptance test. Starts the Worker with `wrangler dev` against a stand-in GitHub and does what Claude does: OAuth discovery, client registration, password sign-in with PKCE, token exchange and refresh, `initialize`, `tools/list`, then save, read, update, search, list, log and delete a note, plus search, logs and rescan over 800 notes with one GitHub call each. Claude registers via a client metadata document rather than dynamic registration; `ALLOW_CLIENT_REGISTRATION=true` turns registration on for this test only. Both run in CI.

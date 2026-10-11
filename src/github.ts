@@ -8,6 +8,8 @@ export interface Env extends ReminderEnv {
   /** Overrides for tests, and for using a different "Connect GitHub" OAuth app. */
   GITHUB_LOGIN_URL?: string;
   GITHUB_CLIENT_ID?: string;
+  /** "true" enables OAuth dynamic client registration (local MCP acceptance test only). */
+  ALLOW_CLIENT_REGISTRATION?: string;
   MCP_BEARER_TOKEN: string;
   /** Friendlier name for MCP_BEARER_TOKEN, used by the Deploy to Cloudflare form. */
   PASSWORD?: string;
@@ -54,7 +56,14 @@ function base64Decode(s: string): string {
   const binary = atob(s.replace(/\s/g,""));
   return new TextDecoder().decode(Uint8Array.from(binary, c => c.charCodeAt(0)));
 }
+import { readTarGz } from "./snapshot";
+
+const MAX_ARCHIVE_BYTES = 50 * 1024 * 1024;
+
 export class GithubNotes {
+  /** Whole-repository read, shared by everything in one request (see snapshot()). */
+  private snap?: Promise<Map<string, string>>;
+
   constructor(private env: Env) {
     if (!env.NOTES_REPO || !env.GITHUB_TOKEN) throw new Error("Notes aren't set up yet. Open this server's /app page in a browser and finish setup.");
     if (!/^[\w.-]+\/[\w.-]+$/.test(env.NOTES_REPO.trim())) throw new Error("Invalid NOTES_REPO: use owner/repo");
@@ -89,6 +98,7 @@ export class GithubNotes {
   }
   async put(name: string, content: string, sha?: string): Promise<string> {
     validateContent(content);
+    this.snap = undefined;
     await this.api(this.path(name), {
       method:"PUT",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({message:"notes: " + (sha ? "update " : "add ") + name,
@@ -117,6 +127,7 @@ export class GithubNotes {
   }
   async delete(name:string):Promise<string> {
     const {sha} = await this.get(name);
+    this.snap = undefined;
     await this.api(this.path(name), {method:"DELETE",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({message:"notes: delete " + name,sha,branch:this.branch})});
     return name;
@@ -130,26 +141,38 @@ export class GithubNotes {
     return (tree.tree as {path:string;type:string}[])
       .filter(e=>e.type==="blob" && validPath(e.path)).map(e=>e.path).sort().reverse();
   }
-  /** Every note with its content (bounded like search). */
-  async all(skipPrefix?:string):Promise<{name:string;content:string}[]> {
-    const names=(await this.list()).filter(n=>!skipPrefix||!n.startsWith(skipPrefix));
-    if (names.length>300) throw new Error("Scan limited to 300 notes; add indexing for larger repositories");
-    const out=[];
-    for (const name of names) out.push({name,content:(await this.get(name)).content});
-    return out;
+  /**
+   * Every note's content, read in one go as a gzipped archive (one API call and one redirect), so
+   * search, scans and log views cost the same few outside calls whether there are 10 notes or 10,000.
+   */
+  async snapshot():Promise<Map<string,string>> {
+    this.snap ??= (async () => {
+      const response = await fetch((this.env.GITHUB_API_URL || "https://api.github.com") + "/repos/" + this.env.NOTES_REPO.trim() + "/tarball/" + encodeURIComponent(this.branch), {
+        headers: { "Authorization": "Bearer " + this.env.GITHUB_TOKEN, "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "personal-notes-mcp" }
+      });
+      // An empty repository has no archive: there are simply no notes.
+      if (response.status === 404 || response.status === 409) return new Map();
+      if (!response.ok || !response.body) throw new Error("GitHub request failed (" + response.status + ")");
+      if (Number(response.headers.get("Content-Length") || 0) > MAX_ARCHIVE_BYTES) throw new Error("Notes repository is too large to read at once");
+      const files = await readTarGz(response.body);
+      const notes = new Map<string,string>();
+      for (const [path, content] of files) if (validPath(path)) notes.set(path, content);
+      return notes;
+    })();
+    try { return await this.snap; } catch (e) { this.snap = undefined; throw e; }
+  }
+  /** Notes with their content, newest name first; optionally only under `prefix`, or skipping `skipPrefix`. */
+  async all(skipPrefix?:string, prefix?:string):Promise<{name:string;content:string}[]> {
+    const snap = await this.snapshot();
+    return [...snap.keys()].filter(n=>(!skipPrefix||!n.startsWith(skipPrefix)) && (!prefix||n.startsWith(prefix)))
+      .sort().reverse().map(name=>({name,content:snap.get(name)!}));
   }
   async search(query:string):Promise<string[]> {
     const terms=query.toLocaleLowerCase().split(/\s+/).filter(Boolean);
     if (!terms.length) return [];
-    const names=await this.list();
-    const matches:string[]=[];
-    // Keep API traffic bounded. For large note stores, add a search index.
-    if (names.length>300) throw new Error("Search limited to 300 notes; add indexing for larger repositories");
-    for (const name of names) {
-      if (terms.every(t=>name.toLocaleLowerCase().includes(t))) {matches.push(name);continue;}
-      const content=(await this.get(name)).content.toLocaleLowerCase();
-      if (terms.every(t=>(name.toLocaleLowerCase()+" "+content).includes(t))) matches.push(name);
-    }
-    return matches;
+    return (await this.all()).filter(({name,content})=>{
+      const hay=(name+" "+content).toLocaleLowerCase();
+      return terms.every(t=>hay.includes(t));
+    }).map(n=>n.name);
   }
 }

@@ -175,9 +175,7 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
       }
       case "POST /log/edit": return json(await editLog(notes, await request.json()));
       case "GET /goals": {
-        const names = (await notes.list()).filter(n => n.startsWith("goals/"));
-        const out = [];
-        for (const name of names) out.push({ name, content: (await notes.get(name)).content });
+        const out = await notes.all(undefined, "goals/");
         return json(out);
       }
     }

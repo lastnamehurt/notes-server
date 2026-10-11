@@ -17,3 +17,5 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npx wrangler deploy --dry-run --outdir dist
+      - name: MCP acceptance test (sign in, tools, notes, scale)
+        run: npm run test:mcp

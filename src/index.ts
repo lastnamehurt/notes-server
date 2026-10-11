@@ -166,8 +166,14 @@ export function publicOrigin(env: { PUBLIC_URL?: string }, request: Request): st
 
 // OAuth metadata names this server's own URL, so build the provider per origin instead of hardcoding one deployment.
 const providers = new Map<string, OAuthProvider>();
-function providerFor(origin: string): OAuthProvider {
-  let provider = providers.get(origin);
+/**
+ * `allowRegistration` adds OAuth dynamic client registration. Claude identifies itself with a client metadata
+ * document instead, so this stays off unless ALLOW_CLIENT_REGISTRATION=true (used by the local MCP acceptance test,
+ * whose client can't publish a metadata document on public HTTPS).
+ */
+function providerFor(origin: string, allowRegistration = false): OAuthProvider {
+  const cacheKey = origin + (allowRegistration ? "#reg" : "");
+  let provider = providers.get(cacheKey);
   if (!provider) {
     provider = new OAuthProvider({
       apiRoute: "/mcp",
@@ -178,9 +184,10 @@ function providerFor(origin: string): OAuthProvider {
       scopesSupported: ["notes:read", "notes:write"],
       resourceMetadata: { resource: origin + "/mcp", authorization_servers: [origin] },
       requiredScopes: ["notes:read"],
-      clientIdMetadataDocumentEnabled: true
+      clientIdMetadataDocumentEnabled: true,
+      ...(allowRegistration ? { clientRegistrationEndpoint: "/oauth/register" } : {})
     });
-    providers.set(origin, provider);
+    providers.set(cacheKey, provider);
   }
   return provider;
 }
@@ -199,7 +206,7 @@ export default {
       recordedOrigin = origin;
       ctx.waitUntil(scheduler(env).setOrigin(origin).catch(e => { recordedOrigin = undefined; console.error("setOrigin failed", e); }));
     }
-    return providerFor(origin).fetch(request, merged as Env & { OAUTH_PROVIDER: any }, ctx);
+    return providerFor(origin, env.ALLOW_CLIENT_REGISTRATION === "true").fetch(request, merged as Env & { OAUTH_PROVIDER: any }, ctx);
   },
   // Hourly rescan catches notes edited outside the MCP server (CLI pushes, GitHub web edits).
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {

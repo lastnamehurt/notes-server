@@ -49,10 +49,8 @@ export async function appendLog(notes: GithubNotes, entry: string, opts: LogOpti
 export async function recentLogs(notes: GithubNotes, days: number, timeZone = DEFAULT_TIMEZONE, now = Date.now()): Promise<{ date: string; content: string }[]> {
   const span = Math.max(1, Math.min(Math.floor(days), 90));
   const cutoff = logPath(localStamp(now - (span - 1) * 86_400_000, timeZone).date);
-  const names = (await notes.list()).filter(n => n.startsWith(LOG_PREFIX) && n >= cutoff);
-  const out = [];
-  for (const name of names) out.push({ date: name.slice(LOG_PREFIX.length, -3), content: (await notes.get(name)).content });
-  return out;
+  return (await notes.all(undefined, LOG_PREFIX)).filter(n => n.name >= cutoff)
+    .map(n => ({ date: n.name.slice(LOG_PREFIX.length, -3), content: n.content }));
 }
 
 export interface LogEdit { date: string; original: string; entry?: string; time?: string; remove?: boolean; }
