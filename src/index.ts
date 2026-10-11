@@ -119,7 +119,9 @@ const defaultHandler = {
         const host = escapeHtml(details.redirectHost);
         const scopes = details.scope.map((s: string) => escapeHtml(s)).join(", ");
         consent.headers.set("Content-Type", "text/html; charset=utf-8");
-        consent.headers.set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'");
+        // Browsers apply form-action to the redirect after Allow, so the client's own host must be allowed here.
+        const redirectTo = details.redirectIsLoopback ? "http://localhost:* http://127.0.0.1:* " : `https://${details.redirectHost.replace(/[^a-zA-Z0-9.-]/g, "")} `;
+        consent.headers.set("Content-Security-Policy", `default-src 'none'; style-src 'unsafe-inline'; form-action 'self' ${redirectTo}; frame-ancestors 'none'`);
         return new Response(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Authorize notes</title></head><body style="font:16px system-ui;max-width:32rem;margin:3rem auto;padding:1rem"><h1>Authorize ${client}?</h1><p>Access to your private notes: ${scopes}</p><p>Authorization will be sent to <strong>${host}</strong>.</p>${details.clientDomain ? `<p>Client domain: ${escapeHtml(details.clientDomain)}</p>` : "<p>Client identity is not independently verified.</p>"}${details.redirectIsLoopback ? "<p><strong>This client redirects to your local computer.</strong></p>" : ""}<form method="post"><input type="hidden" name="handle" value="${escapeHtml(consent.handle)}"><input type="hidden" name="scope" value="${escapeHtml(details.scope.join(" "))}"><label>Enter your notes password to allow this:<br><input type="password" name="password" required autocomplete="off" style="width:100%;padding:.5rem"></label><p><button name="decision" value="approve">Allow</button> <button name="decision" value="deny">Deny</button></p></form></body></html>`, { headers: consent.headers });
       }
       if (request.method === "POST") {
