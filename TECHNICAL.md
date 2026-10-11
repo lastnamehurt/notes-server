@@ -1,6 +1,6 @@
 # Notes server: technical notes
 
-This Cloudflare Worker provides ten MCP tools backed by GitHub's Contents API. It does not require a filesystem or Git executable. The existing Python CLI and local MCP server remain unchanged.
+This Cloudflare Worker provides eleven MCP tools backed by GitHub's Contents API. It does not require a filesystem or Git executable. The existing Python CLI and local MCP server remain unchanged.
 
 ## Authentication
 
@@ -72,10 +72,13 @@ Then call `sync_notes` once to schedule reminders already in your notes.
 
 Open `https://<worker>/app` on your phone and unlock it with your `MCP_BEARER_TOKEN` (the same key the connector's sign-in page asks for). In Safari, Share then Add to Home Screen makes it an app icon.
 
-- **Today**: a time rail of today's log with a line for the current time, today's reminders below it with a Done button, and a box at the bottom for logging, with tag chips.
-- **Notes**: notes grouped by folder, search, new note, and an editor with a Read view where you can tick checkboxes (ticking a reminder stops it) and an Edit view for the Markdown.
-- **Goals**: each goal note with its target date, a step meter and the next open step.
-- **Reminders**: everything scheduled, grouped by day.
+- **Today**: a time rail of today's log with a line for the current time. Reminders due today sit on the same rail; ones that already went off stay as "Due" until you tap Done. Tap any log entry to change its text or time, or delete it. The box at the bottom logs with tag chips, and "Now" can be changed to log something from earlier.
+- **Notes**: notes grouped by folder, search, and new note. A note opens in a read view: tap it (or Edit) to change the title and text, tap a checkbox or its text to tick it, and use Add reminder for timed items. Leaving with unsaved changes asks first.
+- **Goals**: each goal with its target date, a step meter and the next step, which you can tick from the list. New goal is a short form (goal, why, measure, target date, first step); a goal's page has Add update for dated progress notes.
+- **Reminders**: everything scheduled, grouped by day, with Done and New reminder (once, or repeating on chosen days).
+- **Setup** (only when the deployment doesn't set the notes repository): notes repository, access key, time zone and phone notifications.
+
+**Done** means the same everywhere (the app, the notification button, or Claude's `complete_reminder` tool): it logs `✓ <text> #done`, stops that occurrence from notifying, and ticks a one-off's box in its note. Each occurrence is tracked separately, so finishing an 8am item doesn't affect the 8pm one with the same text. With no push provider configured, reminders still go off in the app; there's just no push.
 
 The session is an HMAC-signed, HttpOnly, `SameSite=Strict` cookie (30 days) scoped to `/app`; writes also require a same-origin `Origin` header. Rotating `MCP_BEARER_TOKEN` signs everyone out. The page is a single file, `src/app.html`, served with a strict Content-Security-Policy.
 

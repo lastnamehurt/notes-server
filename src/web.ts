@@ -2,8 +2,8 @@
 // Unlocked with MCP_BEARER_TOKEN; the session is an HMAC-signed, HttpOnly, SameSite=Strict cookie.
 
 import { GithubNotes, CATEGORIES, type Category, type Env } from "./github";
-import { appendLog, recentLogs } from "./log";
-import { scheduler, scheduleNote, loadSettings, saveSettings, rescan, checkPassword } from "./core";
+import { appendLog, recentLogs, editLog } from "./log";
+import { scheduler, scheduleNote, loadSettings, saveSettings, rescan, checkPassword, completeReminder, addReminder, startOfToday } from "./core";
 import { applySettings, notesConfigured, type Settings } from "./settings";
 import { listRepos, prepareRepo } from "./setup";
 import { sendPush } from "./reminders";
@@ -135,7 +135,18 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
         return json(await appendLog(notes, entry, { date, time, timeZone: env.NOTES_TIMEZONE }));
       }
       case "GET /logs": return json(await recentLogs(notes, Number(url.searchParams.get("days") ?? 7), env.NOTES_TIMEZONE));
-      case "GET /reminders": return json(await scheduler(env).upcoming());
+      case "GET /reminders": {
+        // Upcoming, plus what already went off today and what was marked done, so Today can show both.
+        const since = startOfToday(env);
+        const s = scheduler(env);
+        return json({ upcoming: await s.upcoming(), firedToday: await s.firedSince(since), doneToday: await s.doneSince(since) });
+      }
+      case "POST /reminder": return json(await addReminder(env, await request.json()));
+      case "POST /complete": {
+        const { note, text, at } = await request.json<{ note: string; text: string; at?: number }>();
+        return json(await completeReminder(env, note, text, typeof at === "number" ? at : undefined));
+      }
+      case "POST /log/edit": return json(await editLog(notes, await request.json()));
       case "GET /goals": {
         const names = (await notes.list()).filter(n => n.startsWith("goals/"));
         const out = [];

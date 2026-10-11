@@ -1,6 +1,6 @@
 import { GithubNotes, type Env } from "./github";
-import { parseReminders, pushConfigured, DEFAULT_TIMEZONE, type Reminder } from "./reminder-parse";
-import { LOG_PREFIX } from "./log";
+import { parseReminders, pushConfigured, localStamp, zonedTime, DEFAULT_TIMEZONE, type Reminder } from "./reminder-parse";
+import { LOG_PREFIX, appendLog } from "./log";
 import { equalSecret } from "./action";
 import { applySettings, deployConfigured, type Settings } from "./settings";
 
@@ -69,4 +69,70 @@ export async function checkPassword(env: Env, attempt: string): Promise<string |
   if (env.MCP_BEARER_TOKEN && attempt && (await equalSecret(attempt, env.MCP_BEARER_TOKEN))) return null;
   await s.recordPasswordFailure();
   return "That password doesn't match. Use the one you chose when you set up this server.";
+}
+
+const tz = (env: Env) => env.NOTES_TIMEZONE || DEFAULT_TIMEZONE;
+const TASK = /^(\s*[-*]\s+\[)( |x|X)(\]\s+.*)$/;
+
+/** Local midnight today, as an epoch. */
+export function startOfToday(env: Env, now = Date.now()): number {
+  const [y, m, d] = localStamp(now, tz(env)).date.split("-").map(Number);
+  return zonedTime(y, m, d, 0, 0, tz(env));
+}
+
+/**
+ * Mark a reminder done: log it, stop that occurrence from pushing, and for a one-off
+ * tick its box in the note (which also unschedules it). `at` is the occurrence; if
+ * omitted (e.g. from chat), the occurrence today closest to now is used.
+ */
+export async function completeReminder(env: Env, note: string, text: string, at?: number): Promise<{ ticked: boolean }> {
+  const notes = new GithubNotes(env);
+  const s = scheduler(env);
+  if (at === undefined) {
+    const since = startOfToday(env);
+    const candidates = [...await s.firedSince(since), ...(await s.upcoming()).filter(r => r.at < since + 86_400_000)]
+      .filter(r => r.note === note && r.text === text);
+    candidates.sort((a, b) => Math.abs(a.at - Date.now()) - Math.abs(b.at - Date.now()));
+    at = candidates[0]?.at;
+  }
+  await appendLog(notes, "✓ " + text + " #done", { timeZone: env.NOTES_TIMEZONE });
+  if (at !== undefined) await s.markDone(note, text, at);
+  let doc: { content: string };
+  try { doc = await notes.get(note); } catch { return { ticked: false }; }
+  const lines = doc.content.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const [r] = parseReminders(note, lines[i], tz(env));
+    if (!r || r.text !== text || r.repeat || !TASK.test(lines[i]) || /\[[xX]\]/.test(lines[i])) continue;
+    lines[i] = lines[i].replace(TASK, "$1x$3");
+    const content = lines.join("\n");
+    await notes.update(note, content);
+    await scheduleNote(env, note, content);
+    return { ticked: true };
+  }
+  return { ticked: false };
+}
+
+const REMINDERS_NOTE = /^inbox\/(?:\d{4}-\d{2}-\d{2}-)?reminders(?:-\d+)?\.md$/;
+
+/** Add "- [ ] <text> @<schedule>" to a note (default: a "Reminders" note in the inbox). */
+export async function addReminder(env: Env, input: { text: string; schedule: string; note?: string }) {
+  const text = (input.text ?? "").replace(/\s+/g, " ").trim();
+  if (!text) throw new Error("Say what the reminder is for");
+  const line = `- [ ] ${text} @${(input.schedule ?? "").trim()}`;
+  const parsed = parseReminders("check", line, tz(env));
+  if (!parsed.length) throw new Error("Couldn't read that date and time");
+  if (!parsed[0].repeat && parsed.every(r => r.at <= Date.now())) throw new Error("That time has already passed");
+  const notes = new GithubNotes(env);
+  let name = input.note || (await notes.list()).find(n => REMINDERS_NOTE.test(n));
+  if (!name) {
+    const content = "# Reminders\n\n" + line + "\n";
+    return scheduleNote(env, await notes.save(content, "inbox"), content);
+  }
+  const lines = (await notes.get(name)).content.trimEnd().split("\n");
+  let at = lines.length;
+  for (let i = lines.length - 1; i >= 0; i--) if (TASK.test(lines[i])) { at = i + 1; break; }
+  lines.splice(at, 0, line);
+  const content = lines.join("\n") + "\n";
+  await notes.update(name, content);
+  return scheduleNote(env, name, content);
 }

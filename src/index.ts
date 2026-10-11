@@ -4,7 +4,7 @@ import { createMcpHandler } from "agents/mcp/server";
 import { z } from "zod";
 import { GithubNotes, CATEGORIES, type Env } from "./github";
 import { appendLog, recentLogs } from "./log";
-import { scheduler, fmt, scheduleNote, rescan, effectiveEnv, checkPassword } from "./core";
+import { scheduler, fmt, scheduleNote, rescan, effectiveEnv, checkPassword, completeReminder } from "./core";
 import { notesConfigured } from "./settings";
 import { handleApp } from "./web";
 import { DEFAULT_TIMEZONE } from "./reminder-parse";
@@ -18,7 +18,7 @@ REMINDERS push a notification to the owner's phone. Any unchecked task line with
   - [ ] Take meds @daily 8am, 8pm                  repeating; also @weekdays, @weekends, @mon,wed,fri
 Times: 9am, 5:30pm or 17:30; several separated by commas. Checking the box ([x]), removing the line or deleting the note stops it. Past one-off times are ignored. Notifications have a Done button that records the item in that day's log.
 
-LOG (log / get_logs tools): timestamped entries in one note per day (journal/log/YYYY-MM-DD.md). Tag each entry: #food #drink #med #exercise #sleep #mood #goal, or another short tag that fits. Example: log("burrito and a beer #food #drink"). Pass date/time when the owner describes something earlier ("had eggs at 8" → time "08:00"). Items completed from a reminder's Done button appear as "✓ <reminder text> #done".
+LOG (log / get_logs tools): timestamped entries in one note per day (journal/log/YYYY-MM-DD.md). Tag each entry: #food #drink #med #exercise #sleep #mood #goal, or another short tag that fits. Example: log("burrito and a beer #food #drink"). Pass date/time when the owner describes something earlier ("had eggs at 8" → time "08:00"). Items completed from a reminder's Done button appear as "✓ <reminder text> #done". When the owner says they did something that has a reminder (e.g. took their meds), call complete_reminder instead of log so the reminder stops.
 
 GOALS go in the goals category, one note each:
   # <goal>
@@ -58,6 +58,8 @@ function serverFor(env: Env): McpServer {
     ({ entry, date, time }) => result(() => appendLog(notes, entry, { date, time, timeZone: env.NOTES_TIMEZONE })));
   server.registerTool("get_logs", { description: "Read daily logs from the last N days (default 7, max 90), newest first", inputSchema: { days: z.number().int().min(1).max(90).default(7) } },
     ({ days }) => result(() => recentLogs(notes, days, env.NOTES_TIMEZONE)));
+  server.registerTool("complete_reminder", { description: "Mark a reminder done (e.g. the owner says they took their meds): logs it, stops that occurrence from notifying, and ticks a one-off's box. Use the note and text from list_reminders.", inputSchema: { note: z.string(), text: z.string() } },
+    ({ note, text }) => result(() => completeReminder(env, note, text)));
   server.registerTool("list_reminders", { description: "List upcoming phone reminders from notes", inputSchema: {} },
     () => result(async () => {
       const s = scheduler(env);
@@ -90,9 +92,10 @@ async function done(request: Request, env: Env): Promise<Response> {
   // GET (a tapped notification link) only shows a confirm button, so link previews never log anything.
   if (request.method === "GET")
     return donePage(`<p>${escapeHtml(action.text)}</p><form method="post"><button style="font:inherit;padding:.75rem 1.5rem">Mark done</button></form>`);
-  await appendLog(new GithubNotes(env), "✓ " + action.text + " #done", { timeZone: env.NOTES_TIMEZONE });
+  // Done means the same everywhere: log it, stop this occurrence notifying, and tick a one-off's box.
+  await completeReminder(env, action.note, action.text, action.at);
   const fromForm = (request.headers.get("Content-Type") ?? "").includes("form");
-  return fromForm ? donePage(`<p>✓ Logged: ${escapeHtml(action.text)}</p>`) : new Response("Logged");
+  return fromForm ? donePage(`<p>✓ Done: ${escapeHtml(action.text)}</p>`) : new Response("Done");
 }
 
 const defaultHandler = {

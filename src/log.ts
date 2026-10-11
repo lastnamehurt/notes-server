@@ -54,3 +54,27 @@ export async function recentLogs(notes: GithubNotes, days: number, timeZone = DE
   for (const name of names) out.push({ date: name.slice(LOG_PREFIX.length, -3), content: (await notes.get(name)).content });
   return out;
 }
+
+export interface LogEdit { date: string; original: string; entry?: string; time?: string; remove?: boolean; }
+
+/** Change or delete one line (matched exactly) in a day's log, keeping time order. */
+export async function editLog(notes: GithubNotes, edit: LogEdit): Promise<{ name: string; line: string | null }> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(edit.date)) throw new Error("date must be YYYY-MM-DD");
+  const name = logPath(edit.date);
+  const { content, sha } = await notes.get(name);
+  const lines = content.trimEnd().split("\n");
+  const at = lines.indexOf(edit.original);
+  if (at < 0) throw new Error("That entry changed since you opened it. Refresh and try again.");
+  lines.splice(at, 1);
+  let next = lines.join("\n") + "\n";
+  let line: string | null = null;
+  if (!edit.remove) {
+    const clean = (edit.entry ?? "").replace(/\s*\n+\s*/g, " ").trim();
+    if (!clean) throw new Error("Log entry cannot be empty");
+    if (!edit.time || !/^([01]\d|2[0-3]):[0-5]\d$/.test(edit.time)) throw new Error("time must be HH:MM (24-hour)");
+    line = `- ${edit.time} ${clean}`;
+    next = insertLogLine(next, edit.date, line);
+  }
+  await notes.put(name, next, sha);
+  return { name, line };
+}

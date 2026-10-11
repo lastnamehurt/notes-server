@@ -129,29 +129,67 @@ h2.group b { color: var(--ink); }
 .rem .sub { display: block; font-size: 14px; color: var(--ink-2); }
 .rem .sub a { color: inherit; }
 
-/* Editor */
-.ed-top { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
-.ed-top .path { flex: 1 1 100%; color: var(--ink-2); font-size: 14px; overflow-wrap: anywhere; }
-.seg { display: inline-flex; border: 1.5px solid var(--rule); border-radius: 10px; overflow: hidden; }
-.seg button { background: none; border: 0; padding: 8px 14px; color: var(--ink-2); font-weight: 600; }
-.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
-textarea.src { width: 100%; min-height: 55dvh; border: 1.5px solid var(--rule); background: var(--sheet); border-radius: 12px; padding: 14px; line-height: 1.55; resize: vertical; }
-textarea.src:focus { border-color: var(--ink); outline: none; }
+/* Editor and forms: a top bar that stays put, so Save is never under the keyboard. */
+.edbar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--paper); padding: 10px 0; margin: -10px 0 10px; border-bottom: 1px solid var(--rule); }
+.edbar .left, .edbar .right { display: flex; gap: 8px; align-items: center; }
+.link { background: none; border: 0; padding: 8px 2px; color: var(--ink); font-weight: 600; text-decoration: none; }
+.link.back::before { content: "\2039"; font-size: 26px; line-height: 0; margin-right: 6px; position: relative; top: 2px; }
+.btn.small { padding: 8px 16px; border-radius: 10px; }
+.where { color: var(--ink-2); font-size: 14px; margin: 0 0 10px; }
+.field { display: block; margin: 0 0 14px; }
+.field > span { display: block; font-weight: 600; font-size: 15px; margin-bottom: 6px; }
+.field input, .field textarea, .field select, .title-in, textarea.body-in {
+  width: 100%; border: 1.5px solid var(--rule); background: var(--sheet); border-radius: 12px; padding: 11px 14px; }
+.field input:focus, .field textarea:focus, .title-in:focus, textarea.body-in:focus { border-color: var(--ink); outline: none; }
+.title-in { font-size: 24px; font-weight: 800; letter-spacing: -0.01em; margin-bottom: 10px; }
+textarea.body-in { min-height: 40dvh; line-height: 1.55; resize: none; overflow: hidden; }
 .hint { font-size: 14px; color: var(--ink-2); margin: 8px 0 0; }
-.doc { background: var(--sheet); border-radius: 12px; padding: 4px 18px 14px; box-shadow: var(--shadow); overflow-wrap: anywhere; }
+.doc { background: var(--sheet); border-radius: 12px; padding: 4px 18px 14px; box-shadow: var(--shadow); overflow-wrap: anywhere; cursor: text; }
 .doc h1 { font-size: 28px; letter-spacing: -0.02em; line-height: 1.15; margin: 16px 0 8px; }
 .doc h2 { font-size: 20px; margin: 20px 0 6px; }
 .doc h3 { font-size: 17px; margin: 16px 0 4px; }
 .doc ul { padding-left: 20px; margin: 8px 0; }
-.doc li.task { list-style: none; margin-left: -20px; display: flex; gap: 10px; align-items: flex-start; padding: 3px 0; }
-.doc li.task input { width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--ink); flex: none; }
+.doc li.task { list-style: none; margin-left: -20px; padding: 3px 0; }
+.doc li.task label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.doc li.task input { width: 22px; height: 22px; margin: 1px 0 0; accent-color: var(--ink); flex: none; cursor: pointer; }
 .doc li.task.checked span { color: var(--ink-2); text-decoration: line-through; }
 .doc .when { color: var(--mark); font-weight: 600; white-space: nowrap; }
 .doc code { background: var(--paper); padding: 1px 5px; border-radius: 4px; font-size: .92em; }
 .doc a { color: var(--ink); }
-.ed-actions { display: flex; gap: 10px; margin-top: 14px; }
-.ed-actions .grow { flex: 1; }
-select.cat { border: 1.5px solid var(--rule); background: var(--sheet); border-radius: 10px; padding: 8px 10px; }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.danger-link { display: block; margin: 36px 0 0; background: none; border: 0; padding: 8px 0; color: var(--mark); font-weight: 600; }
+
+/* Bottom sheets */
+dialog.sheet { border: 0; padding: 0; width: 100%; max-width: 640px; margin: auto auto 0; background: var(--paper); color: var(--ink); border-radius: 18px 18px 0 0; max-height: 92dvh; }
+dialog.sheet::backdrop { background: rgb(10 14 30 / .45); }
+dialog.sheet form { padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); }
+dialog.sheet h2 { margin: 0 0 14px; font-size: 21px; }
+.sheet-actions { display: flex; gap: 10px; justify-content: flex-end; align-items: center; margin-top: 6px; }
+.sheet-actions .spacer { flex: 1; }
+.seg { display: inline-flex; border: 1.5px solid var(--rule); border-radius: 10px; overflow: hidden; margin-bottom: 14px; }
+.seg button { background: none; border: 0; padding: 8px 16px; color: var(--ink-2); font-weight: 600; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.days { display: flex; gap: 6px; margin-bottom: 8px; }
+.days button { flex: 1; aspect-ratio: 1; max-width: 44px; border-radius: 50%; border: 1.5px solid var(--rule); background: var(--sheet); font-weight: 600; color: var(--ink-2); }
+.days button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.repeat-say { font-size: 14px; color: var(--ink-2); margin: 0 0 14px; }
+.two { display: flex; gap: 10px; } .two .field { flex: 1; min-width: 0; }
+.formerr { color: var(--mark); font-weight: 600; margin: 0 0 10px; }
+
+/* Log rows are tappable */
+.ev button.entry { all: unset; cursor: pointer; display: block; }
+.ev button.entry:focus-visible { outline: 2px solid var(--mark); outline-offset: 4px; border-radius: 4px; }
+.ev.due::after { background: var(--mark); }
+.ev.due .sub { color: var(--mark); }
+.timebtn { flex: none; border: 1.5px solid var(--rule); background: var(--sheet); border-radius: 12px; padding: 0 12px; font-weight: 600; color: var(--ink-2); min-width: 64px; }
+.timebtn.set { color: var(--ink); border-color: var(--ink); }
+#when { flex: none; width: 112px; }
+.goal .next { display: flex; gap: 10px; align-items: flex-start; font-size: 16px; }
+.goal .next input { width: 22px; height: 22px; margin: 1px 0 0; accent-color: var(--ink); flex: none; }
+.goal .next .lbl { color: var(--ink-2); }
+.rem { grid-template-columns: 76px 1fr auto; align-items: start; }
+.rem .mk, .ev .mk { flex: none; background: none; border: 1.5px solid var(--mark); color: var(--mark); border-radius: 999px; padding: 3px 12px; font-size: 14px; font-weight: 600; }
+.rem a.what { color: inherit; text-decoration: none; }
 
 /* Lock */
 .lock { padding-top: 10dvh; }
@@ -173,7 +211,7 @@ select.cat { border: 1.5px solid var(--rule); background: var(--sheet); border-r
 .step .muted { color: var(--ink-2); font-size: 15px; }
 .step input[type=text], .step input[type=password], .step select { width: 100%; border: 1.5px solid var(--rule); background: var(--paper); border-radius: 12px; padding: 12px 14px; margin: 4px 0 10px; }
 .step label { font-weight: 600; display: block; }
-.btn.link { display: inline-block; text-decoration: none; }
+.btn.a-btn { display: inline-block; text-decoration: none; }
 .choices { list-style: none; padding: 0; margin: 6px 0 10px; }
 .choices label { display: flex; gap: 10px; align-items: center; font-weight: 400; padding: 8px 0; border-bottom: 1px solid var(--rule); }
 .choices input { width: 20px; height: 20px; accent-color: var(--ink); }
@@ -207,32 +245,42 @@ details.more summary { cursor: pointer; color: var(--ink-2); margin: 8px 0; }
   <div class="in">
     <div class="chips" id="chips" role="group" aria-label="Tags"></div>
     <div class="row">
+      <button type="button" class="timebtn" id="timebtn" aria-label="Time: now. Tap to change">Now</button>
+      <input type="time" id="when" hidden aria-label="Time">
       <label for="entry" style="position:absolute;left:-9999px">Log something</label>
-      <input id="entry" name="entry" placeholder="Log something: coffee, meds, a walk" enterkeyhint="send">
+      <input id="entry" name="entry" placeholder="Log a meal, meds, a walk…" enterkeyhint="send">
       <button class="btn" id="logbtn" type="submit">Log</button>
     </div>
   </div>
 </form>
 
+<dialog class="sheet" id="sheet" aria-labelledby="sheet-title"></dialog>
+
 <script>
 "use strict";
 const TAGS = ["food", "drink", "med", "exercise", "sleep", "mood"];
+const DAYS = ["S", "M", "T", "W", "T", "F", "S"];
+const DAY_IDS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+const DAY_NAMES = ["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"];
 const $ = (s, el = document) => el.querySelector(s);
 const main = $("#main");
+const sheet = $("#sheet");
 let cfg = { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, categories: [], push: true };
 
 const esc = s => String(s).replace(/[&<>"']/g, c => "&#" + c.charCodeAt(0) + ";");
 const h = (strings, ...vals) => strings.reduce((out, s, i) => out + s + (i < vals.length ? (vals[i] && vals[i].__html !== undefined ? vals[i].__html : esc(vals[i] ?? "")) : ""), "");
 const raw = html => ({ __html: html });
 
-// Dates in the owner's time zone, not the phone's.
+/* ---------- Time, always in the owner's time zone ---------- */
 const parts = (ms = Date.now()) => Object.fromEntries(new Intl.DateTimeFormat("en-US", {
-  timeZone: cfg.timeZone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", weekday: "short"
+  timeZone: cfg.timeZone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"
 }).formatToParts(new Date(ms)).map(p => [p.type, p.value]));
 const dayKey = ms => { const p = parts(ms); return p.year + "-" + p.month + "-" + p.day; };
 const hhmm = ms => { const p = parts(ms); return p.hour + ":" + p.minute; };
 const fmt12 = t => { let [H, M] = t.split(":").map(Number); const ap = H >= 12 ? "pm" : "am"; H = H % 12 || 12; return H + (M ? ":" + String(M).padStart(2, "0") : "") + ap; };
 const longDay = ms => new Intl.DateTimeFormat("en-US", { timeZone: cfg.timeZone, weekday: "short", month: "short", day: "numeric" }).format(new Date(ms));
+const shortDate = iso => new Date(iso + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+const addDays = (iso, n) => { const d = new Date(iso + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 
 function drawDate() {
   const now = new Date();
@@ -246,7 +294,7 @@ function toast(msg) {
   const t = document.createElement("div");
   t.className = "toast"; t.role = "status"; t.textContent = msg;
   document.body.append(t);
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.remove(), 2600);
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.remove(), 2800);
 }
 
 class Locked extends Error {}
@@ -258,8 +306,14 @@ async function api(path, opts = {}) {
   });
   if (res.status === 401) throw new Locked();
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || "Request failed (" + res.status + ")");
+  if (!res.ok) throw new Error(data.error || "Something went wrong (" + res.status + ")");
   return data;
+}
+function savedMessage(res, base) {
+  const n = res && res.reminders ? res.reminders.length : 0;
+  let msg = base + (n ? ", " + n + " reminder" + (n > 1 ? "s" : "") + " set" : "");
+  if (res && res.warning) msg += /NTFY_TOPIC/.test(res.warning) ? ". Phone notifications are off (turn them on in Setup)." : ". " + res.warning;
+  return msg;
 }
 
 /* ---------- Note names and Markdown ---------- */
@@ -269,15 +323,21 @@ function titleFrom(name, content) {
   const file = name.split("/").pop().replace(/\.md$/, "");
   const m = /^\d{4}-\d{2}-\d{2}-(.+)$/.exec(file);
   const slug = m ? m[1] : file;
-  if (/^\d{8}T\d{6}Z?-[0-9a-f]{8}$/.test(slug)) return "Untitled note";
+  if (/^\d{8}T\d{6}Z?-[0-9a-f]{8}$/.test(slug) || slug === "note") return "Untitled note";
   return slug.replace(/-\d+$/, "").replace(/-/g, " ").replace(/^./, c => c.toUpperCase());
 }
 function dateFrom(name) {
   const m = /(\d{4})-?(\d{2})-?(\d{2})/.exec(name.split("/").pop());
-  if (!m) return "";
-  return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], 12)).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  return m ? shortDate(m[1] + "-" + m[2] + "-" + m[3]) : "";
 }
 const folderName = c => ({ inbox: "Inbox", goals: "Goals", projects: "Projects", decisions: "Decisions", runbooks: "Runbooks", reference: "Reference", journal: "Journal" }[c] || c);
+/** Split a note into its "# Title" line and the rest. */
+function splitTitle(content) {
+  const m = /^\s*#\s+(.*)\n?/.exec(content);
+  if (!m) return { title: "", body: content.replace(/^\n+/, "") };
+  return { title: m[1].trim(), body: content.slice(m[0].length).replace(/^\n+/, "") };
+}
+const joinTitle = (title, body) => (title.trim() ? "# " + title.trim() + "\n\n" : "") + body.replace(/\s+$/, "") + "\n";
 
 function inline(s) {
   return esc(s)
@@ -287,11 +347,12 @@ function inline(s) {
     .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" rel="noopener noreferrer" target="_blank">$1</a>');
 }
 const SCHED = /\s+@((?:\d{4}-\d{2}-\d{2}|daily|everyday|weekdays|weekends|[a-z]{3,9}(?:,[a-z]{3,9})*)(?:\s+[\d:apm, ]+)?)\s*$/i;
-const shortDate = iso => new Date(iso + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 function niceSched(spec) {
   const [when, ...times] = spec.trim().split(/\s+/);
-  const day = /^\d{4}-\d{2}-\d{2}$/.test(when) ? shortDate(when) : when.replace(/,/g, ", ");
-  return day + (times.length ? ", " + times.join(" ") : "");
+  const t = times.join(" ").split(",").map(x => x.trim()).filter(Boolean).map(x => /^\d{1,2}:\d{2}$/.test(x) ? fmt12(x) : x).join(", ");
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(when) ? shortDate(when)
+    : ({ daily: "daily", everyday: "daily", weekdays: "weekdays", weekends: "weekends" }[when.toLowerCase()] || when.replace(/,/g, ", "));
+  return day + (t ? ", " + t : "");
 }
 function render(md) {
   const out = []; let list = false; let para = [];
@@ -305,7 +366,7 @@ function render(md) {
       const checked = m[1] !== " ";
       const s = SCHED.exec(m[2]);
       const text = s ? m[2].slice(0, s.index) : m[2];
-      out.push(`<li class="task${checked ? " checked" : ""}"><input type="checkbox" data-line="${i}" ${checked ? "checked" : ""} aria-label="Done"><span>${inline(text)}${s ? ` <span class="when">${esc(niceSched(s[1]))}</span>` : ""}</span></li>`);
+      out.push(`<li class="task${checked ? " checked" : ""}"><label><input type="checkbox" data-line="${i}" ${checked ? "checked" : ""}><span>${inline(text)}${s ? ` <span class="when">${esc(niceSched(s[1]))}</span>` : ""}</span></label></li>`);
       return;
     }
     if ((m = /^\s*[-*]\s+(.*)$/.exec(line))) { flush(); if (!list) { out.push("<ul>"); list = true; } out.push("<li>" + inline(m[1]) + "</li>"); return; }
@@ -315,54 +376,216 @@ function render(md) {
   flush(); close();
   return out.join("");
 }
+/** Tick or untick task line `i` of a note and save. */
+async function setTask(name, content, i, done) {
+  const lines = content.split("\n");
+  lines[i] = lines[i].replace(/\[( |x|X)\]/, done ? "[x]" : "[ ]");
+  const next = lines.join("\n");
+  await api("/note", { method: "PUT", body: { name, content: next } });
+  return next;
+}
+
+/* ---------- Unsaved-changes guard ---------- */
+let isDirty = () => false;
+const clearDirty = () => { isDirty = () => false; };
+window.addEventListener("beforeunload", e => { if (isDirty()) { e.preventDefault(); e.returnValue = ""; } });
+
+/* ---------- Sheets ---------- */
+function openSheet(html, wire) {
+  sheet.innerHTML = html;
+  sheet.showModal();
+  wire(sheet);
+  const first = sheet.querySelector("[autofocus]");
+  if (first) first.focus();
+}
+const closeSheet = () => { if (sheet.open) sheet.close(); };
+sheet.addEventListener("click", e => { if (e.target === sheet) closeSheet(); });
+function sheetError(msg) {
+  let el = sheet.querySelector(".formerr");
+  if (!el) { el = document.createElement("p"); el.className = "formerr"; el.role = "alert"; sheet.querySelector(".sheet-actions").before(el); }
+  el.textContent = msg;
+}
+
+/** Add a reminder (to `note`, or the inbox "Reminders" note). */
+function reminderSheet(note, onSaved) {
+  const nowMs = Date.now();
+  const today = dayKey(nowMs);
+  const nextHour = (Number(hhmm(nowMs).slice(0, 2)) + 1) % 24;
+  const time = String(nextHour).padStart(2, "0") + ":00";
+  const date = nextHour === 0 ? addDays(today, 1) : today;
+  let repeat = false;
+  const days = new Set([0, 1, 2, 3, 4, 5, 6]);
+  openSheet(h`<form method="dialog" novalidate>
+      <h2 id="sheet-title">New reminder</h2>
+      <label class="field"><span>Remind me to</span><input id="r-text" autofocus required placeholder="Take meds, call the shop…" enterkeyhint="next"></label>
+      <div class="seg" role="group" aria-label="How often"><button type="button" data-rep="0" aria-pressed="true">Once</button><button type="button" data-rep="1" aria-pressed="false">Repeats</button></div>
+      <div id="r-once" class="two"><label class="field"><span>Day</span><input type="date" id="r-date" value="${date}" min="${today}"></label>
+        <label class="field"><span>Time</span><input type="time" id="r-time1" value="${time}"></label></div>
+      <div id="r-rep" hidden>
+        <div class="days" role="group" aria-label="Days">${raw(DAYS.map((d, i) => `<button type="button" data-day="${i}" aria-pressed="true" aria-label="${DAY_NAMES[i]}">${d}</button>`).join(""))}</div>
+        <p class="repeat-say" id="r-say">Every day</p>
+        <label class="field"><span>Time</span><input type="time" id="r-time2" value="${time}"></label>
+      </div>
+      <div class="sheet-actions"><button type="button" class="btn quiet" data-close>Cancel</button><button class="btn" id="r-save" type="submit">Add reminder</button></div>
+    </form>`, el => {
+    const say = () => {
+      const d = [...days].sort();
+      $("#r-say").textContent = d.length === 7 ? "Every day" : d.join() === "1,2,3,4,5" ? "Weekdays" : d.join() === "0,6" ? "Weekends"
+        : d.length ? "On " + d.map(i => DAY_NAMES[i]).join(", ").replace(/, ([^,]*)$/, " and $1") : "Pick at least one day";
+    };
+    el.querySelectorAll("[data-rep]").forEach(b => b.onclick = () => {
+      repeat = b.dataset.rep === "1";
+      el.querySelectorAll("[data-rep]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+      $("#r-once").hidden = repeat; $("#r-rep").hidden = !repeat;
+    });
+    el.querySelectorAll("[data-day]").forEach(b => b.onclick = () => {
+      const i = +b.dataset.day;
+      days.has(i) ? days.delete(i) : days.add(i);
+      b.setAttribute("aria-pressed", String(days.has(i)));
+      say();
+    });
+    el.querySelector("[data-close]").onclick = closeSheet;
+    el.querySelector("form").onsubmit = async e => {
+      e.preventDefault();
+      const text = $("#r-text").value.trim();
+      if (!text) return sheetError("Say what to remind you about.");
+      let schedule;
+      if (!repeat) {
+        const d = $("#r-date").value, t = $("#r-time1").value;
+        if (!d || !t) return sheetError("Pick a day and a time.");
+        schedule = d + " " + t;
+      } else {
+        const d = [...days].sort(), t = $("#r-time2").value;
+        if (!d.length) return sheetError("Pick at least one day.");
+        if (!t) return sheetError("Pick a time.");
+        const spec = d.length === 7 ? "daily" : d.join() === "1,2,3,4,5" ? "weekdays" : d.join() === "0,6" ? "weekends" : d.map(i => DAY_IDS[i]).join(",");
+        schedule = spec + " " + t;
+      }
+      $("#r-save").disabled = true;
+      try {
+        const res = await api("/reminder", { method: "POST", body: { text, schedule, note } });
+        closeSheet(); toast(savedMessage({ ...res, reminders: [1] }, "Reminder added").replace(", 1 reminder set", ""));
+        onSaved && onSaved(res);
+      } catch (err) { if (err instanceof Locked) { closeSheet(); return unlockSheet(); } sheetError(err.message); $("#r-save").disabled = false; }
+    };
+  });
+}
+
+/** Edit or delete one log line. */
+function logEntrySheet(date, original, time, text) {
+  openSheet(h`<form method="dialog" novalidate>
+      <h2 id="sheet-title">Edit entry</h2>
+      <label class="field"><span>What</span><input id="l-text" value="${text}" autofocus></label>
+      <label class="field"><span>Time</span><input type="time" id="l-time" value="${time}"></label>
+      <div class="sheet-actions"><button type="button" class="btn danger" id="l-del">Delete</button><span class="spacer"></span>
+        <button type="button" class="btn quiet" data-close>Cancel</button><button class="btn" id="l-save" type="submit">Save</button></div>
+    </form>`, el => {
+    el.querySelector("[data-close]").onclick = closeSheet;
+    const go = async body => {
+      try { await api("/log/edit", { method: "POST", body: { date, original, ...body } }); closeSheet(); toast(body.remove ? "Entry deleted" : "Entry saved"); views.today(); }
+      catch (err) { if (err instanceof Locked) { closeSheet(); return unlockSheet(); } sheetError(err.message); }
+    };
+    $("#l-del").onclick = () => go({ remove: true });
+    el.querySelector("form").onsubmit = e => {
+      e.preventDefault();
+      const entry = $("#l-text").value.trim(), t = $("#l-time").value;
+      if (!entry) return sheetError("Write something, or tap Delete.");
+      if (!t) return sheetError("Pick a time.");
+      go({ entry, time: t });
+    };
+  });
+}
+
+/** Append a dated line under "## Progress" in a goal note. */
+function progressSheet(name, content, onSaved) {
+  openSheet(h`<form method="dialog" novalidate>
+      <h2 id="sheet-title">Add an update</h2>
+      <label class="field"><span>What happened</span><textarea id="p-text" rows="3" autofocus placeholder="Ordered the battery, booked smog for Friday…"></textarea></label>
+      <div class="sheet-actions"><button type="button" class="btn quiet" data-close>Cancel</button><button class="btn" id="p-save" type="submit">Add update</button></div>
+    </form>`, el => {
+    el.querySelector("[data-close]").onclick = closeSheet;
+    el.querySelector("form").onsubmit = async e => {
+      e.preventDefault();
+      const text = $("#p-text").value.replace(/\s+/g, " ").trim();
+      if (!text) return sheetError("Write the update first.");
+      const line = "- " + dayKey(Date.now()) + ": " + text;
+      const lines = content.replace(/\s+$/, "").split("\n");
+      let at = lines.findIndex(l => /^##\s+Progress\s*$/i.test(l));
+      if (at < 0) { lines.push("", "## Progress", line); }
+      else { let end = at + 1; while (end < lines.length && !/^#{1,2}\s/.test(lines[end])) end++; while (end > at + 1 && !lines[end - 1].trim()) end--; lines.splice(end, 0, line); }
+      const next = lines.join("\n") + "\n";
+      $("#p-save").disabled = true;
+      try { await api("/note", { method: "PUT", body: { name, content: next } }); closeSheet(); toast("Update added"); onSaved(next); }
+      catch (err) { if (err instanceof Locked) { closeSheet(); return unlockSheet(); } sheetError(err.message); $("#p-save").disabled = false; }
+    };
+  });
+}
+
+async function complete(note, text, at) {
+  await api("/complete", { method: "POST", body: { note, text, at } });
+  toast("Done");
+}
 
 /* ---------- Views ---------- */
 const views = {};
 
 views.today = async () => {
-  main.innerHTML = '<p class="empty">Loading today…</p>';
+  if (!main.querySelector(".rail")) main.innerHTML = '<p class="empty">Loading today…</p>';
   const [logs, rems] = await Promise.all([api("/logs?days=1"), api("/reminders")]);
   const today = dayKey(Date.now());
   const entries = [];
   const log = logs.find(l => l.date === today);
   if (log) for (const line of log.content.split("\n")) {
     const m = /^- (\d{2}:\d{2}) (.*)$/.exec(line);
-    if (m) entries.push({ t: m[1], text: m[2] });
+    if (m) entries.push({ kind: "log", t: m[1], text: m[2], line });
   }
-  // A reminder already marked done today (via the app or the notification's Done button) isn't upcoming.
-  const doneToday = new Set(entries.map(e => (/^✓ (.*?)(\s+#[\w-]+)*$/.exec(e.text) || [])[1]).filter(Boolean));
-  const upcoming = rems.filter(r => dayKey(r.at) === today && !doneToday.has(r.text));
-  const later = rems.filter(r => dayKey(r.at) !== today).slice(0, 3);
+  // Occurrences marked done (here, by Claude, or from the notification) drop off the list.
+  const key = r => r.note + "\u0000" + r.text + "\u0000" + r.at;
+  const seen = new Set(rems.doneToday.map(key));
+  const agenda = [];
+  for (const r of [...rems.firedToday, ...rems.upcoming.filter(r => dayKey(r.at) === today)]) {
+    if (seen.has(key(r))) continue;
+    seen.add(key(r));
+    agenda.push({ kind: "rem", t: hhmm(r.at), r });
+  }
   const nowT = hhmm(Date.now());
+  const items = [...entries, ...agenda].sort((a, b) => a.t.localeCompare(b.t) || (a.kind === "log" ? -1 : 1));
+  const later = rems.upcoming.filter(r => dayKey(r.at) > today).slice(0, 3);
 
-  const logRow = e => {
-    const tags = (e.text.match(/#[\w-]+/g) || []).join(" ");
-    const what = e.text.replace(/\s*#[\w-]+/g, "").trim();
-    const done = /^✓/.test(what);
-    return h`<li class="ev${done ? " done-ev" : ""}"><time>${fmt12(e.t)}</time><div><span class="what">${what}</span> <span class="tags">${tags}</span></div></li>`;
+  const row = it => {
+    if (it.kind === "log") {
+      const tags = (it.text.match(/#[\w-]+/g) || []).join(" ");
+      const what = it.text.replace(/\s*#[\w-]+/g, "").trim();
+      return h`<li class="ev${/^✓/.test(what) ? " done-ev" : ""}"><time>${fmt12(it.t)}</time><button class="entry" data-line="${it.line}" aria-label="Edit ${what} at ${fmt12(it.t)}"><span class="what">${what}</span> <span class="tags">${tags}</span></button></li>`;
+    }
+    const due = it.t <= nowT;
+    return h`<li class="ev ${due ? "due" : "up"}"><time>${fmt12(it.t)}</time><div class="body"><div><span class="what">${it.r.text}</span>
+      <span class="sub">${due ? "Due, " : ""}<a href="#note/${it.r.note}" style="color:inherit">${titleFrom(it.r.note)}</a>${it.r.repeat ? ", repeats" : ""}</span></div>
+      <button class="mk" data-note="${it.r.note}" data-text="${it.r.text}" data-at="${it.r.at}" aria-label="Mark ${it.r.text} done">Done</button></div></li>`;
   };
-  const remRow = r => h`<li class="ev up"><time>${fmt12(hhmm(r.at))}</time><div class="body"><div><span class="what">${r.text}</span>
-      <span class="sub"><a href="#note/${r.note}" style="color:inherit">${titleFrom(r.note)}</a>${r.repeat ? ", repeats" : ""}</span></div>
-      <button class="mk" data-done="${r.text}" aria-label="Mark ${r.text} done">Done</button></div></li>`;
-
-  let html = "";
-  if (!entries.length && !upcoming.length) {
-    html = `<p class="empty">Nothing logged yet today. Use the box below to log a meal, a drink, your meds or how you're feeling.</p>`;
+  let html;
+  if (!items.length) {
+    html = `<p class="empty">Nothing logged yet today. Use the box at the bottom to log a meal, a drink, your meds or how you're feeling.</p>`;
   } else {
-    html = '<ol class="rail">' + entries.filter(e => e.t <= nowT).map(logRow).join("") + "</ol>";
-    html += `<div class="now" role="separator" aria-label="Now"><span>${esc(fmt12(nowT))}</span></div>`;
-    html += '<ol class="rail">' + entries.filter(e => e.t > nowT).map(logRow).join("") + upcoming.map(remRow).join("") + "</ol>";
+    const before = items.filter(i => i.t <= nowT), after = items.filter(i => i.t > nowT);
+    html = (before.length ? '<ol class="rail">' + before.map(row).join("") + "</ol>" : "")
+      + `<div class="now" role="separator" aria-label="Now"><span>${esc(fmt12(nowT))}</span></div>`
+      + (after.length ? '<ol class="rail">' + after.map(row).join("") + "</ol>" : "");
   }
   if (later.length) {
     html += '<p class="later">Coming up</p><ol class="rail">' + later.map(r =>
-      h`<li class="ev up"><time>${longDay(r.at).replace(/^\w+, /, "")}</time><div><span class="what">${r.text}</span><span class="sub">${fmt12(hhmm(r.at))}</span></div></li>`).join("") + "</ol>";
+      h`<li class="ev up"><time>${longDay(r.at).replace(/^\w+, /, "")}</time><div><a class="what" href="#note/${r.note}" style="color:inherit;text-decoration:none">${r.text}</a><span class="sub">${fmt12(hhmm(r.at))}</span></div></li>`).join("") + "</ol>";
   }
-  if (!cfg.push) html += `<p class="hint">Reminders are saved, but phone notifications aren't set up yet.</p>`;
+  if (!cfg.push) html += `<p class="hint">Reminders show here, but phone notifications are off.${cfg.canSetup ? ' Turn them on in <a href="#settings">Setup</a>.' : ""}</p>`;
   main.innerHTML = html;
-  main.querySelectorAll("[data-done]").forEach(b => b.onclick = async () => {
+  main.querySelectorAll(".mk").forEach(b => b.onclick = async () => {
     b.disabled = true;
-    try { await api("/log", { method: "POST", body: { entry: "✓ " + b.dataset.done + " #done" } }); toast("Logged as done"); views.today(); }
+    try { await complete(b.dataset.note, b.dataset.text, +b.dataset.at); views.today(); }
     catch (e) { handle(e); b.disabled = false; }
+  });
+  main.querySelectorAll("button.entry").forEach(b => b.onclick = () => {
+    const m = /^- (\d{2}:\d{2}) (.*)$/.exec(b.dataset.line);
+    logEntrySheet(today, b.dataset.line, m[1], m[2]);
   });
 };
 
@@ -387,8 +610,7 @@ views.notes = async () => {
     clearTimeout(timer);
     const q = e.target.value.trim();
     if (!q) return draw(allNotes);
-    const quick = allNotes.filter(n => n.toLowerCase().includes(q.toLowerCase()));
-    draw(quick);
+    draw(allNotes.filter(n => n.toLowerCase().includes(q.toLowerCase())));
     timer = setTimeout(async () => { try { draw(await api("/search?q=" + encodeURIComponent(q))); } catch (err) { handle(err); } }, 450);
   };
 };
@@ -397,101 +619,164 @@ views.goals = async () => {
   main.innerHTML = '<p class="empty">Loading goals…</p>';
   const goals = await api("/goals");
   if (!goals.length) {
-    main.innerHTML = `<p class="empty">No goals yet. Start one with why it matters, how you'll measure it and the first step.</p><a class="btn" href="#new/goals" style="text-decoration:none;display:inline-block">New goal</a>`;
+    main.innerHTML = `<p class="empty">No goals yet. Write down what you're aiming for, why, and a first step.</p><a class="btn" href="#new-goal" style="text-decoration:none;display:inline-block">New goal</a>`;
     return;
   }
   const today = dayKey(Date.now());
-  main.innerHTML = goals.map(g => {
+  main.innerHTML = goals.map((g, gi) => {
     const c = g.content;
-    const steps = [...c.matchAll(/^\s*[-*]\s+\[( |x|X)\]\s+(.*)$/gm)];
-    const done = steps.filter(s => s[1] !== " ").length;
-    const next = steps.find(s => s[1] === " ");
+    const lines = c.split("\n");
+    const steps = lines.map((l, i) => [/^\s*[-*]\s+\[( |x|X)\]\s+(.*)$/.exec(l), i]).filter(([m]) => m);
+    const done = steps.filter(([m]) => m[1] !== " ").length;
+    const next = steps.find(([m]) => m[1] === " ");
     const target = (/Target:\s*(\d{4}-\d{2}-\d{2})/i.exec(c) || [])[1];
     const days = target ? Math.round((Date.parse(target) - Date.parse(today)) / 86400000) : null;
     const progress = [...c.matchAll(/^- (\d{4}-\d{2}-\d{2}): (.*)$/gm)].pop();
-    const meta = [target ? (days >= 0 ? days + " days left, due " + shortDate(target) : Math.abs(days) + " days past " + shortDate(target)) : "",
+    const meta = [target ? (days > 0 ? days + " days left, due " + shortDate(target) : days === 0 ? "Due today" : Math.abs(days) + " days past " + shortDate(target)) : "",
                   steps.length ? done + " of " + steps.length + " steps done" : ""].filter(Boolean).join(", ");
     return h`<article class="goal"><h3><a href="#note/${g.name}">${titleFrom(g.name, c)}</a></h3>
       <div class="meta">${meta || "No steps yet"}</div>
-      ${raw(steps.length ? '<div class="meter" aria-hidden="true">' + steps.map(s => `<i class="${s[1] !== " " ? "on" : ""}"></i>`).join("") + "</div>" : "")}
-      ${raw(next ? h`<div class="next"><span>Next:</span> ${next[2].replace(SCHED, "")}</div>` : "")}
+      ${raw(steps.length ? '<div class="meter" aria-hidden="true">' + steps.map(([m]) => `<i class="${m[1] !== " " ? "on" : ""}"></i>`).join("") + "</div>" : "")}
+      ${raw(next ? h`<label class="next"><input type="checkbox" data-goal="${gi}" data-line="${next[1]}"><span><span class="lbl">Next:</span> ${next[0][2].replace(SCHED, "")}</span></label>` : "")}
       ${raw(progress ? h`<div class="meta" style="margin-top:6px">Last update ${shortDate(progress[1])}: ${progress[2]}</div>` : "")}</article>`;
-  }).join("") + `<p style="margin-top:20px"><a class="btn quiet" href="#new/goals" style="text-decoration:none;display:inline-block">New goal</a></p>`;
+  }).join("") + `<p style="margin-top:20px"><a class="btn quiet" href="#new-goal" style="text-decoration:none;display:inline-block">New goal</a></p>`;
+  main.querySelectorAll("input[data-goal]").forEach(cb => cb.onchange = async () => {
+    const g = goals[+cb.dataset.goal];
+    cb.disabled = true;
+    try { await setTask(g.name, g.content, +cb.dataset.line, true); toast("Step done"); views.goals(); }
+    catch (e) { cb.checked = false; cb.disabled = false; handle(e); }
+  });
+};
+
+views["new-goal"] = async () => {
+  const today = dayKey(Date.now());
+  main.innerHTML = h`<form id="gform" novalidate>
+      <div class="edbar"><div class="left"><a class="link" href="#goals">Cancel</a></div><div class="right"><button class="btn small" type="submit" id="g-save">Save</button></div></div>
+      <label class="field"><span>Goal</span><input id="g-title" placeholder="Run a 10k, finish the EP…" autofocus></label>
+      <label class="field"><span>Why it matters</span><textarea id="g-why" rows="2"></textarea></label>
+      <label class="field"><span>How you'll know you're there</span><input id="g-measure" placeholder="Four tracks mixed and uploaded"></label>
+      <label class="field"><span>Target date</span><input type="date" id="g-target" min="${today}"></label>
+      <label class="field"><span>First step</span><input id="g-step" placeholder="Pick the four tracks"></label>
+      <p class="hint">You can add more steps, reminders and progress updates once it's saved.</p>
+    </form>`;
+  const fields = ["g-title", "g-why", "g-measure", "g-target", "g-step"];
+  isDirty = () => fields.some(id => $("#" + id) && $("#" + id).value.trim());
+  $("#g-title").focus();
+  $("#gform").onsubmit = async e => {
+    e.preventDefault();
+    const v = id => $("#" + id).value.replace(/\s+/g, " ").trim();
+    if (!v("g-title")) { toast("Name the goal first"); return $("#g-title").focus(); }
+    const content = "# " + v("g-title") + "\n\n" + [v("g-why") && "Why: " + v("g-why"), v("g-measure") && "Measure: " + v("g-measure"), v("g-target") && "Target: " + v("g-target")].filter(Boolean).join("\n")
+      + "\n\n## Next steps\n" + (v("g-step") ? "- [ ] " + v("g-step") + "\n" : "") + "\n## Progress\n";
+    $("#g-save").disabled = true;
+    try { const res = await api("/note", { method: "POST", body: { content, category: "goals" } }); clearDirty(); nextToast = "Goal saved"; location.hash = "#note/" + res.name; }
+    catch (err) { handle(err); $("#g-save").disabled = false; }
+  };
 };
 
 views.reminders = async () => {
   main.innerHTML = '<p class="empty">Loading reminders…</p>';
-  const rems = await api("/reminders");
+  const { upcoming: rems } = await api("/reminders");
+  let html = `<div class="bar" style="justify-content:flex-end"><button class="btn" id="newrem">New reminder</button></div>`;
   if (!rems.length) {
-    main.innerHTML = `<p class="empty">No reminders scheduled. Add a line like <code>- [ ] Take meds @daily 8am</code> to any note.</p>`;
-    return;
+    html += `<p class="empty">Nothing scheduled. Add a reminder for meds, errands or anything with a time.</p>`;
+  } else {
+    const today = dayKey(Date.now()), tomorrow = addDays(today, 1);
+    let last = "";
+    for (const r of rems) {
+      const k = dayKey(r.at);
+      if (k !== last) { html += (last ? "</div>" : "") + h`<h2 class="group"><b>${k === today ? "Today" : k === tomorrow ? "Tomorrow" : longDay(r.at)}</b></h2><div>`; last = k; }
+      html += h`<div class="rem"><time>${fmt12(hhmm(r.at))}</time><div><a class="what" href="#note/${r.note}">${r.text}</a><span class="sub">${titleFrom(r.note)}${r.repeat ? ", repeats" : ""}</span></div>
+        <button class="mk" data-note="${r.note}" data-text="${r.text}" data-at="${r.at}" aria-label="Mark ${r.text} done">Done</button></div>`;
+    }
+    html += "</div>";
   }
-  const today = dayKey(Date.now()), tomorrow = dayKey(Date.now() + 86400000);
-  let html = "", last = "";
-  for (const r of rems) {
-    const k = dayKey(r.at);
-    if (k !== last) { html += (last ? "</div>" : "") + h`<h2 class="group"><b>${k === today ? "Today" : k === tomorrow ? "Tomorrow" : longDay(r.at)}</b></h2><div>`; last = k; }
-    html += h`<div class="rem"><time>${fmt12(hhmm(r.at))}</time><div>${r.text}<span class="sub"><a href="#note/${r.note}">${titleFrom(r.note)}</a>${r.repeat ? ", repeats" : ""}</span></div></div>`;
-  }
-  main.innerHTML = html + "</div>";
+  main.innerHTML = html;
+  $("#newrem").onclick = () => reminderSheet(null, () => views.reminders());
+  main.querySelectorAll(".mk").forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    try { await complete(b.dataset.note, b.dataset.text, +b.dataset.at); views.reminders(); }
+    catch (e) { handle(e); b.disabled = false; }
+  });
 };
 
-/* Editor: read view with tickable boxes, or Markdown source. */
+/* ---------- Note: read, tap to edit ---------- */
 async function editor(name, category) {
   const isNew = !name;
-  let content = "", mode = isNew ? "edit" : "read";
+  const folder = isNew ? (category || "inbox") : name.split("/")[0];
+  const backTo = folder === "goals" ? "#goals" : "#notes";
+  const backLabel = folder === "goals" ? "Goals" : "Notes";
+  let content = "";
   if (!isNew) {
     main.innerHTML = '<p class="empty">Opening note…</p>';
     content = (await api("/note?name=" + encodeURIComponent(name))).content;
-  } else if (category === "goals") {
-    content = "# \n\nWhy: \nMeasure: \nTarget: \n\n## Next steps\n- [ ] \n\n## Progress\n";
   }
-  const cats = cfg.categories.filter(c => c !== "journal" || isNew);
-  const draw = () => {
-    main.innerHTML = h`<div class="ed-top">
-        <div class="path">${isNew ? "New note" : "In " + folderName(name.split("/")[0]) + (dateFrom(name) ? ", created " + dateFrom(name) : "")}</div>
-        <div class="seg" role="group" aria-label="View"><button data-m="read" aria-pressed="${mode === "read"}">Read</button><button data-m="edit" aria-pressed="${mode === "edit"}">Edit</button></div>
-        ${raw(isNew ? h`<select class="cat" id="cat" aria-label="Folder">${raw(cats.map(c => h`<option value="${c}" ${c === (category || "inbox") ? "selected" : ""}>${folderName(c)}</option>`).join(""))}</select>` : "")}
-      </div>
-      ${raw(mode === "read"
-        ? `<div class="doc">${content.trim() ? render(content) : '<p class="empty">This note is empty.</p>'}</div>`
-        : h`<label for="src" style="position:absolute;left:-9999px">Note text</label><textarea class="src" id="src" spellcheck="true">${content}</textarea>
-           <p class="hint">Start with a # title. Add a reminder with <code>- [ ] Call the pharmacy @2026-10-14 9am</code> or <code>@daily 8am</code>.</p>`)}
-      <div class="ed-actions">
-        <button class="btn grow" id="save" ${mode === "read" ? "hidden" : ""}>Save</button>
-        ${raw(!isNew ? '<button class="btn danger" id="del">Delete</button>' : "")}
-      </div>`;
-    main.querySelectorAll("[data-m]").forEach(b => b.onclick = () => { if (mode === "edit") content = $("#src").value; mode = b.dataset.m; draw(); });
-    main.querySelectorAll("input[data-line]").forEach(cb => cb.onchange = async () => {
-      const lines = content.split("\n"); const i = +cb.dataset.line;
-      lines[i] = lines[i].replace(/\[( |x|X)\]/, cb.checked ? "[x]" : "[ ]");
-      const prev = content; content = lines.join("\n"); draw();
-      try { await api("/note", { method: "PUT", body: { name, content } }); toast(cb.checked ? "Checked off" : "Unchecked"); }
-      catch (e) { content = prev; draw(); handle(e); }
+
+  const read = () => {
+    clearDirty();
+    const isGoal = folder === "goals";
+    main.innerHTML = h`<div class="edbar"><div class="left"><a class="link back" href="${backTo}">${backLabel}</a></div><div class="right"><button class="btn small" id="edit">Edit</button></div></div>
+      <p class="where">In ${folderName(folder)}${dateFrom(name) ? ", created " + dateFrom(name) : ""}</p>
+      ${raw(`<div class="doc" id="doc" title="Tap to edit">${content.trim() ? render(content) : '<p class="empty">This note is empty. Tap to write.</p>'}</div>`)}
+      <div class="actions"><button class="btn quiet" id="addrem">Add reminder</button>${raw(isGoal ? '<button class="btn quiet" id="addupd">Add update</button>' : "")}</div>
+      <button class="danger-link" id="del">Delete note</button>`;
+    $("#edit").onclick = () => edit();
+    $("#doc").onclick = e => { if (!e.target.closest("input, a, label")) edit(); };
+    main.querySelectorAll("#doc input[data-line]").forEach(cb => cb.onchange = async () => {
+      cb.disabled = true;
+      try { content = await setTask(name, content, +cb.dataset.line, cb.checked); toast(cb.checked ? "Checked off" : "Unchecked"); }
+      catch (e) { handle(e); }
+      read();
     });
-    const save = $("#save");
-    if (save) save.onclick = async () => {
-      content = $("#src").value;
-      if (!content.trim()) return toast("Write something before saving");
-      save.disabled = true;
-      try {
-        const res = isNew ? await api("/note", { method: "POST", body: { content, category: $("#cat").value } })
-                          : await api("/note", { method: "PUT", body: { name, content } });
-        const n = res.reminders ? res.reminders.length : 0;
-        const msg = "Saved" + (n ? ", " + n + " reminder" + (n > 1 ? "s" : "") + " set" : "") +
-          (res.warning ? (/NTFY_TOPIC/.test(res.warning) ? ". Phone notifications aren't set up yet (Settings)." : ". " + res.warning) : "");
-        allNotes = null;
-        if (isNew) { nextToast = msg; location.hash = "#note/" + res.name; } else { mode = "read"; draw(); toast(msg); }
-      } catch (e) { handle(e); save.disabled = false; }
-    };
-    const del = $("#del");
-    if (del) del.onclick = async () => {
-      if (!confirm("Delete this note? Its reminders stop too.")) return;
-      try { await api("/note?name=" + encodeURIComponent(name), { method: "DELETE" }); nextToast = "Deleted"; location.hash = "#notes"; }
+    $("#addrem").onclick = () => reminderSheet(name, async () => { content = (await api("/note?name=" + encodeURIComponent(name))).content; read(); });
+    if (isGoal) $("#addupd").onclick = () => progressSheet(name, content, next => { content = next; read(); });
+    $("#del").onclick = async () => {
+      if (!confirm("Delete this note? Any reminders in it stop too.")) return;
+      try { await api("/note?name=" + encodeURIComponent(name), { method: "DELETE" }); nextToast = "Note deleted"; location.hash = backTo; }
       catch (e) { handle(e); }
     };
   };
-  draw();
+
+  const edit = () => {
+    const { title, body } = splitTitle(content);
+    const cats = cfg.categories.filter(c => c !== "journal");
+    main.innerHTML = h`<form id="edform" novalidate>
+      <div class="edbar"><div class="left"><button type="button" class="link" id="cancel">Cancel</button></div><div class="right"><button class="btn small" id="save" type="submit">Save</button></div></div>
+      ${raw(isNew ? h`<label class="field"><span>Folder</span><select id="cat">${raw(cats.map(c => h`<option value="${c}" ${c === folder ? "selected" : ""}>${folderName(c)}</option>`).join(""))}</select></label>` : "")}
+      <label for="title" style="position:absolute;left:-9999px">Title</label><input class="title-in" id="title" value="${title}" placeholder="Title">
+      <label for="body" style="position:absolute;left:-9999px">Note</label><textarea class="body-in" id="body" placeholder="Write anything. Start a line with - [ ] to make a checkbox.">${body}</textarea>
+      <p class="hint">For a timed reminder, save and tap Add reminder.</p>
+    </form>`;
+    const ta = $("#body");
+    const grow = () => { ta.style.height = "auto"; ta.style.height = Math.max(ta.scrollHeight + 4, window.innerHeight * 0.4) + "px"; };
+    ta.oninput = grow; grow();
+    const original = joinTitle(title, body);
+    const current = () => joinTitle($("#title").value, $("#body").value);
+    isDirty = () => !!$("#edform") && current() !== original;
+    (isNew || !title ? $("#title") : ta).focus();
+    $("#cancel").onclick = () => {
+      if (isDirty() && !confirm("Discard your changes?")) return;
+      clearDirty();
+      if (isNew) location.hash = backTo; else read();
+    };
+    $("#edform").onsubmit = async e => {
+      e.preventDefault();
+      const next = current();
+      if (!$("#title").value.trim() && !$("#body").value.trim()) return toast("Write something before saving");
+      $("#save").disabled = true;
+      try {
+        if (isNew) {
+          const res = await api("/note", { method: "POST", body: { content: next, category: $("#cat").value } });
+          clearDirty(); allNotes = null; nextToast = savedMessage(res, "Saved"); location.hash = "#note/" + res.name;
+        } else {
+          const res = await api("/note", { method: "PUT", body: { name, content: next } });
+          content = next; clearDirty(); read(); toast(savedMessage(res, "Saved"));
+        }
+      } catch (err) { handle(err); $("#save").disabled = false; }
+    };
+  };
+
+  isNew ? edit() : read();
 }
 
 
@@ -523,7 +808,7 @@ views.setup = async () => {
 
     ${raw(first ? h`<section class="step" id="s1"><h3><span class="n">1</span>Make a private place for your notes</h3>
       <p>This opens GitHub with a private repository called <b>notes</b> ready to create. Check <b>Private</b> is selected, then tap <b>Create repository</b>.</p>
-      <a class="btn quiet link" href="${GH_NEW_REPO}" target="_blank" rel="noopener">Create notes repository</a>
+      <a class="btn quiet a-btn" href="${GH_NEW_REPO}" target="_blank" rel="noopener">Create notes repository</a>
       <p class="muted">Already have one? Skip this.</p></section>` : "")}
 
     <section class="step" id="s2"><h3><span class="n">${first ? 2 : 1}</span>Give this app a key to it</h3>
@@ -532,7 +817,7 @@ views.setup = async () => {
         <li>Under <b>Repository access</b>, choose <b>Only select repositories</b> and pick <b>notes</b>.</li>
         <li>Scroll down, tap <b>Generate token</b>, then <b>copy</b> it (it starts with <code>github_pat_</code>).</li>
       </ol>
-      <a class="btn quiet link" href="${GH_NEW_KEY}" target="_blank" rel="noopener">Create access key</a>
+      <a class="btn quiet a-btn" href="${GH_NEW_KEY}" target="_blank" rel="noopener">Create access key</a>
       <label for="tok" style="margin-top:14px">Paste the key here</label>
       <input id="tok" type="password" autocomplete="off" spellcheck="false" placeholder="${prev.hasToken ? "Key saved (paste to replace)" : "github_pat_…"}">
       <button class="btn" id="check" type="button">Check key</button>
@@ -576,6 +861,7 @@ views.setup = async () => {
     catch (e) { if (e instanceof Locked) return showLock(); $("#repos").innerHTML = h`<p class="err">${e.message}</p>`; }
     b.disabled = false; b.textContent = "Check key";
   };
+  isDirty = () => Boolean($("#tok") && $("#tok").value.trim());
   $("#check").onclick = check;
   $("#tok").addEventListener("paste", () => setTimeout(check, 50));
   if (prev.hasToken) check();
@@ -610,10 +896,13 @@ function showDone(mcpUrl) {
       <div class="copyrow"><code>${mcpUrl}</code><button class="btn quiet" id="copymcp" type="button">Copy</button></div>
       <ol start="3"><li>A sign-in page opens. Enter the same password you use here and tap <b>Allow</b>.</li>
         <li>Try it: ask Claude <i>"remind me to drink water at 3pm"</i>.</li></ol></section>
-    <section class="step"><h3><span class="n">3</span>Put this app on your home screen</h3>
-      <p>iPhone: tap <b>Share</b>, then <b>Add to Home Screen</b>. Android: tap <b>⋮</b>, then <b>Add to Home screen</b>.</p></section>
-    <a class="btn link" href="#today" style="width:100%;text-align:center;padding:15px">Open my notes</a></div>`;
+    <section class="step"><h3><span class="n">3</span>Keep this app handy</h3>
+      <p>This is your notes app's address. Save it somewhere, like a note to yourself:</p>
+      <div class="copyrow"><code>${location.origin + "/app"}</code><button class="btn quiet" id="copyapp" type="button">Copy</button></div>
+      <p>On your phone, put it on your home screen. iPhone: tap <b>Share</b>, then <b>Add to Home Screen</b>. Android: tap <b>⋮</b>, then <b>Add to Home screen</b>.</p></section>
+    <a class="btn a-btn" href="#today" style="width:100%;text-align:center;padding:15px">Open my notes</a></div>`;
   $("#copymcp").onclick = e => copy(mcpUrl, e.target);
+  $("#copyapp").onclick = e => copy(location.origin + "/app", e.target);
   const t = $("#test");
   if (t) t.onclick = async () => {
     t.disabled = true; t.textContent = "Sending…";
@@ -626,6 +915,7 @@ views.settings = views.setup;
 
 /* ---------- Lock ---------- */
 function showLock(message) {
+  closeSheet();
   $("#tabs").hidden = true; $("#composer").hidden = true; $("#lockbtn").hidden = true;
   main.innerHTML = h`<form class="lock" id="lockform"><p>Your notes, logs and reminders. Unlock with your password (the same one Claude asks for).</p>
     <label for="key">Password</label><input id="key" type="password" autocomplete="current-password" required>
@@ -639,21 +929,40 @@ function showLock(message) {
   };
 }
 function handle(e) {
-  if (e instanceof Locked) return showLock();
+  if (e instanceof Locked) return isDirty() || sheet.open ? unlockSheet() : showLock();
   toast(e.message || String(e));
+}
+/** Session ended mid-edit: unlock over the page so nothing typed is lost. */
+function unlockSheet() {
+  openSheet(h`<form method="dialog" novalidate>
+      <h2 id="sheet-title">Unlock to keep going</h2>
+      <p class="hint" style="margin:0 0 12px">Your session ended. Your changes are still on the page.</p>
+      <label class="field"><span>Password</span><input id="u-key" type="password" autocomplete="current-password" autofocus></label>
+      <div class="sheet-actions"><button class="btn" type="submit">Unlock</button></div>
+    </form>`, el => {
+    el.querySelector("form").onsubmit = async e => {
+      e.preventDefault();
+      const res = await fetch("/app/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: $("#u-key").value }) });
+      if (res.ok) { closeSheet(); toast("Unlocked. Tap Save again."); }
+      else sheetError((await res.json().catch(() => ({}))).error || "Couldn't unlock. Try again.");
+    };
+  });
 }
 
 /* ---------- Router ---------- */
+let currentHash = location.hash;
 async function route() {
   document.querySelectorAll(".toast").forEach(t => t.remove());
+  closeSheet(); clearDirty();
+  currentHash = location.hash;
   const hash = decodeURIComponent(location.hash.slice(1)) || "today";
   const [view, ...rest] = hash.split("/");
   const arg = rest.join("/");
-  document.querySelectorAll("#tabs a").forEach(a => a.toggleAttribute("aria-current", false));
-  const tab = view === "note" || view === "new" ? (arg.startsWith("goals") ? "goals" : "notes") : view;
+  document.querySelectorAll("#tabs a").forEach(a => a.removeAttribute("aria-current"));
+  const tab = view === "new-goal" ? "goals" : view === "note" || view === "new" ? (arg.startsWith("goals") ? "goals" : "notes") : view;
   const link = $(`#tabs a[href="#${tab}"]`);
   if (link) link.setAttribute("aria-current", "page");
-  $("#composer").hidden = view !== "today";
+  $("#composer").hidden = view !== "today" && hash !== "today";
   try {
     if (!cfg.configured) { $("#tabs").hidden = true; $("#composer").hidden = true; await views.setup(); window.scrollTo(0, 0); return; }
     if (view === "note") await editor(arg);
@@ -663,6 +972,13 @@ async function route() {
   window.scrollTo(0, 0);
   if (nextToast) { toast(nextToast); nextToast = null; }
 }
+window.addEventListener("hashchange", () => {
+  if (isDirty() && !confirm("Discard your changes?")) {
+    history.replaceState(null, "", currentHash || "#today");
+    return;
+  }
+  route();
+});
 
 async function start() {
   cfg = await api("/config");
@@ -671,6 +987,7 @@ async function start() {
   $("#settingsTab").hidden = !cfg.canSetup;
 }
 
+/* ---------- Composer ---------- */
 const chips = $("#chips");
 chips.innerHTML = TAGS.map(t => `<button type="button" class="chip" aria-pressed="false" data-tag="${t}">#${t}</button>`).join("");
 chips.onclick = e => {
@@ -678,23 +995,42 @@ chips.onclick = e => {
   b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") === "true" ? "false" : "true");
   $("#entry").focus();
 };
+const when = $("#when"), timebtn = $("#timebtn");
+timebtn.onclick = () => {
+  when.value = hhmm(Date.now());
+  timebtn.hidden = true; when.hidden = false; when.focus();
+  if (when.showPicker) try { when.showPicker(); } catch {}
+};
+const resetWhen = () => { when.value = ""; when.hidden = true; timebtn.hidden = false; };
 $("#composer").onsubmit = async e => {
   e.preventDefault();
   const input = $("#entry");
+  if (!input.value.trim()) return input.focus();
   const tags = [...chips.querySelectorAll('[aria-pressed="true"]')].map(b => "#" + b.dataset.tag);
   const entry = [input.value.trim(), ...tags.filter(t => !input.value.includes(t))].join(" ").trim();
-  if (!input.value.trim()) return input.focus();
+  const body = { entry };
+  if (!when.hidden && when.value && when.value !== hhmm(Date.now())) body.time = when.value;
   $("#logbtn").disabled = true;
   try {
-    await api("/log", { method: "POST", body: { entry } });
-    input.value = ""; chips.querySelectorAll(".chip").forEach(b => b.setAttribute("aria-pressed", "false"));
-    toast("Logged"); await views.today();
+    await api("/log", { method: "POST", body });
+    input.value = ""; resetWhen(); chips.querySelectorAll(".chip").forEach(b => b.setAttribute("aria-pressed", "false"));
+    toast(body.time ? "Logged at " + fmt12(body.time) : "Logged"); await views.today();
   } catch (err) { handle(err); }
   $("#logbtn").disabled = false;
 };
-$("#lockbtn").onclick = async () => { await fetch("/app/logout", { method: "POST" }); showLock(); };
-window.addEventListener("hashchange", route);
-document.addEventListener("visibilitychange", () => { if (!document.hidden) drawDate(); });
+$("#lockbtn").onclick = async () => {
+  if (isDirty() && !confirm("Discard your changes?")) return;
+  clearDirty();
+  await fetch("/app/logout", { method: "POST" }); showLock();
+};
+
+// Coming back to the app (it stays open in the background on a phone): refresh the date and the page.
+let hiddenAt = 0;
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) { hiddenAt = Date.now(); return; }
+  drawDate();
+  if (Date.now() - hiddenAt > 60_000 && !isDirty() && !sheet.open && !$("#tabs").hidden) route();
+});
 
 drawDate();
 start().then(route).catch(e => (e instanceof Locked ? showLock() : (main.innerHTML = h`<p class="err">${e.message}</p>`)));

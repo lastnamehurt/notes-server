@@ -5,12 +5,12 @@ import { applySettings, type Settings } from "./settings";
 import type { Env } from "./github";
 export * from "./reminder-parse";
 
-/** Signed link that logs the reminder as done in today's log. */
+/** Signed link that marks this occurrence of the reminder done (see completeReminder). */
 async function doneUrl(env: ReminderEnv, r: Reminder, origin?: string): Promise<string | undefined> {
   const base = env.PUBLIC_URL?.trim() || origin;
   const secret = env.MCP_BEARER_TOKEN || env.PASSWORD;
   if (!base || !secret) return undefined;
-  return base.replace(/\/+$/, "") + "/done?a=" + await signAction(secret, r);
+  return base.replace(/\/+$/, "") + "/done?a=" + await signAction(secret, { note: r.note, text: r.text, at: r.at });
 }
 
 /** Send via Pushover when configured, otherwise ntfy. */
@@ -60,6 +60,14 @@ const MAX_FAILS = 10;
 const FAIL_WINDOW_MS = 15 * 60 * 1000;
 
 export interface PushError { at: number; message: string; reminder: string; }
+
+const KEEP_FIRED_MS = 48 * 3600 * 1000;
+// "Done" marker for one occurrence, so a reminder completed early doesn't push when its time comes.
+const doneKey = (note: string, text: string, at: number) => "d:" + at + SEP + note + SEP + text;
+const firedKey = (r: Reminder) => "f:" + r.at + SEP + r.note + SEP + r.text;
+
+/** A reminder that already went off (kept ~2 days so Today can still offer Done). */
+export interface Fired { note: string; text: string; at: number; repeat: boolean; }
 
 /** Single instance ("global") that stores upcoming reminders and fires them with an alarm. */
 export class ReminderScheduler extends DurableObject<ReminderEnv> {
@@ -133,6 +141,27 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
     return [...(await this.all()).values()].sort((a, b) => a.at - b.at);
   }
 
+  /** Reminders that went off since `since` (oldest first); also prunes old history. */
+  async firedSince(since: number): Promise<Fired[]> {
+    const all = await this.ctx.storage.list<Fired>({ prefix: "f:" });
+    const stale = [...all].filter(([, f]) => f.at < Date.now() - KEEP_FIRED_MS).map(([k]) => k);
+    if (stale.length) await this.ctx.storage.delete(stale.slice(0, 128));
+    return [...all.values()].filter(f => f.at >= since).sort((a, b) => a.at - b.at);
+  }
+
+  /** Mark one occurrence done so it won't push. */
+  async markDone(note: string, text: string, at: number): Promise<void> {
+    await this.ctx.storage.put(doneKey(note, text, at), { note, text, at });
+    const old = await this.ctx.storage.list<{ at: number }>({ prefix: "d:" });
+    const stale = [...old].filter(([, v]) => v.at < Date.now() - 3 * 86_400_000).map(([k]) => k);
+    if (stale.length) await this.ctx.storage.delete(stale.slice(0, 128));
+  }
+
+  /** Occurrences marked done with times at or after `since`. */
+  async doneSince(since: number): Promise<{ note: string; text: string; at: number }[]> {
+    return [...(await this.ctx.storage.list<{ note: string; text: string; at: number }>({ prefix: "d:" })).values()].filter(d => d.at >= since);
+  }
+
   async alarm(): Promise<void> {
     let failed = false;
     const origin = await this.ctx.storage.get<string>(ORIGIN);
@@ -140,8 +169,13 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
     for (const [k, r] of await this.all()) {
       if (r.at > Date.now() + 1000) continue;
       try {
-        await sendPush(env, r, origin);
-        await this.ctx.storage.delete([k, LAST_ERROR]);
+        const alreadyDone = await this.ctx.storage.get(doneKey(r.note, r.text, r.at));
+        if (!alreadyDone) {
+          // Without a push provider the reminder still "goes off" (shows as due in the app) and repeats roll forward.
+          if (pushConfigured(env)) { await sendPush(env, r, origin); await this.ctx.storage.delete(LAST_ERROR); }
+          await this.ctx.storage.put(firedKey(r), { note: r.note, text: r.text, at: r.at, repeat: Boolean(r.repeat) } satisfies Fired);
+        }
+        await this.ctx.storage.delete(k);
         if (r.repeat) {
           const at = nextOccurrence(r.repeat, env.NOTES_TIMEZONE || DEFAULT_TIMEZONE, Math.max(r.at, Date.now()));
           const next = { ...r, at };

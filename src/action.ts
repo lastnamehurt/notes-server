@@ -1,7 +1,7 @@
 // Signed links for the "Done" button on reminder notifications. The phone has no
 // OAuth token, so the link carries an HMAC (keyed by MCP_BEARER_TOKEN) over its payload.
 
-export interface DoneAction { note: string; text: string; }
+export interface DoneAction { note: string; text: string; at?: number; }
 
 const enc = new TextEncoder();
 const b64url = (bytes: Uint8Array) =>
@@ -14,7 +14,7 @@ async function key(secret: string): Promise<CryptoKey> {
 }
 
 export async function signAction(secret: string, action: DoneAction): Promise<string> {
-  const payload = b64url(enc.encode(JSON.stringify({ n: action.note, t: action.text })));
+  const payload = b64url(enc.encode(JSON.stringify({ n: action.note, t: action.text, ...(action.at ? { a: action.at } : {}) })));
   const sig = new Uint8Array(await crypto.subtle.sign("HMAC", await key(secret), enc.encode("done:" + payload)));
   return payload + "." + b64url(sig);
 }
@@ -25,8 +25,9 @@ export async function verifyAction(secret: string, token: string): Promise<DoneA
   try {
     const ok = await crypto.subtle.verify("HMAC", await key(secret), unb64url(sig), enc.encode("done:" + payload));
     if (!ok) return null;
-    const { n, t } = JSON.parse(new TextDecoder().decode(unb64url(payload)));
-    return typeof n === "string" && typeof t === "string" ? { note: n, text: t } : null;
+    const { n, t, a } = JSON.parse(new TextDecoder().decode(unb64url(payload)));
+    if (typeof n !== "string" || typeof t !== "string") return null;
+    return typeof a === "number" ? { note: n, text: t, at: a } : { note: n, text: t };
   } catch { return null; }
 }
 
