@@ -1,0 +1,643 @@
+#!/usr/bin/env python3
+"""note-mcp - expose the notes repo to an AI tool over MCP: save, search, get, update, delete, list, sync.
+
+Speaks MCP over stdio (newline-delimited JSON-RPC) using only the standard library,
+so it runs on any machine that has python3. Configure an MCP client to launch
+this executable with NOTES_DIR pointing at your local notes clone.
+
+The tool surface provides search/get/update/delete, confirmation for destructive calls,
+and descriptions that say when to use each. The store is the personal ~/notes repo.
+A note id is its path
+relative to the repo, such as inbox/2026-10-09-kafka-retries.md.
+
+Writes are commits, so installed Git hooks still guard them, and git history is
+the undo. NOTES_DIR overrides the repo; NOTE_BIN overrides the `note` command (tests).
+"""
+import difflib
+import json
+import os
+import re
+import subprocess
+import sys
+
+NOTES_DIR = os.environ.get("NOTES_DIR") or os.path.expanduser("~/notes")
+HERE = os.path.dirname(os.path.abspath(__file__))
+NOTE_BIN = os.environ.get("NOTE_BIN") or os.path.join(HERE, "..", "bin", "note")
+FOLDERS = ("inbox", "goals", "projects", "decisions", "runbooks", "reference", "journal")
+MAX_RESULTS = 10
+MAX_DIFF_LINES = 60
+
+
+class NoteError(Exception):
+    """A problem to report to the caller as a tool error."""
+
+
+SECRETS = (
+    "Never include SSNs, candidate data, tokens, passwords or .env contents: "
+    "a write is committed and pushed immediately."
+)
+
+TOOLS = [
+    {
+        "name": "save_note",
+        "description": (
+            "Save a new note to the user's personal notes repo (~/notes/inbox). Use it when the "
+            "user asks you to remember, note down or jot something for later. " + SECRETS
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "The note body, markdown."},
+                "title": {
+                    "type": "string",
+                    "description": "Optional title. Defaults to the first line of the text.",
+                },
+            },
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "search_notes",
+        "description": (
+            "Search the user's personal notes (inbox, goals, projects, decisions, runbooks, reference, "
+            "journal). Use it when the user refers to something they wrote down, or before "
+            "re-deriving something they may already have recorded. Every word of the query must "
+            "appear in the note. Returns ids, titles and a snippet; read one in full with "
+            "get_note. An empty result means nothing is recorded, not that the answer is obvious. "
+            "tags narrow to notes carrying every tag named. Call with no arguments to see the "
+            "folders and tags in use."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Words to look for."},
+                "tags": {"type": "array", "items": {"type": "string"}},
+            },
+        },
+    },
+    {
+        "name": "get_note",
+        "description": "Read one personal note in full, by its id (its path in ~/notes, as search_notes returns it).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"id": {"type": "string", "description": "e.g. inbox/2026-10-09-kafka.md"}},
+            "required": ["id"],
+        },
+    },
+    {
+        "name": "update_note",
+        "description": (
+            "Change an existing personal note and commit it. Use it when a note is still right "
+            "but incomplete or imprecise. Give either `addition` (a paragraph to append) or "
+            "`replaces` with `with_text` (an exact snippet to swap, which must appear exactly "
+            "once). Read the note first with get_note. Returns the diff. " + SECRETS
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "addition": {"type": "string", "description": "Paragraph to append."},
+                "replaces": {"type": "string", "description": "Exact snippet to replace."},
+                "with_text": {"type": "string", "description": "Replacement for `replaces`."},
+                "reason": {"type": "string", "description": "Why, for the commit message."},
+            },
+            "required": ["id"],
+        },
+    },
+    {
+        "name": "list_notes",
+        "description": (
+            "List the user's personal notes, newest first, with id, date, title and tags. Use it "
+            "when the user asks what notes they have, what they saved recently, or what is in a "
+            "folder. Optional `folder` (inbox, goals, projects, decisions, runbooks, reference, journal), "
+            "`tags`, and `limit` (default 20, at most 100). To look for something specific use "
+            "search_notes instead."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "folder": {"type": "string"},
+                "tags": {"type": "array", "items": {"type": "string"}},
+                "limit": {"type": "integer", "description": "How many to show, default 20."},
+            },
+        },
+    },
+    {
+        "name": "sync_notes",
+        "description": (
+            "Bring ~/notes level with its remote in both directions: pull notes saved or changed "
+            "on other machines, and push commits that have not been pushed yet. Use it after a "
+            "write reports that its push failed, or when the user may have been working on another "
+            "machine, before you search. It never forces. On a conflict it stops, changes "
+            "nothing and says so."
+        ),
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "delete_note",
+        "description": (
+            "Delete one personal note, committed and pushed. This is destructive, so confirm "
+            "must be true; ask the user first unless they already asked for this note to go. "
+            "One note per call. The commit can be undone with git revert, and the result says how."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "confirm": {"type": "boolean", "description": "Must be true."},
+            },
+            "required": ["id", "confirm"],
+        },
+    },
+]
+
+
+# ---------------------------------------------------------------- notes on disk
+
+
+def _folder_root(folder):
+    return os.path.realpath(os.path.join(NOTES_DIR, folder))
+
+
+def _resolve(note_id):
+    """Map an id to (absolute path, id). Only .md files under the note folders qualify."""
+    if not isinstance(note_id, str) or not note_id.strip():
+        raise NoteError("An id is needed: the note's path in ~/notes, as search_notes shows it.")
+    rel = note_id.strip()
+    parts = rel.split("/")
+    if rel.startswith("/") or ".." in parts or parts[0] not in FOLDERS or not rel.endswith(".md"):
+        raise NoteError(
+            f"'{rel}' is not a note id. Ids are .md paths under {', '.join(FOLDERS)}; "
+            "use search_notes to find one."
+        )
+    path = os.path.realpath(os.path.join(NOTES_DIR, rel))
+    if not path.startswith(_folder_root(parts[0]) + os.sep):
+        raise NoteError(f"'{rel}' resolves outside the note folders.")
+    if not os.path.isfile(path):
+        raise NoteError(f"No note with id '{rel}'. Use search_notes to find one.")
+    return path, rel
+
+
+def _iter_ids():
+    for folder in FOLDERS:
+        root = os.path.join(NOTES_DIR, folder)
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames[:] = sorted(d for d in dirnames if not d.startswith("."))
+            for name in sorted(filenames):
+                if name.endswith(".md") and not name.startswith("."):
+                    yield os.path.relpath(os.path.join(dirpath, name), NOTES_DIR)
+
+
+def _read(path):
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        return fh.read()
+
+
+def _parse(text):
+    """Return (frontmatter dict, body, title, tags). Frontmatter is optional and flat."""
+    meta, body = {}, text
+    if text.startswith("---\n"):
+        end = text.find("\n---", 4)
+        if end != -1:
+            for line in text[4:end].splitlines():
+                key, sep, value = line.partition(":")
+                if sep:
+                    meta[key.strip()] = value.strip().strip("\"'")
+            body = text[end + 4:].lstrip("\n")
+    tags = [t.strip().strip("\"'") for t in meta.get("tags", "").strip("[]").split(",") if t.strip()]
+    title = meta.get("title") or next(
+        (re.sub(r"^#+\s*", "", ln).strip() for ln in body.splitlines() if ln.strip()), "(untitled)"
+    )
+    return meta, body, title, tags
+
+
+def _commit_dates():
+    """Newest commit date per path, from one git pass. Dates undated notes."""
+    done = _git("-c", "core.quotepath=off", "log", "--format=%x00%cs", "--name-only", "--no-renames")
+    dates, current = {}, ""
+    for line in done.stdout.splitlines():
+        if line.startswith("\x00"):
+            current = line[1:]
+        elif line and line not in dates:
+            dates[line] = current
+    return dates
+
+
+def _entries():
+    """Every note as a dict. date is the frontmatter date, else the last commit date."""
+    dates = _commit_dates()
+    out = []
+    for note_id in _iter_ids():
+        meta, body, title, tags = _parse(_read(os.path.join(NOTES_DIR, note_id)))
+        out.append({
+            "id": note_id, "folder": note_id.split("/", 1)[0],
+            "date": meta.get("date") or dates.get(note_id, ""),
+            "title": title, "tags": tags, "body": body,
+        })
+    return out
+
+
+def _filter(entries, folder=None, tags=()):
+    want = {t.lower() for t in tags}
+    return [
+        e for e in entries
+        if (not folder or e["folder"] == folder) and want <= {t.lower() for t in e["tags"]}
+    ]
+
+
+def _newest_first(entries):
+    return sorted(entries, key=lambda e: (e["date"], e["id"]), reverse=True)
+
+
+def _words(query):
+    return [w for w in re.split(r"[^a-z0-9]+", query.lower()) if w]
+
+
+def _search(entries, words):
+    """Notes containing every word, best match first, then newest."""
+    hits = []
+    for e in entries:
+        lower_title, lower_body = e["title"].lower(), e["body"].lower()
+        if all(w in lower_title or w in lower_body for w in words):
+            score = sum(3 * lower_title.count(w) + lower_body.count(w) for w in words)
+            hits.append(dict(e, score=score))
+    return sorted(hits, key=lambda e: (e["score"], e["date"]), reverse=True)
+
+
+def _snippet(body, words):
+    flat = " ".join(body.split())
+    low = flat.lower()
+    hits = [low.find(w) for w in words if low.find(w) != -1]
+    start = max(0, (min(hits) if hits else 0) - 40)
+    piece = flat[start:start + 140]
+    return ("..." if start else "") + piece + ("..." if start + 140 < len(flat) else "")
+
+
+def _tag_text(e):
+    return f"[{', '.join(e['tags'])}]" if e["tags"] else ""
+
+
+def _row(e, id_width=0):
+    """One line: date, id, title, tags."""
+    parts = [(e["date"] or "").ljust(10), e["id"].ljust(id_width), e["title"], _tag_text(e)]
+    return "  ".join(p for p in parts if p).rstrip()
+
+
+def _result_lines(hits, words, indent="  "):
+    lines = []
+    for e in hits:
+        head = indent + "  ".join(p for p in (e["id"], _tag_text(e), e["date"]) if p)
+        lines += [head, f"{indent}  {e['title']}", f"{indent}  {_snippet(e['body'], words)}", ""]
+    return lines
+
+
+def search_notes(args):
+    query = args.get("query") or ""
+    tags = args.get("tags") or []
+    words = _words(query)
+    entries = _entries()
+
+    if not words and not tags:
+        folders, tag_counts = {}, {}
+        for e in entries:
+            folders[e["folder"]] = folders.get(e["folder"], 0) + 1
+            for tag in e["tags"]:
+                tag_counts[tag.lower()] = tag_counts.get(tag.lower(), 0) + 1
+        lines = [f"{len(entries)} notes."]
+        lines.append("Folders: " + (", ".join(f"{k} ({v})" for k, v in sorted(folders.items())) or "none"))
+        lines.append("Tags: " + (", ".join(f"{k} ({v})" for k, v in sorted(tag_counts.items())) or "none"))
+        return "\n".join(lines), False
+
+    hits = _search(_filter(entries, tags=tags), words) if words else _newest_first(_filter(entries, tags=tags))
+    label = f'"{query}"' if words else "those tags"
+    if not hits:
+        return (
+            f"No notes match {label}. Nothing is recorded under it, "
+            "which is not the same as the answer being obvious."
+        ), False
+
+    capped = f", showing the first {MAX_RESULTS}" if len(hits) > MAX_RESULTS else ""
+    lines = [f"{len(hits)} note(s) for {label}{capped}:", ""]
+    lines += _result_lines(hits[:MAX_RESULTS], words)
+    lines.append('Read one in full with get_note(id="<id>").')
+    return "\n".join(lines), False
+
+
+def list_notes(args):
+    folder = args.get("folder")
+    if folder and folder not in FOLDERS:
+        raise NoteError(f"'{folder}' is not a note folder. Folders: {', '.join(FOLDERS)}.")
+    try:
+        limit = min(max(int(args.get("limit") or 20), 1), 100)
+    except (TypeError, ValueError):
+        raise NoteError("limit must be a number from 1 to 100.")
+    rows = _newest_first(_filter(_entries(), folder, args.get("tags") or []))
+    if not rows:
+        return "No notes there.", False
+    width = min(max(len(e["id"]) for e in rows[:limit]), 60)
+    capped = f", showing {limit}" if len(rows) > limit else ""
+    lines = [f"{len(rows)} note(s), newest first{capped}:", ""]
+    lines += [f"  {_row(e, width)}" for e in rows[:limit]]
+    lines += ["", 'Read one in full with get_note(id="<id>").']
+    return "\n".join(lines), False
+
+
+def get_note(args):
+    path, note_id = _resolve(args.get("id"))
+    return f"{note_id}\n\n{_read(path)}", False
+
+
+# ------------------------------------------------------------------------- git
+
+
+def _git(*cmd):
+    env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
+    return subprocess.run(
+        ["git", "-C", NOTES_DIR, *cmd], capture_output=True, text=True, timeout=60,
+        stdin=subprocess.DEVNULL, env=env,
+    )
+
+
+def _push():
+    done = _git("push", "-q", "origin", "HEAD")
+    if done.returncode == 0:
+        return "Pushed."
+    return f"Committed locally but the push failed; run sync_notes to retry.\n{done.stderr.strip()}"
+
+
+def _output(done):
+    return (done.stdout + done.stderr).strip()
+
+
+def update_note(args):
+    path, note_id = _resolve(args.get("id"))
+    addition, replaces, with_text = args.get("addition"), args.get("replaces"), args.get("with_text")
+    has_addition = isinstance(addition, str) and addition.strip() != ""
+    has_replace = isinstance(replaces, str) and replaces != "" and isinstance(with_text, str)
+    if has_addition == has_replace:
+        raise NoteError("Give either `addition`, or `replaces` together with `with_text`. Not both, and not neither.")
+
+    old = _read(path)
+    if has_addition:
+        new = old.rstrip("\n") + "\n\n" + addition.strip() + "\n"
+    else:
+        count = old.count(replaces)
+        if count != 1:
+            raise NoteError(
+                f"`replaces` must appear exactly once in {note_id}; it appears {count} times. "
+                "Nothing was changed. Read the note with get_note and quote a longer snippet."
+            )
+        new = old.replace(replaces, with_text, 1)
+    if new == old:
+        raise NoteError("That change leaves the note as it was.")
+
+    title = _parse(old)[2]
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(new)
+    _git("add", "--", note_id)
+    message = ["-m", f"note: update {title}"] + (["-m", args["reason"]] if args.get("reason") else [])
+    done = _git("commit", "-q", *message, "--", note_id)
+    if done.returncode != 0:
+        _git("reset", "-q", "--", note_id)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(old)
+        raise NoteError(f"Commit refused, nothing changed:\n{_output(done)}")
+
+    diff = list(difflib.unified_diff(old.splitlines(), new.splitlines(), f"a/{note_id}", f"b/{note_id}", lineterm="", n=1))
+    shown = diff[:MAX_DIFF_LINES] + (["..."] if len(diff) > MAX_DIFF_LINES else [])
+    return "\n".join([f"Updated {note_id}. {_push()}", ""] + shown), False
+
+
+def delete_note(args):
+    if args.get("confirm") is not True:
+        raise NoteError("Refusing to delete without confirm=true. Re-run with confirm=true to delete this note.")
+    path, note_id = _resolve(args.get("id"))
+    title = _parse(_read(path))[2]
+
+    removed = _git("rm", "-q", "--", note_id)
+    if removed.returncode != 0:
+        raise NoteError(f"Could not remove {note_id}; it may not be tracked by git:\n{_output(removed)}")
+    done = _git("commit", "-q", "-m", f"note: delete {title}", "--", note_id)
+    if done.returncode != 0:
+        _git("reset", "-q", "HEAD", "--", note_id)
+        _git("checkout", "--", note_id)
+        raise NoteError(f"Commit refused, the note is still there:\n{_output(done)}")
+
+    sha = _git("rev-parse", "--short", "HEAD").stdout.strip()
+    return f"Deleted {note_id}. {_push()}\nUndo with: git -C {NOTES_DIR} revert {sha}", False
+
+
+def sync_notes(args):
+    env = dict(os.environ, NOTES_DIR=NOTES_DIR, GIT_TERMINAL_PROMPT="0")
+    try:
+        done = subprocess.run(
+            [NOTE_BIN, "sync"], capture_output=True, text=True, timeout=120,
+            stdin=subprocess.DEVNULL, env=env,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise NoteError(f"note sync could not run: {exc}")
+    return _output(done) or "synced", done.returncode != 0
+
+
+def save_note(args):
+    text = args.get("text")
+    if not isinstance(text, str) or not text.strip():
+        raise NoteError("save_note needs non-empty 'text'.")
+    cmd = [NOTE_BIN]
+    title = args.get("title")
+    if isinstance(title, str) and title.strip():
+        cmd += ["-t", title]
+    # "--" so text that starts with a dash is never read as a flag.
+    cmd += ["--", text]
+    try:
+        done = subprocess.run(cmd, capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise NoteError(f"note could not run: {exc}")
+    return _output(done) or "saved", done.returncode != 0
+
+
+# ------------------------------------------------------------------- protocol
+
+HANDLERS = {
+    "save_note": save_note,
+    "search_notes": search_notes,
+    "get_note": get_note,
+    "update_note": update_note,
+    "delete_note": delete_note,
+    "sync_notes": sync_notes,
+    "list_notes": list_notes,
+}
+
+
+def call_tool(params):
+    handler = HANDLERS.get(params.get("name"))
+    if handler is None:
+        return {"content": [{"type": "text", "text": "unknown tool"}], "isError": True}
+    try:
+        text, is_error = handler(params.get("arguments") or {})
+    except NoteError as exc:
+        text, is_error = str(exc), True
+    except (OSError, subprocess.SubprocessError) as exc:
+        text, is_error = f"{params.get('name')} failed: {exc}", True
+    return {"content": [{"type": "text", "text": text}], "isError": is_error}
+
+
+def handle(msg):
+    method, mid = msg.get("method"), msg.get("id")
+    if mid is None:  # a notification; never answered
+        return None
+    if method == "initialize":
+        return {
+            "protocolVersion": (msg.get("params") or {}).get("protocolVersion", "2024-11-05"),
+            "capabilities": {"tools": {}},
+            "serverInfo": {"name": "notes", "version": "2.0.0"},
+        }
+    if method == "ping":
+        return {}
+    if method == "tools/list":
+        return {"tools": TOOLS}
+    if method == "tools/call":
+        return call_tool(msg.get("params") or {})
+    raise LookupError(method)
+
+
+def main():
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            msg = json.loads(line)
+        except ValueError:
+            continue
+        try:
+            result = handle(msg)
+            reply = None if result is None else {"jsonrpc": "2.0", "id": msg["id"], "result": result}
+        except LookupError:
+            reply = {"jsonrpc": "2.0", "id": msg.get("id"), "error": {"code": -32601, "message": "method not found"}}
+        if reply is not None:
+            sys.stdout.write(json.dumps(reply) + "\n")
+            sys.stdout.flush()
+
+
+# ------------------------------------------------------------- CLI backends
+# bin/note calls these (note-mcp ls|find|resolve|title) so the CLI and the MCP tools share one
+# implementation of listing and searching.
+
+
+def _candidates(entries, wanted):
+    """Ids that a fragment could mean: an exact id, else id substrings, else title substrings."""
+    ids = [e["id"] for e in entries]
+    for candidate in (wanted, wanted + ".md"):
+        if candidate in ids:
+            return [candidate]
+    low = wanted.lower()
+    matches = [i for i in ids if low in i.lower()]
+    if len(matches) > 1:
+        exact = [i for i in matches if os.path.basename(i)[:-3].lower() == low]
+        matches = exact or matches
+    return matches or [e["id"] for e in entries if low in e["title"].lower()]
+
+
+def _resolve_query(query):
+    """A full id, or a fragment of an id or title that matches exactly one note."""
+    wanted = (query or "").strip()
+    if not wanted:
+        raise NoteError("Which note? Give an id or part of its name.")
+    matches = _candidates(_entries(), wanted)
+    if len(matches) == 1:
+        return matches[0]
+    if not matches:
+        raise NoteError(f"No note matches '{wanted}'. Try: note find {wanted}")
+    listing = "\n".join(f"    {m}" for m in matches[:15]) + ("\n    ..." if len(matches) > 15 else "")
+    raise NoteError(f"More than one note matches '{wanted}':\n{listing}\nUse a longer part of the name.")
+
+
+def cli_ls(argv):
+    import argparse
+    ap = argparse.ArgumentParser(prog="note ls")
+    ap.add_argument("folder", nargs="?")
+    ap.add_argument("-n", "--limit", type=int, default=None, help="how many (default 30; 0 for all)")
+    ap.add_argument("-t", "--tag", action="append", default=[])
+    ap.add_argument("--ids", action="store_true", help="ids only, one per line")
+    ap.add_argument("--fzf", action="store_true", help="feed for fzf: id<TAB>display text")
+    a = ap.parse_args(argv)
+    if a.folder and a.folder not in FOLDERS:
+        print(f"note: '{a.folder}' is not a note folder. Folders: {', '.join(FOLDERS)}.", file=sys.stderr)
+        return 2
+    rows = _newest_first(_filter(_entries(), a.folder, a.tag))
+    plain = a.ids or a.fzf
+    limit = a.limit if a.limit is not None else (0 if plain else 30)
+    shown = rows[:limit] if limit else rows
+    if a.ids:
+        print("\n".join(e["id"] for e in shown))
+    elif a.fzf:
+        for e in shown:
+            blob = " ".join(e["body"].split())[:1500]
+            text = "  ".join(p for p in (e["folder"], e["date"], e["title"], _tag_text(e)) if p)
+            print(f"{e['id']}\t{text}  \x1b[2m{blob}\x1b[0m")
+    else:
+        width = min(max((len(e["id"]) for e in shown), default=0), 60)
+        for e in shown:
+            print(_row(e, width))
+        if limit and len(rows) > limit:
+            sys.stdout.flush()
+            print(f"({len(rows) - limit} more; note ls -n 0 for all, or note pick)", file=sys.stderr)
+    return 0
+
+
+def cli_find(argv):
+    import argparse
+    ap = argparse.ArgumentParser(prog="note find")
+    ap.add_argument("words", nargs="+")
+    ap.add_argument("-t", "--tag", action="append", default=[])
+    ap.add_argument("-n", "--limit", type=int, default=10)
+    ap.add_argument("--ids", action="store_true", help="ids only, best match first")
+    a = ap.parse_args(argv)
+    words = _words(" ".join(a.words))
+    hits = _search(_filter(_entries(), tags=a.tag), words) if words else []
+    shown = hits[:a.limit] if a.limit else hits
+    if a.ids:
+        print("\n".join(e["id"] for e in shown))
+    elif not hits:
+        print(f'No notes match "{" ".join(a.words)}".')
+    else:
+        print("\n".join(_result_lines(shown, words, indent="")).rstrip())
+        if len(hits) > len(shown):
+            sys.stdout.flush()
+            print(f"({len(hits) - len(shown)} more; note find -n 0 ...)", file=sys.stderr)
+    return 0
+
+
+def cli_resolve(argv):
+    try:
+        print(_resolve_query(" ".join(argv)))
+    except NoteError as exc:
+        print(f"note: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def cli_matches(argv):
+    wanted = " ".join(argv).strip()
+    if wanted:
+        print("\n".join(_candidates(_entries(), wanted)))
+    return 0
+
+
+def cli_title(argv):
+    try:
+        path, _ = _resolve(argv[0] if argv else "")
+    except NoteError as exc:
+        print(f"note: {exc}", file=sys.stderr)
+        return 1
+    print(_parse(_read(path))[2])
+    return 0
+
+
+CLI = {"ls": cli_ls, "find": cli_find, "resolve": cli_resolve, "matches": cli_matches, "title": cli_title}
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] in CLI:
+        sys.exit(CLI[sys.argv[1]](sys.argv[2:]))
+    main()

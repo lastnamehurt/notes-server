@@ -4,6 +4,8 @@ Ask Claude to remember things, set reminders that buzz your phone, and log meals
 
 It's free, takes about 15 minutes, and needs no coding. You'll tap through a few websites; this page tells you exactly what to tap.
 
+This repository also includes the **`note` / `notes` command-line client** for your local notes clone. See [CLI installation and usage](CLI.md).
+
 ## What you need
 
 - A phone or computer with a web browser

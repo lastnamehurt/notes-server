@@ -6,6 +6,15 @@ on:
 permissions:
   contents: read
 jobs:
+  cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: bash scripts/test-cli.sh
+
   worker:
     runs-on: ubuntu-latest
     steps:
@@ -22,7 +31,7 @@ jobs:
 
   # Deploys to Cloudflare only after every check above has passed on main.
   deploy:
-    needs: worker
+    needs: [worker, cli]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     concurrency:

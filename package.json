@@ -10,7 +10,8 @@
     "test": "tsx --test test/reminder-parse.test.ts test/log-action.test.ts test/setup.test.ts test/snapshot.test.ts test/github-login.test.ts",
     "setup": "node scripts/setup.mjs",
     "test:mcp": "node test/e2e/mcp-acceptance.mjs",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:cli": "bash scripts/test-cli.sh"
 
   },
   "dependencies": {
