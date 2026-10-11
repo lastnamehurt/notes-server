@@ -3,9 +3,9 @@
 
 import { GithubNotes, CATEGORIES, type Category, type Env } from "./github";
 import { appendLog, recentLogs, editLog } from "./log";
-import { scheduler, scheduleNote, loadSettings, saveSettings, rescan, checkPassword, completeReminder, addReminder, startOfToday } from "./core";
+import { scheduler, scheduleNote, loadSettings, saveSettings, rescan, checkPassword, completeReminder, addReminder, startOfToday, effectiveEnv } from "./core";
 import { applySettings, notesConfigured, type Settings } from "./settings";
-import { listRepos, prepareRepo, startDeviceFlow, pollDeviceFlow, ensureNotesRepo, githubClientId } from "./setup";
+import { listRepos, prepareRepo, startDeviceFlow, pollDeviceFlow, ensureNotesRepo, githubClientId, githubLogin, ownsNotesRepo } from "./setup";
 import { sendPush } from "./reminders";
 import { signSession, verifySession } from "./action";
 import { APP_HTML, MANIFEST } from "./ui";
@@ -55,6 +55,36 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
     if (problem) return fail(problem, 401);
     const value = await signSession(env.MCP_BEARER_TOKEN, Date.now() + SESSION_DAYS * 86_400_000);
     return new Response(null, { status: 204, headers: { "Set-Cookie": sessionCookie(value, SESSION_DAYS * 86_400) } });
+  }
+  // Sign in with GitHub, as the owner of the notes repository. The token only proves who approved; it is not kept.
+  if (path === "/app/login/github/start" && request.method === "POST") {
+    const s = scheduler(env);
+    const configured = await effectiveEnv(env);
+    if (!configured.NOTES_REPO) return fail("Sign in with your password until your notes are set up.", 409);
+    if (!(await s.passwordAttemptAllowed())) return fail("Too many wrong passwords. Wait 15 minutes and try again.", 429);
+    try {
+      const flow = await startDeviceFlow(env, "");
+      return json({ userCode: flow.userCode, verificationUri: flow.verificationUri, interval: flow.interval, deviceCode: flow.deviceCode });
+    } catch (err) {
+      return fail((err as Error).message, 502);
+    }
+  }
+  if (path === "/app/login/github/poll" && request.method === "POST") {
+    const { deviceCode } = await request.json<{ deviceCode?: string }>().catch(() => ({ deviceCode: "" }));
+    if (!deviceCode) return fail("Start sign-in again.", 400);
+    const result = await pollDeviceFlow(env, deviceCode);
+    if (result.state === "pending") return json({ state: "pending", interval: result.interval });
+    if (result.state === "failed") return json(result);
+    const configured = await effectiveEnv(env);
+    const login = await githubLogin(env, result.token);
+    if (!ownsNotesRepo(login, configured.NOTES_REPO)) {
+      await scheduler(env).recordPasswordFailure();
+      return json({ state: "failed", message: `That GitHub account (${login}) doesn't own these notes. Sign in as the owner, or use your password.` });
+    }
+    const value = await signSession(env.MCP_BEARER_TOKEN, Date.now() + SESSION_DAYS * 86_400_000);
+    return new Response(JSON.stringify({ state: "done" }), {
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "Set-Cookie": sessionCookie(value, SESSION_DAYS * 86_400) }
+    });
   }
   if (path === "/app/logout" && request.method === "POST")
     return new Response(null, { status: 204, headers: { "Set-Cookie": sessionCookie("", 0) } });

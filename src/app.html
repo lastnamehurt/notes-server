@@ -978,16 +978,36 @@ views.settings = views.setup;
 function showLock(message) {
   closeSheet();
   $("#tabs").hidden = true; $("#composer").hidden = true; $("#lockbtn").hidden = true;
-  main.innerHTML = h`<form class="lock" id="lockform"><p>Your notes, logs and reminders. Unlock with your password (the same one Claude asks for).</p>
-    <label for="key">Password</label><input id="key" type="password" autocomplete="current-password" required>
-    <button class="btn" type="submit">Unlock</button>${raw(message ? h`<p class="err" role="alert">${message}</p>` : "")}</form>`;
-  $("#key").focus();
+  main.innerHTML = h`<div class="lock" id="lockview"><p>Your notes, logs and reminders. Sign in with the GitHub account that owns your notes.</p>
+    <button class="btn" type="button" id="ghbtn">Sign in with GitHub</button>
+    <div id="ghcode"></div>
+    <details class="lockalt"><summary>Use your password instead</summary>
+      <form id="lockform"><label for="key">Password</label><input id="key" type="password" autocomplete="current-password" required>
+      <button class="btn" type="submit">Unlock</button></form>
+    </details>${raw(message ? h`<p class="err" role="alert">${message}</p>` : "")}</div>`;
+  $("#ghbtn").onclick = startGithubLogin;
   $("#lockform").onsubmit = async e => {
     e.preventDefault();
     const res = await fetch("/app/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: $("#key").value }) });
     if (res.ok) { await start(); route(); }
     else showLock((await res.json().catch(() => ({}))).error || "Couldn't unlock. Try again.");
   };
+}
+async function startGithubLogin() {
+  const button = $("#ghbtn");
+  button.disabled = true;
+  const res = await fetch("/app/login/github/start", { method: "POST" });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) { button.disabled = false; return showLock(body.error || "Couldn't reach GitHub. Try again."); }
+  $("#ghcode").innerHTML = h`<p>On GitHub, open <a href="${body.verificationUri}" target="_blank" rel="noopener">${body.verificationUri}</a> and enter <b>${body.userCode}</b>. Then come back here.</p>`;
+  pollGithubLogin(body.deviceCode, body.interval);
+}
+async function pollGithubLogin(deviceCode, interval) {
+  const res = await fetch("/app/login/github/poll", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ deviceCode }) });
+  const body = await res.json().catch(() => ({}));
+  if (body.state === "pending") return setTimeout(() => pollGithubLogin(deviceCode, body.interval || interval), interval * 1000);
+  if (body.state === "done") { await start(); return route(); }
+  showLock(body.message || body.error || "Couldn't sign in with GitHub. Try again.");
 }
 function handle(e) {
   if (e instanceof Locked) return isDirty() || sheet.open ? unlockSheet() : showLock();

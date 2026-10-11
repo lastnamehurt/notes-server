@@ -91,10 +91,11 @@ async function login(env: LoginEnv, path: string, params: Record<string, string>
 
 export interface DeviceStart { deviceCode: string; userCode: string; verificationUri: string; interval: number; expiresAt: number; }
 
-export async function startDeviceFlow(env: LoginEnv): Promise<DeviceStart> {
+/** `scope` defaults to "repo" for connecting notes; pass "" to sign in with an identity-only token. */
+export async function startDeviceFlow(env: LoginEnv, scope = "repo"): Promise<DeviceStart> {
   const clientId = githubClientId(env);
   if (!clientId) throw new Error("Connect GitHub isn't available on this server. Use an access key instead.");
-  const r = await login(env, "/login/device/code", { client_id: clientId, scope: "repo" });
+  const r = await login(env, "/login/device/code", { client_id: clientId, scope });
   if (r.error) throw new Error(r.error === "device_flow_disabled"
     ? "Connect GitHub isn't switched on for this server. Use an access key instead."
     : "GitHub couldn't start connecting (" + r.error + "). Try again, or use an access key instead.");
@@ -116,6 +117,19 @@ export async function pollDeviceFlow(env: LoginEnv, deviceCode: string): Promise
     case "access_denied": return { state: "failed", message: "GitHub says you chose Cancel. Tap Connect GitHub to try again." };
     default: return { state: "failed", message: "Couldn't connect (" + (r.error || "unknown") + "). Tap Connect GitHub to try again." };
   }
+}
+
+/** The GitHub login behind a token. Used to check who signed in; the token is not kept. */
+export async function githubLogin(env: GhEnv, token: string): Promise<string> {
+  const user = await gh(env, token, "/user");
+  if (!user.ok) throw new Error(`GitHub isn't answering right now (${user.status}). Try again in a minute.`);
+  return (await user.json<{ login: string }>()).login;
+}
+
+/** Whether a GitHub login owns the notes repository ("owner/name"). Case-insensitive, as GitHub logins are. */
+export function ownsNotesRepo(login: string, notesRepo: string | undefined): boolean {
+  const owner = notesRepo?.split("/")[0];
+  return Boolean(owner) && login.trim().toLowerCase() === owner!.toLowerCase();
 }
 
 /** Find or create a private repository for notes: "notes", or the next free name if "notes" is taken by a public one. */

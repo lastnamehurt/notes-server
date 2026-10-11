@@ -63,7 +63,7 @@ Open your app's address on your phone (the page you bookmarked).
 ## Good to know
 
 - **Who can see my notes?** Only you. They live in your private GitHub repository, and the app runs in your own Cloudflare account. The person who shared this with you has no access to either.
-- **Forgot your password?** In Cloudflare, open your Worker → **Settings** → **Variables and Secrets**, edit **PASSWORD**, and save a new one. Then reconnect Claude.
+- **Forgot your password?** Open the app and tap **Sign in with GitHub**, using the GitHub account that owns your notes. Claude still asks for the password, so to set a new one, open your Worker in Cloudflare → **Settings** → **Variables and Secrets**, edit **MCP_BEARER_TOKEN** (or **PASSWORD** if there's no MCP_BEARER_TOKEN), and save. Then reconnect Claude.
 - **Typed the wrong password too many times?** Wait 15 minutes; the app locks briefly to stop guessing.
 - **Change reminders or time zone later:** open the app and tap **Setup**.
 - **Not getting notifications?** In the app's **Setup**, tap **Save and finish**, then **Send test notification**. If it never arrives, ntfy may be busy; switch to Pushover (a $5 app) under *Use Pushover instead*.
