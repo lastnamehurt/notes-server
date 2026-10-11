@@ -1,17 +1,23 @@
 # End-to-end QA for the web app (/app), driven in a phone-sized Chromium with Playwright.
 # Setup used when this was written:
 #   python3 fake_github.py seed.json            # fake GitHub Contents API on :8798 (port is hardcoded)
-#   a stub ntfy server on :8799 that logs POSTs to /tmp/claude-0/app/ntfy.log
+#   a stub ntfy server on :8799 that logs POSTs to the file named by QA_NTFY_LOG
 #   wrangler dev with GITHUB_API_URL=http://127.0.0.1:8798, NTFY_SERVER=http://127.0.0.1:8799,
 #     MCP_BEARER_TOKEN=testkey, on :8790
-# Paths below are from that environment; adjust before reuse. Takes ~3 minutes (waits for real reminders).
+# Configure with environment variables (defaults match the setup above, with the output in the system temp dir):
+#   QA_BASE_URL  default http://localhost:8790/app
+#   QA_OUT_DIR   default <tempdir>/notes-qa   (screenshots go here, and ntfy.log is read from here)
+#   QA_NTFY_LOG  default <QA_OUT_DIR>/ntfy.log
+# Takes ~3 minutes (waits for real reminders).
 # Re-test every QA finding against the fixed app, plus regressions. Real timing: reminders go off during the run.
 import time, re, json
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from playwright.sync_api import sync_playwright
-S = "/tmp/claude-0/app/qa2"; B = "http://localhost:8790/app"
-import os; os.makedirs(S, exist_ok=True)
+import os, tempfile
+S = os.environ.get("QA_OUT_DIR", os.path.join(tempfile.gettempdir(), "notes-qa")); B = os.environ.get("QA_BASE_URL", "http://localhost:8790/app")
+NTFY_LOG = os.environ.get("QA_NTFY_LOG", os.path.join(S, "ntfy.log"))
+os.makedirs(S, exist_ok=True)
 LA = ZoneInfo("America/Los_Angeles")
 fails, passes = [], []
 def check(cond, msg):
@@ -118,8 +124,8 @@ with sync_playwright() as p:
 
     # Wait for the reminders to go off.
     deadline = time.time() + 200
-    while time.time() < deadline and "Water plants" not in open("/tmp/claude-0/app/ntfy.log").read(): time.sleep(5)
-    time.sleep(4); pushes = open("/tmp/claude-0/app/ntfy.log").read()
+    while time.time() < deadline and "Water plants" not in open(NTFY_LOG).read(): time.sleep(5)
+    time.sleep(4); pushes = open(NTFY_LOG).read()
     check("Water plants" in pushes and "Stretch" in pushes, "Due reminders pushed")
     check("Early bird" not in pushes, "Reminder marked done early did not push")
     pg.goto(B + "#today"); pg.reload(); pg.wait_for_selector(".rail"); pg.wait_for_timeout(600)
