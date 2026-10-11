@@ -50,6 +50,22 @@ test('wrong-origin mutation is rejected', async ({ request, baseURL }) => {
   expect(response.status()).toBe(403);
 });
 
+test('lock screen offers sign-in with GitHub and keeps the password as a fallback', async ({ page }) => {
+  await page.goto('/app');
+  await expect(page.getByRole('button', { name: 'Sign in with GitHub' })).toBeVisible();
+  await expect(page.getByText('Use your password instead')).toBeVisible();
+});
+
+test('GitHub sign-in is refused until notes are set up (unauthenticated smoke)', async ({ request, baseURL }) => {
+  // Only valid while the test Worker has no notes repository configured; authenticated runs skip this.
+  test.skip(Boolean(password), 'Notes are configured on the authenticated test Worker');
+  const response = await request.post(`${baseURL}/app/login/github/start`, {
+    headers: { Origin: new URL(baseURL).origin },
+  });
+  expect(response.status()).toBe(409);
+  expect((await response.json()).error).toMatch(/password/i);
+});
+
 test('mobile web app loads and manifest is available', async ({ page, request, baseURL }) => {
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
