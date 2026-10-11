@@ -1,0 +1,10 @@
+{
+ "journal/log/2026-10-10.md": "# Log 2026-10-10\n\n- 07:45 woke up, slept ok #sleep\n- 08:20 coffee #drink\n- 09:10 walked the dog #exercise\n",
+ "goals/2026-10-01-ship-the-stelvio-back-on-the-road.md": "# Get the Stelvio back on the road\n\nWhy: it's been in the garage since spring\nMeasure: passes smog and drives to work for a week\nTarget: 2026-12-15\n\n## Next steps\n- [x] Jump-start and read codes\n- [x] Order new battery\n- [ ] Replace battery @2026-10-12 10am\n- [ ] Book smog check\n\n## Progress\n- 2026-10-03: codes read, mostly battery-related\n- 2026-10-08: battery ordered\n",
+ "goals/2026-10-05-finish-lo-fi-ep.md": "# Finish the lo-fi EP\n\nWhy: five sketches sitting on the sampler\nMeasure: four mixed tracks uploaded\nTarget: 2026-11-30\n\n## Next steps\n- [x] Pick the four tracks\n- [ ] Arrange track one @sat 2pm\n- [ ] Arrange track two\n- [ ] Mix pass\n- [ ] Master and upload\n\n## Progress\n- 2026-10-06: picked tracks, dropped the rainy one\n",
+ "inbox/2026-10-10-meds.md": "# Meds\n\n- [ ] Take morning meds @daily 8am\n- [ ] Take evening meds @daily 9pm\n- [ ] Refill prescription @2026-10-13 11am\n",
+ "runbooks/2026-10-10-connecting-the-personal-notes-mcp-to-claude.md": "# Connecting the Personal Notes MCP to Claude\n\nPersonal Notes is a remote MCP server running as a Cloudflare Worker.\n\n## Verifying\n- Run `list_notes`\n- Confirmed working on 2026-10-10\n",
+ "inbox/20261010T094856Z-0e261f8f.md": "Quick thought: check flaky test fixer dashboard\n",
+ "projects/2026-10-09-day-book-ui-ideas.md": "# Day book UI ideas\n\n- Time rail for today\n- Tick boxes from the phone\n",
+ "inbox/2026-10-10-errands.md": "# Errands\n\n- [ ] Pick up dry cleaning @2026-10-10 11am\n- [ ] Call the shop about the Stelvio @2026-10-10 4pm\n- Buy dog food\n"
+}
