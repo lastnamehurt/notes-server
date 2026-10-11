@@ -86,7 +86,7 @@ The session is an HMAC-signed, HttpOnly, `SameSite=Strict` cookie (30 days) scop
 
 ## Security
 
-Never deploy without both secrets. Protect the bearer token like a password. For broad AI client support and delegated access, implement OAuth before connecting ChatGPT. The Python secret scanner is not shared with this adapter; both implementations perform only basic checks. For more reliable secret protection, add GitHub push protection and robust content validation.
+Never deploy without both secrets. Protect the bearer token like a password. Claude connects over OAuth 2.1 (see the authentication section above). ChatGPT and other clients have not been tested against this server. The Python secret scanner is not shared with this adapter; both implementations perform only basic checks. For more reliable secret protection, add GitHub push protection and robust content validation.
 
 ## Notes
 
