@@ -51,6 +51,8 @@ When it says **You're set up**, it shows the last two steps.
 2. Name it **Notes** and paste the address the app showed you (it ends in `/mcp`).
 3. A sign-in page opens. Enter your password and tap **Allow**.
 
+Using ChatGPT or Gemini instead? See [docs/ai-assistants.md](docs/ai-assistants.md) for what's supported.
+
 Try it: *"Remind me to drink water at 3pm"*, *"Log: oatmeal and coffee"*, or *"Save a note: gift ideas for mom"*.
 
 ## Step 6: Put the app on your home screen
