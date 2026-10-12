@@ -695,6 +695,27 @@ views.today = async () => {
       h`<li class="ev up"><time>${longDay(r.at).replace(/^\w+, /, "")}</time><div><a class="what" href="#note/${r.note}" style="color:inherit;text-decoration:none">${r.text}</a><span class="sub">${fmt12(hhmm(r.at))}</span></div></li>`).join("") + "</ol>";
   }
   if (!cfg.push) html += `<p class="hint">Reminders show here, but phone notifications are off.${cfg.canSetup ? ' Turn them on in <a href="#settings">Setup</a>.' : ""}</p>`;
+  // Presentation only: preserve the raw @date tokens in Markdown for MCP and reminders.
+  const taskDate = text => {
+    const match = /(?:^|\s)@(\d{4}-\d{2}-\d{2})(?:\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm))?\b/i.exec(text);
+    if (!match) return null;
+    const hour = match[3] === undefined && !match[4] ? 12 : Number(match[2]);
+    const h24 = match[4] ? hour % 12 + (match[4].toLowerCase() === "pm" ? 12 : 0) : hour;
+    const minute = Number(match[3] || 0);
+    const [y,m,d] = match[1].split("-").map(Number);
+    const date = new Date(y,m-1,d,h24,minute);
+    if (date.getFullYear() !== y || date.getMonth() !== m-1 || date.getDate() !== d || h24 > 23 || minute > 59) return null;
+    return {date, token:match[0], title:text.replace(match[0]," ").replace(/\s+/g," ").trim()};
+  };
+  const displayTaskDate = date => {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const day = new Date(date); day.setHours(0,0,0,0);
+    const delta = Math.round((day-today)/86400000);
+    const relative = delta < 0 ? "Overdue" : delta === 0 ? "Today" : delta === 1 ? "Tomorrow" : delta <= 7 ? "In " + delta + " days" : "";
+    const calendar = new Intl.DateTimeFormat(undefined,{weekday:"short",month:"short",day:"numeric",year:date.getFullYear() !== today.getFullYear() ? "numeric" : undefined}).format(date);
+    const time = new Intl.DateTimeFormat(undefined,{hour:"numeric",minute:"2-digit"}).format(date);
+    return (relative ? relative + " · " : "") + calendar + " · " + time;
+  };
   // GTD inbox and Eisenhower focus; priorities are explicit, never guessed from note content.
   try {
     const tasks = await api("/priorities");
@@ -706,10 +727,10 @@ views.today = async () => {
       ["inbox", "Inbox · clarify", "Unsorted tasks"]
     ];
     const groupHtml = groups.map(([id, label, subtitle]) => {
-      const matching = tasks.filter(t => t.priority === id);
+      const matching = tasks.filter(t => t.priority === id).map(t => ({...t, due:taskDate(t.text)})).sort((a,b) => (a.due?.date.getTime() ?? Infinity) - (b.due?.date.getTime() ?? Infinity));
       if (!matching.length) return "";
       return h`<details class="step" ${id === "do" || id === "inbox" ? "open" : ""}><summary><b>${label}</b> · ${matching.length} <span class="muted">${subtitle}</span></summary>
-        <ul class="list">${raw(matching.slice(0, 30).map(t => h`<li><a href="#note/${t.note}">${t.text}</a>
+        <ul class="list">${raw(matching.slice(0, 30).map(t => h`<li><a href="#note/${t.note}">${t.due ? t.due.title : t.text}</a>${t.due ? h`<div class="muted task-due">◷ ${displayTaskDate(t.due.date)}</div>` : ""}
           <select class="task-priority" data-note="${t.note}" data-line="${t.line}" aria-label="Priority for ${t.text}">
             ${raw(groups.map(([value, title]) => h`<option value="${value}" ${id === value ? "selected" : ""}>${title}</option>`).join(""))}
           </select></li>`).join(""))}</ul></details>`;
