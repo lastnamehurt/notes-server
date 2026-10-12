@@ -297,7 +297,7 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
     <a href="#goals">Goals</a>
     <a href="#reminders">Reminders</a>
     <a href="#connect" id="connectTab" hidden>Connect</a>
-    <a href="#settings" id="settingsTab" hidden>Setup</a>
+    <a href="#settings" id="settingsTab" hidden>Settings</a>
   </nav>
   <main id="main" aria-live="polite"></main>
 </div>
@@ -1072,7 +1072,7 @@ views.setup = async () => {
         token: $("#tok") ? $("#tok").value.trim() : "", repo: chosenRepo, timezone: $("#tz").value,
         ntfyTopic: $("#usentfy").checked && !(pushoverUser && pushoverToken) ? topic : "",
         pushoverUser, pushoverToken } });
-      cfg = await api("/config"); drawDate(); $("#tabs").hidden = false; $("#settingsTab").hidden = !cfg.canSetup; $("#connectTab").hidden = !cfg.configured;
+      cfg = await api("/config"); drawDate(); $("#tabs").hidden = false; $("#settingsTab").hidden = !cfg.configured; $("#connectTab").hidden = !cfg.configured;
       showDone(mcpUrl);
     } catch (e) { if (e instanceof Locked) return showLock(); $("#saveerr").textContent = e.message; }
     b.disabled = false; b.textContent = "Save and finish";
@@ -1221,7 +1221,7 @@ async function start() {
   cfg = await api("/config");
   drawDate();
   $("#tabs").hidden = !cfg.configured; $("#lockbtn").hidden = false;
-  $("#settingsTab").hidden = !cfg.canSetup; $("#connectTab").hidden = !cfg.configured;
+  $("#settingsTab").hidden = !cfg.configured; $("#connectTab").hidden = !cfg.configured;
 }
 
 /* ---------- Composer ---------- */
