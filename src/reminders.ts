@@ -3,7 +3,9 @@ import { nextOccurrence, normalizeTopic, pushConfigured, DEFAULT_TIMEZONE, type 
 import { signAction } from "./action";
 import { sendOnce } from "./delivery";
 import { applySettings, type Settings } from "./settings";
-import type { Env } from "./github";
+import { GithubNotes, type Env } from "./github";
+import { buildBriefing, mergeBriefings, nextBriefingAt, DEFAULT_BRIEFINGS, BRIEFING_KINDS, type BriefingKind, type BriefingSettings, type Briefing } from "./briefing";
+import { localStamp } from "./reminder-parse";
 export * from "./reminder-parse";
 
 /** Signed link that marks this occurrence of the reminder done (see completeReminder). */
@@ -49,6 +51,31 @@ async function sendNtfy(env: ReminderEnv, r: Reminder, done?: string): Promise<v
   }
 }
 
+/** A plain notification (briefings, weekly review): title, text and an optional link. Pushover when configured, otherwise ntfy. */
+export async function sendNotice(env: ReminderEnv, n: { title: string; message: string; url?: string; urlTitle?: string; tags?: string }): Promise<void> {
+  if (!pushConfigured(env)) throw new Error("No push provider configured (set PUSHOVER_TOKEN + PUSHOVER_USER, or NTFY_TOPIC)");
+  let response: Response, provider: string;
+  if (env.PUSHOVER_TOKEN && env.PUSHOVER_USER) {
+    provider = "Pushover";
+    const form = new URLSearchParams({ token: env.PUSHOVER_TOKEN.trim(), user: env.PUSHOVER_USER.trim(), title: n.title, message: n.message });
+    if (n.url) { form.set("url", n.url); form.set("url_title", n.urlTitle || "Open Daybook"); }
+    response = await fetch("https://api.pushover.net/1/messages.json", { method: "POST", body: form });
+  } else {
+    provider = "ntfy";
+    const server = (env.NTFY_SERVER || "https://ntfy.sh").replace(/\/+$/, "");
+    // ntfy headers must be Latin-1; RFC 2047 encoding keeps titles like "Good morning · Mon" intact.
+    const headers: Record<string, string> = { "Title": "=?UTF-8?B?" + btoa(String.fromCharCode(...new TextEncoder().encode(n.title))) + "?=" };
+    if (n.tags) headers["Tags"] = n.tags;
+    if (env.NTFY_TOKEN) headers["Authorization"] = "Bearer " + env.NTFY_TOKEN;
+    if (n.url) headers["Click"] = n.url;
+    response = await fetch(server + "/" + encodeURIComponent(normalizeTopic(env.NTFY_TOPIC!)), { method: "POST", headers, body: n.message });
+  }
+  if (!response.ok) {
+    const detail = (await response.text().catch(() => "")).trim().slice(0, 300);
+    throw new Error(provider + " returned " + response.status + (detail ? ": " + detail : ""));
+  }
+}
+
 const SEP = "\u0000";
 const key = (r: Reminder) => "r:" + r.note + SEP + r.at + SEP + r.text;
 const notePrefix = (note: string) => "r:" + note + SEP;
@@ -64,6 +91,19 @@ const FAIL_WINDOW_MS = 15 * 60 * 1000;
 export interface PushError { at: number; message: string; reminder: string; }
 
 const KEEP_FIRED_MS = 48 * 3600 * 1000;
+// Briefings (see briefing.ts). The "brief:" prefix must not overlap the reminder ("r:"), done ("d:"), fired ("f:") or "sent:" keys.
+const BRIEFINGS = "briefings";
+const briefNext = (kind: BriefingKind) => "brief:next:" + kind;
+const briefSent = (kind: BriefingKind, date: string) => "brief:sent:" + kind + ":" + date;
+const briefTries = (kind: BriefingKind, date: string) => "brief:tries:" + kind + ":" + date;
+const briefStatus = (kind: BriefingKind) => "brief:status:" + kind;
+const BRIEF_TEST = "brief:lastTest";
+/** A briefing more than this late (the server was asleep or failing) is skipped, not sent at an odd hour. */
+const BRIEF_STALE_MS = 2 * 3600 * 1000;
+const BRIEF_MAX_TRIES = 6;
+
+export interface BriefingStatus { at: number; result: "sent" | "skipped" | "failed"; detail?: string; }
+export interface BriefingState { settings: BriefingSettings; next: Partial<Record<BriefingKind, number>>; status: Partial<Record<BriefingKind, BriefingStatus>>; }
 // Apple Reminders sync. Prefixes must not overlap the reminder ("r:"), done ("d:"), fired ("f:") or "sent:" keys.
 const SYNC_BASE = "sync:base:";
 const SYNC_LOCK = "sync:lock";
@@ -87,6 +127,10 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
   private async reschedule(): Promise<void> {
     let next = Infinity;
     for (const r of (await this.all()).values()) next = Math.min(next, r.at);
+    for (const kind of BRIEFING_KINDS) {
+      const at = await this.ctx.storage.get<number>(briefNext(kind));
+      if (at !== undefined) next = Math.min(next, at);
+    }
     if (next === Infinity) await this.ctx.storage.deleteAlarm();
     else await this.ctx.storage.setAlarm(Math.max(next, Date.now()));
   }
@@ -181,6 +225,117 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
     return [...(await this.ctx.storage.list<{ note: string; text: string; at: number }>({ prefix: "d:" })).values()].filter(d => d.at >= since);
   }
 
+  /* ---------- Briefings ---------- */
+
+  private zone(env: ReminderEnv): string { return env.NOTES_TIMEZONE || DEFAULT_TIMEZONE; }
+  private async briefingEnv(): Promise<Env> { return applySettings(this.env as unknown as Env, await this.getSettings()); }
+
+  async getBriefings(): Promise<BriefingState> {
+    const settings = (await this.ctx.storage.get<BriefingSettings>(BRIEFINGS)) ?? DEFAULT_BRIEFINGS;
+    const state: BriefingState = { settings, next: {}, status: {} };
+    for (const kind of BRIEFING_KINDS) {
+      const next = await this.ctx.storage.get<number>(briefNext(kind));
+      const status = await this.ctx.storage.get<BriefingStatus>(briefStatus(kind));
+      if (next !== undefined) state.next[kind] = next;
+      if (status) state.status[kind] = status;
+    }
+    return state;
+  }
+
+  /**
+   * Save briefing settings. `revision` must match the saved one, so two editors can't overwrite each
+   * other. Turning a briefing off, or changing its time, drops its pending send.
+   */
+  async setBriefings(input: unknown, revision: number): Promise<BriefingState> {
+    const current = (await this.ctx.storage.get<BriefingSettings>(BRIEFINGS)) ?? DEFAULT_BRIEFINGS;
+    if (revision !== current.revision) throw new Error("Briefing settings changed elsewhere; reload and try again");
+    const settings = { ...mergeBriefings(current, input), revision: current.revision + 1 };
+    await this.ctx.storage.put(BRIEFINGS, settings);
+    const zone = this.zone(await this.briefingEnv());
+    for (const kind of BRIEFING_KINDS) {
+      if (settings[kind].enabled) await this.ctx.storage.put(briefNext(kind), nextBriefingAt(settings[kind].time, zone, Date.now()));
+      else await this.ctx.storage.delete(briefNext(kind));
+    }
+    await this.reschedule();
+    return this.getBriefings();
+  }
+
+  /** Build a briefing now from the live notes, without sending it. */
+  async previewBriefing(kind: BriefingKind, now = Date.now()): Promise<Briefing> {
+    const env = await this.briefingEnv();
+    const settings = (await this.ctx.storage.get<BriefingSettings>(BRIEFINGS)) ?? DEFAULT_BRIEFINGS;
+    const notes = await new GithubNotes(env).all();
+    return buildBriefing({ kind, notes, done: await this.doneSince(now - 2 * 86_400_000), now, timeZone: this.zone(env), preview: settings.preview });
+  }
+
+  /** Send a briefing right now (Settings' "Send test"). At most once a minute. */
+  async testBriefing(kind: BriefingKind, origin?: string): Promise<Briefing> {
+    const last = await this.ctx.storage.get<number>(BRIEF_TEST);
+    if (last && Date.now() - last < 60_000) throw new Error("Wait a minute before sending another test");
+    await this.ctx.storage.put(BRIEF_TEST, Date.now());
+    const b = await this.previewBriefing(kind);
+    await sendNotice(await this.briefingEnv(), { title: b.title, message: b.message, url: await this.appLink(origin), tags: "sunrise" });
+    return b;
+  }
+
+  private async appLink(origin?: string): Promise<string | undefined> {
+    const base = this.env.PUBLIC_URL?.trim() || origin || await this.ctx.storage.get<string>(ORIGIN);
+    return base ? base.replace(/\/+$/, "") + "/app#today" : undefined;
+  }
+
+  /**
+   * Send due briefings. Each kind goes out at most once per local date: a "sent" mark is recorded
+   * after the provider accepts it, failures retry every few minutes up to a limit, and a briefing
+   * that is hours late is skipped rather than sent at an odd time.
+   */
+  private async runBriefings(now: number): Promise<void> {
+    const settings = (await this.ctx.storage.get<BriefingSettings>(BRIEFINGS)) ?? DEFAULT_BRIEFINGS;
+    let env: Env | undefined, notes: { name: string; content: string }[] | undefined;
+    for (const kind of BRIEFING_KINDS) {
+      const due = await this.ctx.storage.get<number>(briefNext(kind));
+      if (due === undefined || due > now + 1000) continue;
+      env ??= await this.briefingEnv();
+      const zone = this.zone(env);
+      const date = localStamp(due, zone).date;
+      const advance = async (status?: BriefingStatus) => {
+        if (status) await this.ctx.storage.put(briefStatus(kind), status);
+        if (settings[kind].enabled) await this.ctx.storage.put(briefNext(kind), nextBriefingAt(settings[kind].time, zone, Math.max(now, due)));
+        else await this.ctx.storage.delete(briefNext(kind));
+      };
+      if (!settings[kind].enabled) { await advance(); continue; }
+      if (await this.ctx.storage.get(briefSent(kind, date))) { await advance(); continue; }
+      if (now - due > BRIEF_STALE_MS) { await advance({ at: now, result: "skipped", detail: "Missed its time by over two hours" }); continue; }
+      try {
+        notes ??= await new GithubNotes(env).all();
+        const b = buildBriefing({ kind, notes, done: await this.doneSince(now - 2 * 86_400_000), now, timeZone: zone, preview: settings.preview });
+        if (b.empty) {
+          await this.ctx.storage.put(briefSent(kind, date), { at: now });
+          await advance({ at: now, result: "skipped", detail: "Nothing to report" });
+          continue;
+        }
+        const url = await this.appLink();
+        // Record the send only after the provider accepts it; a retry after that never resends.
+        await sendOnce(false, () => sendNotice(env!, { title: b.title, message: b.message, url, tags: "sunrise" }),
+          () => this.ctx.storage.put(briefSent(kind, date), { at: now }));
+        await advance({ at: now, result: "sent" });
+      } catch (e) {
+        const tries = ((await this.ctx.storage.get<number>(briefTries(kind, date))) ?? 0) + 1;
+        await this.ctx.storage.put(briefTries(kind, date), tries);
+        const detail = e instanceof Error ? e.message : String(e);
+        if (tries >= BRIEF_MAX_TRIES) await advance({ at: now, result: "failed", detail: `Gave up after ${tries} tries: ${detail}` });
+        else {
+          await this.ctx.storage.put(briefStatus(kind), { at: now, result: "failed", detail: `Will retry: ${detail}` } satisfies BriefingStatus);
+          await this.ctx.storage.put(briefNext(kind), now + RETRY_MS);
+        }
+      }
+    }
+    // Forget old per-day marks.
+    const old = await this.ctx.storage.list({ prefix: "brief:" });
+    const cutoff = localStamp(now - 7 * 86_400_000, DEFAULT_TIMEZONE).date;
+    const stale = [...old.keys()].filter(k => /^brief:(sent|tries):/.test(k) && k.slice(-10) < cutoff);
+    if (stale.length) await this.ctx.storage.delete(stale.slice(0, 128));
+  }
+
   /* ---------- Apple Reminders sync state (see apple-sync.ts) ---------- */
 
   /** The last state both sides agreed on, per task ID. */
@@ -255,7 +410,9 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
         await this.ctx.storage.put(LAST_ERROR, { at: Date.now(), message, reminder: r.text } satisfies PushError);
       }
     }
+    // Briefings run after reminders, and their failures never affect reminder delivery.
+    try { await this.runBriefings(Date.now()); } catch (e) { console.error("briefings failed", e); }
     await this.reschedule();
-    if (failed) await this.ctx.storage.setAlarm(Date.now() + RETRY_MS);
+    if (failed) await this.ctx.storage.setAlarm(Math.min(Date.now() + RETRY_MS, (await this.ctx.storage.getAlarm()) ?? Infinity));
   }
 }

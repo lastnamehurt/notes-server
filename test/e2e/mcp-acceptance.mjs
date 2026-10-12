@@ -128,7 +128,7 @@ try {
   await rpc("notifications/initialized", {}, true);
 
   const tools = (await rpc("tools/list", {})).tools.map(t => t.name).sort();
-  const expected = ["check_health", "complete_reminder", "create_log_type", "delete_note", "get_logs", "get_note", "list_log_types", "list_notes", "list_priorities", "list_reminders", "log", "log_to", "prepare_weekly_review", "save_note", "search_notes", "sync_notes", "update_note"];
+  const expected = ["check_health", "complete_reminder", "configure_briefings", "create_log_type", "delete_note", "get_logs", "get_note", "list_log_types", "list_notes", "list_priorities", "list_reminders", "log", "log_to", "prepare_briefing", "prepare_weekly_review", "save_note", "search_notes", "sync_notes", "update_note"];
   check(JSON.stringify(tools) === JSON.stringify(expected), `tools/list: all ${expected.length} tools (${tools.join(", ")})`);
 
   const review = await call("prepare_weekly_review");
@@ -143,6 +143,17 @@ try {
 
   const saved = await call("save_note", { content: "# Acceptance check\nmarker-7f3a\n- [ ] Water plants @2099-01-01 9am", category: "inbox" });
   check(!saved.error && /^inbox\/\d{4}-\d{2}-\d{2}-acceptance-check\.md$/.test(saved.data.name), "save_note creates a note: " + saved.text);
+
+  const brief = await call("prepare_briefing", { kind: "evening" });
+  check(!brief.error && brief.data.kind === "evening" && Array.isArray(brief.data.today) && typeof brief.data.notification?.title === "string",
+    "prepare_briefing returns a read-only digest: " + brief.text.slice(0, 120));
+  const on = await call("configure_briefings", { morning: { enabled: true, time: "07:30" } });
+  check(!on.error && on.data.settings.morning.enabled === true && / 7:30am$/.test(on.data.nextMorning ?? "") && on.data.nextEvening === null,
+    "configure_briefings turns the morning briefing on: " + on.text);
+  const badTime = await call("configure_briefings", { evening: { time: "7pm" } });
+  check(badTime.error && /HH:MM/.test(badTime.text), "configure_briefings rejects a bad time: " + badTime.text);
+  const off = await call("configure_briefings", { morning: { enabled: false } });
+  check(!off.error && off.data.nextMorning === null, "configure_briefings turns it back off");
   check(saved.data.reminders?.length === 1, "save_note schedules its reminder");
   const name = saved.data.name;
   check((await call("get_note", { name })).data.includes("marker-7f3a"), "get_note reads it back");

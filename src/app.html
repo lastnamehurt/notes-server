@@ -433,6 +433,16 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
 .later{margin:28px 0 6px}
 @media(max-width:480px){.rail{--tl-time:52px;--tl-gap:28px}}
 @media(max-width:360px){.rail{--tl-time:46px;--tl-gap:24px}}
+/* Daily briefings in Settings */
+.brief-row{display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--rule)}
+.brief-toggle{display:flex;align-items:center;gap:10px;font-weight:600;margin:0}
+.brief-toggle input{width:20px;height:20px;accent-color:var(--mark)}
+.brief-row input[type=time]{min-height:42px;border:1px solid var(--rule);border-radius:10px;background:var(--sheet);color:var(--ink);font:inherit;padding:6px 10px}
+.brief-status{grid-column:1/-1;margin:0;font-size:13px}
+.brief-actions{grid-column:1/-1;display:flex;gap:8px}
+.brief-actions .btn{flex:1;min-height:40px}
+#brief-preview{width:100%;margin-bottom:12px}
+.brief-out{white-space:pre-wrap;background:var(--sheet);border:1px solid var(--rule);border-radius:12px;padding:12px;font:inherit;font-size:14px;margin-top:12px}
 </style>
 </head>
 <body>
@@ -1405,6 +1415,9 @@ views.setup = async () => {
       <button class="btn quiet" id="run-diagnostics" type="button">Run diagnostics</button>
       <div id="diagnostics-results" role="status" aria-live="polite"></div>
     </section>
+    ${raw(cfg.configured ? `<section class="step" id="briefings"><h3>Daily briefings</h3>
+      <p>A short push each morning and evening: what's overdue, due today, done, and coming tomorrow. Skipped on days with nothing to report.</p>
+      <div id="brief-body"><p class="muted">Loading…</p></div></section>` : "")}
 
 
     <section class="step" id="s3"><h3><span class="n">${n.tz}</span>Your time zone</h3>
@@ -1497,6 +1510,7 @@ views.setup = async () => {
   $("#tok").addEventListener("paste", () => setTimeout(check, 50));
   if (prev.hasToken) check();
   if (!first) wireAssistant(location.origin + "/mcp");
+  loadBriefings();
   $("#copytopic").onclick = e => copy(topic, e.target);
 
 
@@ -1570,6 +1584,55 @@ function showDone(mcpUrl) {
   };
 }
 views.settings = views.setup;
+
+/* ---------- Daily briefings (Settings) ---------- */
+const BRIEF_LABEL = { morning: "Morning briefing", evening: "Evening wrap-up" };
+function briefWhen(ms) {
+  if (!ms) return "";
+  const d = new Date(ms);
+  return d.toLocaleDateString(undefined, { weekday: "short" }) + " " + d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+async function loadBriefings() {
+  const body = $("#brief-body");
+  if (!body) return;
+  let state;
+  try { state = await api("/briefings"); } catch (e) { body.innerHTML = h`<p class="muted">Couldn't load briefings: ${e.message}</p>`; return; }
+  const row = kind => {
+    const k = state.settings[kind], st = state.status[kind], next = state.next[kind];
+    const last = st ? (st.result === "sent" ? "Last sent " + briefWhen(st.at) : (st.result === "skipped" ? "Skipped " : "Failed ") + briefWhen(st.at) + (st.detail ? ": " + st.detail : "")) : "";
+    return h`<div class="brief-row">
+      <label class="brief-toggle"><input type="checkbox" id="brief-${kind}-on" ${k.enabled ? "checked" : ""}> ${BRIEF_LABEL[kind]}</label>
+      <input type="time" id="brief-${kind}-time" value="${k.time}" aria-label="${BRIEF_LABEL[kind]} time">
+      <p class="muted brief-status">${k.enabled && next ? "Next: " + briefWhen(next) : "Off"}${last ? " · " + last : ""}</p>
+      <div class="brief-actions"><button class="btn quiet" type="button" data-brief-preview="${kind}">Preview</button><button class="btn quiet" type="button" data-brief-test="${kind}">Send test</button></div>
+    </div>`;
+  };
+  body.innerHTML = row("morning") + row("evening") + h`
+    <label for="brief-preview">On the lock screen</label>
+    <select id="brief-preview"><option value="full" ${state.settings.preview === "full" ? "selected" : ""}>Show task names</option><option value="counts" ${state.settings.preview === "counts" ? "selected" : ""}>Show counts only</option></select>
+    <button class="btn" id="brief-save" type="button">Save briefings</button>
+    ${raw(cfg.push ? "" : '<p class="hint">Phone notifications are off, so briefings won\'t be sent until you turn them on above.</p>')}
+    <pre id="brief-out" class="brief-out" hidden></pre>`;
+  $("#brief-save").onclick = async e => {
+    const b = e.target; b.disabled = true;
+    const settings = { preview: $("#brief-preview").value };
+    for (const kind of ["morning", "evening"]) settings[kind] = { enabled: $(`#brief-${kind}-on`).checked, time: $(`#brief-${kind}-time`).value || state.settings[kind].time };
+    try { await api("/briefings", { method: "PUT", body: { settings, revision: state.settings.revision } }); toast("Briefings saved"); await loadBriefings(); }
+    catch (err) { toast(err.message); b.disabled = false; }
+  };
+  body.querySelectorAll("[data-brief-preview],[data-brief-test]").forEach(b => b.onclick = async () => {
+    const test = b.dataset.briefTest, kind = test || b.dataset.briefPreview;
+    b.disabled = true;
+    try {
+      const out = await api(test ? "/briefings/test" : "/briefings/preview", { method: "POST", body: { kind } });
+      const pre = $("#brief-out");
+      pre.hidden = false;
+      pre.textContent = out.title + "\n" + out.message;
+      if (test) toast("Sent. Check your phone");
+    } catch (err) { toast(err.message); }
+    b.disabled = false;
+  });
+}
 
 /* ---------- Lock ---------- */
 async function showLock(message) {
