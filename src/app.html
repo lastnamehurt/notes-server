@@ -673,6 +673,8 @@ function render(md) {
   const close = () => { if (list) { out.push("</ul>"); list = false; } };
   md.split("\n").forEach((line, i) => {
     let m;
+    // HTML comments are hidden markers (e.g. the journal's generated Activity section): never show them.
+    if (/^\s*<!--.*-->\s*$/.test(line)) return;
     if ((m = /^(#{1,3})\s+(.*)$/.exec(line))) { flush(); close(); out.push(`<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`); return; }
     if ((m = /^\s*[-*]\s+\[( |x|X)\]\s+(.*)$/.exec(line))) {
       flush(); if (!list) { out.push("<ul>"); list = true; }
