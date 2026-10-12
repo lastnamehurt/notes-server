@@ -51,8 +51,11 @@ if [[ $# -eq 1 && "$1" == "sync" ]]; then
   if [[ -n "$remote_ref" ]]; then
     pulled="$(git rev-list --count "HEAD..$remote_ref")"
     if [[ "$pulled" -gt 0 ]] && ! out="$(git pull --rebase --autostash -q origin "$branch" 2>&1)"; then
-      git rebase --abort >/dev/null 2>&1 || true
-      echo "note: conflict while pulling; nothing was changed. Resolve it by hand:" >&2
+      if ! git rebase --abort >/dev/null 2>&1; then
+        echo "note: rebase recovery failed; inspect git status before continuing" >&2
+        exit 1
+      fi
+      echo "note: conflict while pulling; local commits preserved. Inspect git status before retrying:" >&2
       echo "$out" | sed 's/^/    /' >&2
       echo "    git -C $NOTES_DIR pull --rebase" >&2
       exit 1
@@ -104,7 +107,7 @@ resolve_or_die() {
 }
 
 push_or_hint() {
-  git -C "$NOTES_DIR" push -q origin HEAD 2>&1 || echo "note: push failed; committed locally, retry with: note sync" >&2
+  git -C "$NOTES_DIR" push -q origin HEAD 2>&1 || { echo "note: push failed; committed locally, retry with: note sync" >&2; return 1; }
 }
 
 cmd_show() {
@@ -275,5 +278,5 @@ fi
 echo "saved $rel"
 
 if [[ $push -eq 1 ]]; then
-  git push -q origin HEAD 2>&1 || echo "note: push failed; committed locally, retry with: note sync" >&2
+  git push -q origin HEAD 2>&1 || { echo "note: push failed; committed locally, retry with: note sync" >&2; exit 1; }
 fi

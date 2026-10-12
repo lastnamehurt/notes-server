@@ -65,6 +65,21 @@ a_before=$(head_of A)
 out=$(sync_in A); rc=$?
 [ $rc != 0 ] && [ "$(head_of A)" = "$a_before" ] && echo "$out" | grep -qi 'origin' && ok "an unreachable origin fails cleanly and changes nothing" || bad "unreachable" "rc=$rc $out"
 
+# A rejected push must not be reported as a successful save.
+mkrepos
+git -C "$SB/A" remote set-url origin "$SB/missing-origin.git"
+out=$(NOTES_DIR="$SB/A" "$NOTE" "offline note" 2>&1); rc=$?
+[ "$rc" -ne 0 ] && echo "$out" | grep -qi 'push failed' && git -C "$SB/A" log -1 --format=%s | grep -q 'offline note' \
+  && ok "failed push returns nonzero while preserving local commit" || bad "push failure" "rc=$rc $out"
+
+# Dirty changes on the same file as a remote update must never disappear.
+mkrepos; commit_in B inbox/shared.md "remote update" "remote edit"; git -C "$SB/B" push -q origin HEAD
+printf 'local unsaved change\\n' > "$SB/A/inbox/shared.md"
+out=$(sync_in A); rc=$?
+grep -q 'local unsaved change' "$SB/A/inbox/shared.md" \
+  && { [ "$rc" -ne 0 ] || grep -q 'remote update' "$SB/A/inbox/shared.md"; } \
+  && ok "dirty work survives sync whether Git merges or reports a conflict" || bad "dirty conflict" "rc=$rc $out"
+
 mkrepos
 NOTES_DIR="$SB/A" "$NOTE" --no-push -- sync >/dev/null 2>&1
 ls "$SB/A/inbox" | grep -q 'sync' && ok "note -- sync still saves a note whose text is 'sync'" || bad "literal sync" "$(ls "$SB/A/inbox")"
