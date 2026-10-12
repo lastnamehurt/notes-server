@@ -204,6 +204,7 @@ h2.group b { color: var(--ink); }
 
 .log-to-task,.log-to-note{border:1px solid var(--rule);border-radius:9px;background:var(--sheet);color:var(--ink-2);font:inherit;font-size:12px;padding:7px 9px;flex-shrink:0}
 .inbox-item{padding:16px 0;border-bottom:1px solid var(--rule)}.inbox-item>a{color:var(--ink);text-decoration:none}.inbox-item p{font-size:14px;color:var(--ink-2);white-space:pre-wrap;overflow-wrap:anywhere}.inbox-actions{display:flex;gap:8px;flex-wrap:wrap}.inbox-actions button{border:1px solid var(--rule);background:var(--sheet);color:var(--ink);padding:10px 12px;border-radius:10px;font:inherit;font-size:13px;min-height:42px}.inbox-actions button:disabled{opacity:.5}
+.unified-task{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--rule)}.unified-task>a{flex:1;min-width:0;overflow-wrap:anywhere;color:var(--ink)}.unified-task .task-priority{max-width:105px}.task-done{background:var(--sheet);color:var(--ink);border:1px solid var(--rule);border-radius:9px;padding:9px}.task-group h4{margin:14px 0 4px}@media(max-width:420px){.unified-task{flex-wrap:wrap}.unified-task>a{flex-basis:100%}}
 /* Goals */
 .goal { padding: 18px; border: 1px solid var(--rule); border-radius: 16px; background: var(--sheet); box-shadow: var(--shadow); margin: 0 0 12px; }
 .goal h3 { margin: 0 0 4px; font: 400 24px/1.2 "DM Serif Display", Georgia, serif; letter-spacing: -.01em; }
@@ -1004,30 +1005,27 @@ views["new-goal"] = async () => {
 
 views.reminders = async () => {
   main.innerHTML = '<p class="empty">Loading tasks…</p>';
-  const { upcoming: rems } = await api("/reminders");
-  let html = `<div class="bar" style="justify-content:flex-end"><button class="btn" id="newrem">New task</button></div>`;
-  if (!rems.length) {
-    html += `<p class="empty">No scheduled tasks yet. Add a task with a date or time.</p>`;
-  } else {
-    const today = dayKey(Date.now()), tomorrow = addDays(today, 1);
-    let last = "";
-    for (const r of rems) {
-      const k = dayKey(r.at);
-      if (k !== last) { html += (last ? "</div>" : "") + h`<h2 class="group"><b>${k === today ? "Today" : k === tomorrow ? "Tomorrow" : longDay(r.at)}</b></h2><div>`; last = k; }
-      html += h`<div class="rem"><time>${fmt12(hhmm(r.at))}</time><div><a class="what" href="#note/${r.note}">${r.text}</a><span class="sub">${titleFrom(r.note)}${r.repeat ? ", repeats" : ""}</span></div>
-        <button class="mk" data-note="${r.note}" data-text="${r.text}" data-at="${r.at}" aria-label="Mark ${r.text} done">Done</button></div>`;
-    }
-    html += "</div>";
-  }
+  const [priorityTasks, reminders] = await Promise.all([api("/priorities"), api("/reminders")]);
+  const scheduled = reminders.upcoming || [];
+  const groups = [["do","Do now"],["plan","Plan"],["delegate","Handle later"],["someday","Someday / maybe"],["inbox","Inbox · unprioritized"]];
+  const unscheduled = priorityTasks.filter(t => !scheduled.some(r => r.note === t.note && r.text.trim() === t.text.trim()));
+  let html = h`<div class="bar"><h2>Tasks</h2><button class="btn" id="newtask">+ New task</button></div><p class="muted">All open tasks, whether or not they have a reminder. Prioritize them here or in Focus.</p>`;
+  html += h`<section class="step"><h3>Open tasks · ${unscheduled.length}</h3>${raw(groups.map(([id,label]) => {
+    const matching = unscheduled.filter(t => t.priority === id);
+    return matching.length ? h`<div class="task-group"><h4>${label} · ${matching.length}</h4>${raw(matching.map(t => h`<div class="unified-task"><a href="#note/${t.note}">${t.text}</a><select class="task-priority" data-note="${t.note}" data-line="${t.line}" aria-label="Priority for ${t.text}">${raw(groups.map(([value,title]) => h`<option value="${value}" ${value === id ? "selected" : ""}>${title}</option>`).join(""))}</select><button class="task-done" data-note="${t.note}" data-line="${t.line}">Done</button></div>`).join(""))}</div>` : "";
+  }).join(""))}</section>`;
+  html += h`<section class="step"><h3>Scheduled tasks · ${scheduled.length}</h3>${raw(scheduled.length ? scheduled.map(r => h`<div class="rem"><time>${longDay(r.at)} · ${fmt12(hhmm(r.at))}</time><div><a class="what" href="#note/${r.note}">${r.text}</a><span class="sub">${titleFrom(r.note)}${r.repeat ? ", repeats" : ""}</span></div><button class="mk" data-note="${r.note}" data-text="${r.text}" data-at="${r.at}">Done</button></div>`).join("") : '<p class="muted">No scheduled tasks.</p>')}</section>`;
   main.innerHTML = html;
-  $("#newrem").onclick = () => reminderSheet(null, () => views.reminders());
-  main.querySelectorAll(".mk").forEach(b => b.onclick = async () => {
-    b.disabled = true;
-    try { await complete(b.dataset.note, b.dataset.text, +b.dataset.at); views.reminders(); }
-    catch (e) { handle(e); b.disabled = false; }
+  $("#newtask").onclick = () => openSheet(h`<form id="newtask-form"><h2>New task</h2><label class="field"><span>What needs doing?</span><input id="newtask-text" autofocus required></label><div class="sheet-actions"><button class="btn quiet" type="button" id="newtask-cancel">Cancel</button><button class="btn" type="submit">Add task</button></div></form>`, modal => {
+    modal.querySelector("#newtask-cancel").onclick = closeSheet;
+    modal.querySelector("#newtask-form").onsubmit = async e => { e.preventDefault(); const text = modal.querySelector("#newtask-text").value.trim(); if (!text) return; const button = modal.querySelector('button[type="submit"]'); button.disabled = true;
+      try { await api("/note",{method:"POST",body:{category:"inbox",content:"# " + text.slice(0,110) + "\n\n- [ ] " + text + "\n"}}); closeSheet(); toast("Task added"); await views.reminders(); } catch(err) { handle(err); button.disabled = false; }
+    };
   });
+  main.querySelectorAll(".task-priority").forEach(select => select.onchange = async () => { select.disabled = true; try { const note = await api("/note?name=" + encodeURIComponent(select.dataset.note)); await api("/priorities",{method:"POST",body:{name:select.dataset.note,line:Number(select.dataset.line),priority:select.value,sha:note.sha}}); await views.reminders(); } catch(err) { handle(err); select.disabled = false; } });
+  main.querySelectorAll(".task-done").forEach(button => button.onclick = async () => { button.disabled = true; try { const name = button.dataset.note; const note = await api("/note?name=" + encodeURIComponent(name)); await setTask(name,note.content,Number(button.dataset.line),true,note.sha); await views.reminders(); } catch(err) { handle(err); button.disabled = false; } });
+  main.querySelectorAll(".mk").forEach(b => b.onclick = async () => { b.disabled = true; try { await complete(b.dataset.note,b.dataset.text,+b.dataset.at); await views.reminders(); } catch(err) { handle(err); b.disabled = false; } });
 };
-
 /* ---------- Note: read, tap to edit ---------- */
 async function editor(name, category) {
   const isNew = !name;
