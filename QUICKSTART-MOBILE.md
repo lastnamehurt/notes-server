@@ -21,27 +21,29 @@ After 10 wrong passwords in 15 minutes the app locks for a while. Wait 15 minute
 
 It opens like an app from now on.
 
-## 3. Learn the five tabs
+## 3. Learn the tabs
 
 | Tab | What it's for |
 |-----|---------------|
-| **Today** | Today's log, plus reminders that are due. Tap a log entry to edit or delete it. |
-| **Notes** | Your notes, grouped by folder. Search is at the top. |
-| **Goals** | Each goal with its target date and next step. Tick a step off from the list. |
-| **Reminders** | Everything scheduled, grouped by day. |
-| **Setup** | Time zone, notes location, and phone notifications. |
+| **Today** | Your focus for the day, what you've logged, and reminders that are due. Tap a log entry to edit or delete it. |
+| **Journal** | Your daily activities and reflections, day by day. |
+| **Tasks** | Everything you need to do. Tasks with a date or time remind you. |
+| **Memory** | Everything you've saved, grouped by folder. Search is at the top. |
+| **Settings** | Time zone, where notes are saved, phone notifications, daily briefings and connecting an assistant. |
+
+On a bigger screen you'll also see **Logs** and **Goals**.
 
 ## 4. Try it
 
 - **Log something:** type `oatmeal and coffee #food` in the box at the bottom of Today and send it. Tags like `#food`, `#drink`, `#med`, `#exercise`, `#sleep` and `#mood` keep your log easy to scan.
-- **Set a reminder:** on **Reminders**, tap **New reminder**. Pick once, or repeat on the days you choose.
-- **Save a note:** on **Notes**, tap **New note**.
+- **Add a task or reminder:** on **Tasks**, tap **+ Add task**. Give it a day and time to be reminded, once or on the days you choose.
+- **Save a note:** on **Memory**, tap **+ New**.
 - **Tick something off:** tap **Done** on a due reminder. It's recorded in today's log and stops repeating for that time.
 
 ## 5. Get phone notifications (optional)
 
-1. Install the free [ntfy](https://ntfy.sh) app and subscribe to the topic shown on the **Setup** tab. ntfy's [phone guide](https://docs.ntfy.sh/subscribe/phone/) shows how.
-2. In **Setup**, tap **Save and finish**, then **Send test notification**.
+1. Install the free [ntfy](https://ntfy.sh) app and subscribe to the topic shown on the **Settings** tab. ntfy's [phone guide](https://docs.ntfy.sh/subscribe/phone/) shows how.
+2. In **Settings**, tap **Save and finish**, then **Send test notification**.
 3. If it doesn't arrive, ntfy may be busy. Try again later, or switch to [Pushover](https://pushover.net) (a paid app) under *Use Pushover instead*.
 
 ## 6. Connect Claude (optional)
@@ -49,7 +51,7 @@ It opens like an app from now on.
 This lets Claude read and write your notes, so you can say "Remind me to drink water at 3pm" or "Log: burrito and a beer".
 
 1. In a browser, open [claude.ai](https://claude.ai) and go to **Settings → Connectors**.
-2. Choose **Add custom connector**. Name it **Notes** and paste your app's address with `/mcp` on the end.
+2. Choose **Add custom connector**. Name it **Daybook** and paste your app's address with `/mcp` on the end.
 3. A sign-in page opens. Enter your password and tap **Allow**.
 
 Connectors belong to the Claude account you're signed into, so do this with your personal account, not a work one.
@@ -57,7 +59,7 @@ Connectors belong to the Claude account you're signed into, so do this with your
 ## If something goes wrong
 
 - **Forgot the password:** sign in with GitHub instead. To set a new password, open your Worker in the [Cloudflare dashboard](https://dash.cloudflare.com), go to **Settings → Variables and Secrets**, edit **MCP_BEARER_TOKEN** (or **PASSWORD** if there's no MCP_BEARER_TOKEN), and save. Then reconnect Claude, which still asks for the password.
-- **Changed your mind about reminders or time zone:** open **Setup**.
-- **Reminders are late or missing:** check **Reminders** for the time, then check that notifications are on in [ntfy](https://ntfy.sh).
+- **Changed your mind about reminders or time zone:** open **Settings**.
+- **Reminders are late or missing:** check **Tasks** for the time, then check that notifications are on in [ntfy](https://ntfy.sh).
 
 For the details behind any of this, see [TECHNICAL.md](TECHNICAL.md).

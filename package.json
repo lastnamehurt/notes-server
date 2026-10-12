@@ -13,8 +13,8 @@
     "test:mcp": "node test/e2e/mcp-acceptance.mjs",
     "test:briefings-ui": "node test/e2e/briefings-ui.mjs",
     "test:e2e": "playwright test",
-    "test:cli": "bash scripts/test-cli.sh"
-
+    "test:cli": "bash scripts/test-cli.sh",
+    "test:onboarding": "node test/e2e/onboarding.mjs"
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "^1.0.0",

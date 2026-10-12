@@ -6,7 +6,7 @@ It's free, takes about 15 minutes, and needs no coding. You'll tap through a few
 
 This repository also includes the **`note` / `notes` command-line client** for your local notes clone. See [CLI installation and usage](CLI.md).
 
-**[🌐 Daybook website](https://lastnamehurt.github.io/notes-server/)** · **[🚀 Get started](https://deploy.workers.cloudflare.com/?url=https://github.com/lastnamehurt/notes-server)**
+**[🌐 Daybook website](https://lastnamehurt.github.io/notes-server/)** · **[🚀 Get started](#step-1-make-your-two-accounts)**
 
 New here? Start with the [Daybook website](https://lastnamehurt.github.io/notes-server/) for a quick introduction, or follow the complete setup steps below.
 
@@ -49,12 +49,12 @@ The app walks you through the rest:
 2. **Check your time zone.**
 3. **Turn on phone reminders** with the free ntfy app (optional).
 
-When it says **You're set up**, it shows the last two steps.
+When it says **You're set up**, it shows your Claude connection address and buttons, and how to add the app to your home screen.
 
 ## Step 5: Connect Claude
 
 1. In Claude, open **Settings → Connectors** and choose **Add custom connector**.
-2. Name it **Notes** and paste the address the app showed you (it ends in `/mcp`).
+2. Name it **Daybook** and paste the address the app showed you (it ends in `/mcp`).
 3. A sign-in page opens. Enter your password and tap **Allow**.
 
 Using ChatGPT or Gemini instead? See [docs/ai-assistants.md](docs/ai-assistants.md) for what's supported.
@@ -75,8 +75,8 @@ For a quick tour of the app on your phone, see [QUICKSTART-MOBILE.md](QUICKSTART
 - **Who can see my notes?** Only people who can sign in to your GitHub or Cloudflare account. Your notes are not end-to-end encrypted: they are stored as plain text in your private GitHub repository, and your own Cloudflare Worker reads them to answer your requests. The person who shared this with you has no access to either account.
 - **Forgot your password?** Open the app and tap **Sign in with GitHub**, using the GitHub account that owns your notes. Claude still asks for the password, so to set a new one, open your Worker in Cloudflare → **Settings** → **Variables and Secrets**, edit **MCP_BEARER_TOKEN** (or **PASSWORD** if there's no MCP_BEARER_TOKEN), and save. Then reconnect Claude.
 - **Typed the wrong password too many times?** Wait 15 minutes; the app locks briefly to stop guessing.
-- **Change reminders or time zone later:** open the app and tap **Setup**.
-- **Not getting notifications?** In the app's **Setup**, tap **Save and finish**, then **Send test notification**. If it never arrives, ntfy may be busy; switch to Pushover (a $5 app) under *Use Pushover instead*.
+- **Change reminders or time zone later:** open the app and tap **Settings**.
+- **Not getting notifications?** In the app's **Settings**, tap **Save and finish**, then **Send test notification**. If it never arrives, ntfy may be busy; switch to Pushover (a $5 app) under *Use Pushover instead*.
 
 ## For the technically curious
 
