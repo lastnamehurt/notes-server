@@ -730,7 +730,7 @@ views.today = async () => {
       const matching = tasks.filter(t => t.priority === id).map(t => ({...t, due:taskDate(t.text)})).sort((a,b) => (a.due?.date.getTime() ?? Infinity) - (b.due?.date.getTime() ?? Infinity));
       if (!matching.length) return "";
       return h`<details class="step" ${id === "do" || id === "inbox" ? "open" : ""}><summary><b>${label}</b> · ${matching.length} <span class="muted">${subtitle}</span></summary>
-        <ul class="list">${raw(matching.slice(0, 30).map(t => h`<li><a href="#note/${t.note}">${t.due ? t.due.title : t.text}</a>${t.due ? h`<div class="muted task-due">◷ ${displayTaskDate(t.due.date)}</div>` : ""}
+        <ul class="list">${raw(matching.slice(0, 30).map(t => h`<li><a href="#note/${t.note}">${t.due ? t.due.title : t.text}</a>${t.due ? raw(h`<div class="muted task-due">◷ ${displayTaskDate(t.due.date)}</div>`) : ""}
           <select class="task-priority" data-note="${t.note}" data-line="${t.line}" aria-label="Priority for ${t.text}">
             ${raw(groups.map(([value, title]) => h`<option value="${value}" ${id === value ? "selected" : ""}>${title}</option>`).join(""))}
           </select></li>`).join(""))}</ul></details>`;
