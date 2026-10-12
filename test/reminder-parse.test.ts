@@ -93,3 +93,11 @@ test("pushConfigured needs both Pushover secrets or an ntfy topic", async () => 
   assert.equal(pushConfigured({ PUSHOVER_TOKEN: "t", PUSHOVER_USER: "u" }), true);
   assert.equal(pushConfigured({ NTFY_TOPIC: "x" }), true);
 });
+
+
+test("priority metadata after a 24-hour timestamp still schedules a reminder", () => {
+  const reminders = parseReminders("inbox/flight.md", "- [ ] Look for screenshot @2026-10-11 23:00 @priority:do");
+  assert.equal(reminders.length, 1);
+  assert.equal(reminders[0].text, "Look for screenshot");
+  assert.equal(iso(reminders[0].at), "2026-10-12T06:00:00.000Z");
+});
