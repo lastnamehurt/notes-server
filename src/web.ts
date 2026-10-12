@@ -1,3 +1,4 @@
+import { normalizeLogType, typePath, withLogType, parseLogTypes } from "./log-types";
 import { tasksFromNotes, changeTaskPriority } from "./priorities";
 import { runDiagnostics } from "./diagnostics";
 // Web app at /app: a phone-first UI over the same notes, logs and reminders the MCP tools use.
@@ -228,6 +229,20 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
           noteCount: github.status === "fulfilled" ? github.value.length : null }, github.status === "fulfilled" ? 200 : 503);
       }
       case "GET /search": return json(await notes.search(url.searchParams.get("q") ?? ""));
+      case "GET /log-types": return json(parseLogTypes(await notes.all()));
+      case "POST /log-types": {
+        const { name } = await request.json<{name:string}>();
+        const type = normalizeLogType(name);
+        const path = typePath(type);
+        try { await notes.get(path); return fail("Log type already exists", 409); }
+        catch (e) { if (!(e instanceof Error && e.message.startsWith("Note or notes repository not found"))) throw e; }
+        await notes.put(path, "# " + type + "\\n");
+        return json({name:type});
+      }
+      case "POST /typed-log": {
+        const { entry, type, date, time } = await request.json<{entry:string;type:string;date?:string;time?:string}>();
+        return json(await appendLog(notes, withLogType(entry,type), {date,time,timeZone:env.NOTES_TIMEZONE}));
+      }
       case "POST /log": {
         const { entry, date, time } = await request.json<{ entry: string; date?: string; time?: string }>();
         return json(await appendLog(notes, entry, { date, time, timeZone: env.NOTES_TIMEZONE }));
