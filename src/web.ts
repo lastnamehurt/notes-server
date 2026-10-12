@@ -14,7 +14,7 @@ import { sendPush } from "./reminders";
 import { makeBackup, parseBackup, restoreMissing } from "./backup";
 import { signSession, verifySession } from "./action";
 import { APP_HTML, MANIFEST } from "./ui";
-import { pushConfigured } from "./reminder-parse";
+import { pushConfigured, parseReminders } from "./reminder-parse";
 
 const COOKIE = "notes_session";
 const SESSION_DAYS = 30;
@@ -50,6 +50,36 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
   if (path === "/app" && request.method === "GET") return new Response(APP_HTML, { headers: HTML_HEADERS });
   if (path === "/app/manifest.webmanifest")
     return new Response(MANIFEST, { headers: { "Content-Type": "application/manifest+json" } });
+
+  // Read-only Shortcut feed. A separate secret avoids exposing the app/MCP password to Shortcuts.
+  if (path === "/app/shortcuts/tasks" && request.method === "GET") {
+    if (!env.SHORTCUTS_TOKEN || env.SHORTCUTS_TOKEN.length < 32) return fail("Shortcut sync is not configured", 404);
+    const supplied = request.headers.get("Authorization")?.replace(/^Bearer /i, "") ?? "";
+    // Hash both inputs before comparison to avoid timing differences from prefix matches.
+    const digest = async (value: string) => new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
+    const [expected, actual] = await Promise.all([digest(env.SHORTCUTS_TOKEN), digest(supplied)]);
+    let diff = 0;
+    for (let i = 0; i < expected.length; i++) diff |= expected[i] ^ actual[i];
+    if (diff !== 0) return fail("Unauthorized", 401);
+    const configured = await effectiveEnv(env);
+    if (!notesConfigured(configured)) return fail("Notes not configured", 409);
+    const notes = await new GithubNotes(configured).all();
+    const timezone = configured.NOTES_TIMEZONE || "America/Los_Angeles";
+    const tasks = tasksFromNotes(notes);
+    const exported = tasks.map(task => {
+      const source = notes.find(n => n.name === task.note);
+      const rawLine = source?.content.split("\n")[task.line] || "";
+      const parsed = parseReminders(task.note, rawLine, timezone);
+      const oneOff = parsed.find(rem => !rem.repeat);
+      const title = task.text.replace(/\s+@\d{4}-\d{2}-\d{2}(?:\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?)?\b/i, "").trim();
+      const repeat = parsed.find(rem => rem.repeat);
+      return { id: task.note + ":" + task.line, title, priority: task.priority,
+        dueAt: oneOff ? new Date(oneOff.at).toISOString() : null,
+        repeating: Boolean(repeat), sourceNote: task.note };
+    });
+    return json({ version: 1, timezone, tasks: exported });
+
+  }
 
   // Mutating requests must come from this origin (SameSite=Strict already blocks cross-site cookies).
   if (request.method !== "GET" && request.headers.get("Origin") !== url.origin) return fail("Bad origin", 403);
