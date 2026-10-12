@@ -246,6 +246,29 @@ h2.group b { color: var(--ink); }
 .today-activity-heading{margin:18px 0 10px}
 .today-activity-heading .muted{font-size:12px}
 
+/* Notes browsing — readable rows and horizontally scrollable mobile filters. */
+.notes-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.notes-heading h2{margin:0}
+.notes-heading p{margin:4px 0 0;font-size:13px}
+.notes-heading .btn{white-space:nowrap;text-decoration:none}
+.notes-search-wrap{display:block}
+.notes-search-wrap input{display:block;width:100%;box-sizing:border-box;margin:0;min-height:46px}
+.notes-toolbar{display:flex;align-items:center;gap:12px;margin-top:12px}
+.notes-filters{display:flex;flex:1;min-width:0;gap:7px;overflow-x:auto;scrollbar-width:none;padding:3px 1px 7px}
+.notes-filters button{white-space:nowrap;flex:none;border:1px solid var(--rule);border-radius:999px;background:var(--sheet);color:var(--ink-2);padding:9px 13px;font:inherit;font-size:13px;min-height:40px;cursor:pointer}
+.notes-filters button[aria-pressed="true"]{background:var(--mark);color:var(--mark-ink);border-color:var(--mark)}
+.notes-inbox-link{font-size:12px;white-space:nowrap;color:var(--mark);text-decoration:none}
+.notes-result-count{font-size:12px;margin:8px 0}
+.notes-results{list-style:none;padding:0;margin:0}
+.notes-result{border-bottom:1px solid var(--rule)}
+.notes-result a{display:flex;align-items:center;gap:12px;color:var(--ink);text-decoration:none;min-height:64px;padding:10px 2px}
+.notes-result-icon{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:var(--sheet);color:var(--ink-2)}
+.notes-result-body{min-width:0;flex:1;display:grid;gap:5px}
+.notes-result-body strong{font-size:15px;line-height:1.35;font-weight:600;overflow-wrap:anywhere}
+.notes-result-meta{font-size:12px;color:var(--ink-2)}
+.notes-result-arrow{font-size:24px;color:var(--ink-2)}
+@media(max-width:430px){.notes-toolbar{display:block}.notes-inbox-link{display:inline-block;margin:2px 0 4px}.notes-result a{gap:10px}}
+
 /* Goals */
 .goal { padding: 18px; border: 1px solid var(--rule); border-radius: 16px; background: var(--sheet); box-shadow: var(--shadow); margin: 0 0 12px; }
 .goal h3 { margin: 0 0 4px; font: 400 24px/1.2 "DM Serif Display", Georgia, serif; letter-spacing: -.01em; }
@@ -932,28 +955,53 @@ views.inbox = async () => {
   });
 };
 views.notes = async () => {
-  main.innerHTML = h`<div class="bar"><a class="btn quiet" href="#inbox">Review inbox →</a><input class="search" id="q" type="search" placeholder="Search notes" aria-label="Search notes" style="margin:0"><a class="btn" href="#new" style="text-decoration:none;white-space:nowrap">New note</a></div><div id="nl"><p class="empty">Loading notes…</p></div>`;
-  allNotes = await api("/notes");
-  const draw = names => {
-    const byFolder = {};
-    for (const n of names) {
-      if (n.startsWith("journal/log/")) continue;
-      (byFolder[n.split("/")[0]] ||= []).push(n);
-    }
-    const folders = Object.keys(byFolder).sort((a, b) => (a === "inbox" ? -1 : b === "inbox" ? 1 : a.localeCompare(b)));
-    $("#nl").innerHTML = folders.length ? folders.map(f => h`<h2 class="group"><b>${folderName(f)}</b> ${byFolder[f].length}</h2><ul class="list">${raw(byFolder[f].map(n =>
-      h`<li><a href="#note/${n}"><span class="t">${titleFrom(n)}</span><span class="d">${dateFrom(n)}</span></a></li>`).join(""))}</ul>`).join("")
-      : `<p class="empty">No notes match. Try fewer words.</p>`;
+  main.innerHTML = h`<section class="notes-browser">
+    <div class="notes-heading"><div><h2>Notes</h2><p class="muted">Everything you've captured, in one place.</p></div><a class="btn" href="#new">+ New</a></div>
+    <label class="notes-search-wrap"><span class="sr-only">Search notes</span><input class="search" id="q" type="search" placeholder="Search titles and contents…" autocomplete="off"></label>
+    <div class="notes-toolbar"><div class="notes-filters" id="notes-filters" role="group" aria-label="Filter notes"></div><a class="notes-inbox-link" href="#inbox">Review inbox →</a></div>
+    <p class="notes-result-count muted" id="notes-count" aria-live="polite"></p>
+    <div id="nl"><p class="empty">Loading notes…</p></div>
+  </section>`;
+  allNotes = (await api("/notes")).filter(n => !n.startsWith("journal/log/"));
+  const folders = [...new Set(allNotes.map(n => n.split("/")[0]))].sort((a,b) => (a === "inbox" ? -1 : b === "inbox" ? 1 : a.localeCompare(b)));
+  let active = "all", query = "", searchMatches = null, requestId = 0, timer;
+  const chips = [["all","All"],...folders.map(f => [f,folderName(f)])];
+  $("#notes-filters").innerHTML = chips.map(([key,label]) => h`<button type="button" data-folder="${key}" aria-pressed="${key === active}">${label}</button>`).join("");
+  const draw = () => {
+    const matching = (searchMatches || allNotes).filter(n => active === "all" || n.startsWith(active + "/"))
+      .filter(n => !query || searchMatches || n.toLowerCase().includes(query.toLowerCase()));
+    $("#notes-count").textContent = matching.length + (matching.length === 1 ? " note" : " notes") + (active !== "all" ? " · " + folderName(active) : "");
+    $("#notes-filters").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed",String(b.dataset.folder === active)));
+    $("#nl").innerHTML = matching.length ? '<ul class="notes-results">' + matching.map(n => {
+      const folder = n.split("/")[0], title = titleFrom(n), date = dateFrom(n);
+      return h`<li class="notes-result"><a href="#note/${n}"><span class="notes-result-icon" aria-hidden="true">▤</span><span class="notes-result-body"><strong>${title}</strong><span class="notes-result-meta">${folderName(folder)}${date ? " · " + date : ""}</span></span><span class="notes-result-arrow" aria-hidden="true">›</span></a></li>`;
+    }).join("") + "</ul>" : '<p class="empty">No notes match these filters.</p>';
   };
-  draw(allNotes);
-  let timer;
-  $("#q").oninput = e => {
+  $("#notes-filters").onclick = event => {
+    const button = event.target.closest("[data-folder]");
+    if (!button) return;
+    active = button.dataset.folder;
+    draw();
+  };
+  $("#q").oninput = event => {
+    query = event.target.value.trim();
     clearTimeout(timer);
-    const q = e.target.value.trim();
-    if (!q) return draw(allNotes);
-    draw(allNotes.filter(n => n.toLowerCase().includes(q.toLowerCase())));
-    timer = setTimeout(async () => { try { draw(await api("/search?q=" + encodeURIComponent(q))); } catch (err) { handle(err); } }, 450);
+    const current = ++requestId;
+    searchMatches = null;
+    draw();
+    if (!query) return;
+    timer = setTimeout(async () => {
+      try {
+        const results = await api("/search?q=" + encodeURIComponent(query));
+        if (current !== requestId) return;
+        searchMatches = results.filter(n => !n.startsWith("journal/log/"));
+        draw();
+      } catch (err) {
+        if (current === requestId) handle(err);
+      }
+    }, 400);
   };
+  draw();
 };
 
 views.goals = async () => {
