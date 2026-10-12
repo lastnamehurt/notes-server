@@ -1,3 +1,4 @@
+import { withLogType, parseLogTypes, normalizeLogType, typePath } from "./log-types";
 import { tasksFromNotes } from "./priorities";
 import { runDiagnostics } from "./diagnostics";
 import OAuthProvider, { AuthorizationError, CimdFetchError } from "@cloudflare/workers-oauth-provider";
@@ -60,6 +61,19 @@ function serverFor(env: Env): McpServer {
     ({ name }) => result(async () => { await notes.delete(name); await scheduler(env).removeNote(name); return name; }));
   server.registerTool("log", { description: "Add a timestamped entry to today's log (food, drink, meds, exercise, mood...). Tag with #food #drink #med etc. Optional date YYYY-MM-DD and time HH:MM for past items.", inputSchema: { entry: z.string(), date: z.string().optional(), time: z.string().optional() } },
     ({ entry, date, time }) => result(() => appendLog(notes, entry, { date, time, timeZone: env.NOTES_TIMEZONE })));
+  server.registerTool("list_log_types", { description: "List user-defined log types and entry counts", inputSchema: {} },
+    () => result(async () => parseLogTypes(await notes.all())));
+  server.registerTool("create_log_type", { description: "Create a new personal tracker (e.g. cardio, food, sleep) without changing existing entries", inputSchema: { name: z.string() } },
+    ({ name }) => result(async () => {
+      const type = normalizeLogType(name);
+      const path = typePath(type);
+      try { await notes.get(path); return {name:type,alreadyExists:true}; }
+      catch (e) { if (!(e instanceof Error && e.message.startsWith("Note or notes repository not found"))) throw e; }
+      await notes.put(path, "# " + type + "\\n");
+      return {name:type};
+    }));
+  server.registerTool("log_to", { description: "Add a timestamped entry to a named log type, creating a tagged journal entry", inputSchema: { type: z.string(), entry: z.string(), date: z.string().optional(), time: z.string().optional() } },
+    ({type,entry,date,time}) => result(() => appendLog(notes, withLogType(entry,type), {date,time,timeZone:env.NOTES_TIMEZONE})));
   server.registerTool("get_logs", { description: "Read daily logs from the last N days (default 7, max 90), newest first", inputSchema: { days: z.number().int().min(1).max(90).default(7) } },
     ({ days }) => result(() => recentLogs(notes, days, env.NOTES_TIMEZONE)));
   server.registerTool("complete_reminder", { description: "Mark a reminder done (e.g. the owner says they took their meds): logs it, stops that occurrence from notifying, and ticks a one-off's box. Use the note and text from list_reminders.", inputSchema: { note: z.string(), text: z.string() } },
