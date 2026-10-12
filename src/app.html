@@ -466,11 +466,11 @@ function render(md) {
   return out.join("");
 }
 /** Tick or untick task line `i` of a note and save. */
-async function setTask(name, content, i, done) {
+async function setTask(name, content, i, done, sha) {
   const lines = content.split("\n");
   lines[i] = lines[i].replace(/\[( |x|X)\]/, done ? "[x]" : "[ ]");
   const next = lines.join("\n");
-  await api("/note", { method: "PUT", body: { name, content: next } });
+  await api("/note", { method: "PUT", body: { name, content: next, sha } });
   return next;
 }
 
@@ -798,9 +798,12 @@ async function editor(name, category) {
   const backTo = folder === "goals" ? "#goals" : "#notes";
   const backLabel = folder === "goals" ? "Goals" : "Notes";
   let content = "";
+  let revision;
   if (!isNew) {
     main.innerHTML = '<p class="empty">Opening note…</p>';
-    content = (await api("/note?name=" + encodeURIComponent(name))).content;
+    const loaded = await api("/note?name=" + encodeURIComponent(name));
+    content = loaded.content;
+    revision = loaded.sha;
   }
 
   const read = () => {
@@ -815,12 +818,12 @@ async function editor(name, category) {
     $("#doc").onclick = e => { if (!e.target.closest("input, a, label")) edit(); };
     main.querySelectorAll("#doc input[data-line]").forEach(cb => cb.onchange = async () => {
       cb.disabled = true;
-      try { content = await setTask(name, content, +cb.dataset.line, cb.checked); toast(cb.checked ? "Checked off" : "Unchecked"); }
+      try { content = await setTask(name, content, +cb.dataset.line, cb.checked, revision); revision = (await api("/note?name=" + encodeURIComponent(name))).sha; toast(cb.checked ? "Checked off" : "Unchecked"); }
       catch (e) { handle(e); }
       read();
     });
-    $("#addrem").onclick = () => reminderSheet(name, async () => { content = (await api("/note?name=" + encodeURIComponent(name))).content; read(); });
-    if (isGoal) $("#addupd").onclick = () => progressSheet(name, content, next => { content = next; read(); });
+    $("#addrem").onclick = () => reminderSheet(name, async () => { const loaded = await api("/note?name=" + encodeURIComponent(name)); content = loaded.content; revision = loaded.sha; read(); });
+    if (isGoal) $("#addupd").onclick = () => progressSheet(name, content, next => { content = next; revision = undefined; read(); });
     $("#del").onclick = async () => {
       if (!confirm("Delete this note? Any reminders in it stop too.")) return;
       try { await api("/note?name=" + encodeURIComponent(name), { method: "DELETE" }); nextToast = "Note deleted"; location.hash = backTo; }
@@ -860,8 +863,8 @@ async function editor(name, category) {
           const res = await api("/note", { method: "POST", body: { content: next, category: $("#cat").value } });
           clearDirty(); allNotes = null; nextToast = savedMessage(res, "Saved"); location.hash = "#note/" + res.name;
         } else {
-          const res = await api("/note", { method: "PUT", body: { name, content: next } });
-          content = next; clearDirty(); read(); toast(savedMessage(res, "Saved"));
+          const res = await api("/note", { method: "PUT", body: { name, content: next, sha: revision } });
+          content = next; revision = (await api("/note?name=" + encodeURIComponent(name))).sha; clearDirty(); read(); toast(savedMessage(res, "Saved"));
         }
       } catch (err) { handle(err); $("#save").disabled = false; }
     };
