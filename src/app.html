@@ -443,6 +443,7 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
 .brief-actions .btn{flex:1;min-height:40px}
 #brief-preview{width:100%;margin-bottom:12px}
 .brief-out{white-space:pre-wrap;background:var(--sheet);border:1px solid var(--rule);border-radius:12px;padding:12px;font:inherit;font-size:14px;margin-top:12px}
+.journal-day{border:1px solid #8885;border-radius:16px;padding:16px;margin:12px 0}.journal-day-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}.journal-day-heading h3{margin:0}.journal-activities{line-height:1.8}.journal-reflection{white-space:pre-wrap;line-height:1.5}@media(max-width:700px){.tabs .advanced-tab{display:none}}
 </style>
 </head>
 <body>
@@ -466,25 +467,26 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
   </header>
   <nav class="tabs" id="tabs" hidden aria-label="Sections">
     <a href="#today">Today</a>
-    <a href="#notes">Notes</a>
-    <a href="#logs">Logs</a>
-    <a href="#goals">Goals</a>
+    <a href="#journal">Journal</a>
     <a href="#reminders">Tasks</a>
+    <a href="#notes">Memory</a>
+    <a href="#logs" class="advanced-tab">Logs</a>
+    <a href="#goals" class="advanced-tab">Goals</a>
     <a href="#settings" id="settingsTab" hidden>Settings</a>
   </nav>
   <main id="main" aria-live="polite"></main>
 </div>
 
 <form class="composer" id="composer" hidden autocomplete="off" data-collapsed="true">
-  <button class="composer-toggle" id="composer-toggle" type="button" aria-expanded="true" aria-controls="composer-fields"><span id="composer-label">Quick Add</span><span id="composer-chevron" aria-hidden="true">⌄</span></button>
+  <button class="composer-toggle" id="composer-toggle" type="button" aria-expanded="true" aria-controls="composer-fields"><span id="composer-label">Capture something</span><span id="composer-chevron" aria-hidden="true">⌄</span></button>
   <div class="in">
-    <div class="quick-modes" role="group" aria-label="Save as"><button type="button" data-quick-mode="note" aria-pressed="true">Note</button><button type="button" data-quick-mode="task" aria-pressed="false">Task</button><button type="button" data-quick-mode="log" aria-pressed="false">Log</button></div><div class="chips" id="chips" role="group" aria-label="Tags" hidden></div>
+    <div class="quick-modes" role="group" aria-label="Save as"><button type="button" data-quick-mode="note" aria-pressed="true">Thought</button><button type="button" data-quick-mode="task" aria-pressed="false">Task</button><button type="button" data-quick-mode="log" aria-pressed="false">Activity</button></div><div class="chips" id="chips" role="group" aria-label="Tags" hidden></div>
     <div class="row">
       <button type="button" class="timebtn" id="timebtn" hidden aria-label="Time: now. Tap to change">Now</button>
       <input type="time" id="when" hidden aria-label="Time">
       <label for="entry" style="position:absolute;left:-9999px">Log something</label>
       <input id="entry" name="entry" placeholder="Capture a thought…" enterkeyhint="send">
-      <button class="btn" id="logbtn" type="submit">Save note</button>
+      <button class="btn" id="logbtn" type="submit">Save thought</button>
     </div>
   </div>
 </form>
@@ -982,6 +984,19 @@ views.today = async () => {
 };
 
 let allNotes = null;
+views.journal = async () => {
+  $("#composer").hidden = true;
+  main.innerHTML = '<section class="notes-browser"><div class="notes-heading"><div><h2>Journal</h2><p class="muted">Your daily activities and reflections.</p></div><a class="btn" href="#logs">+ Log activity</a></div><div id="journal-days"><p class="empty">Loading journal…</p></div></section>';
+  const names = (await api("/notes")).filter(n => /^journal\/daily\/\d{4}-\d{2}-\d{2}\.md$/.test(n)).sort().reverse();
+  if (!names.length) { $("#journal-days").innerHTML = '<p class="empty">No daily entries yet. Log an activity to begin your journal.</p>'; return; }
+  const days = await Promise.all(names.slice(0, 30).map(async name => ({name, ...(await api("/note?name=" + encodeURIComponent(name)))})));
+  $("#journal-days").innerHTML = days.map(day => {
+    const date = day.name.slice("journal/daily/".length, -3);
+    const activities = day.content.split("\n").filter(line => /^- \d{2}:\d{2} /.test(line));
+    const reflection = day.content.replace(/<!-- daybook:activity:start -->[\s\S]*?<!-- daybook:activity:end -->/g, "").replace(/^# .*\n?/, "").trim();
+    return h`<article class="journal-day"><div class="journal-day-heading"><h3>${date}</h3><a href="#note/${day.name}">Open entry →</a></div>${reflection ? `<p class="journal-reflection">${reflection}</p>` : ""}${activities.length ? `<ul class="journal-activities">${activities.map(line => `<li>${line.slice(2)}</li>`).join("")}</ul>` : '<p class="muted">No activities recorded.</p>'}</article>`;
+  }).join("");
+};
 views.logs = async () => {
   $("#composer").hidden = true;
   main.innerHTML = h`<div class="setup logs-page">
@@ -1093,7 +1108,7 @@ views.inbox = async () => {
 };
 views.notes = async () => {
   main.innerHTML = h`<section class="notes-browser">
-    <div class="notes-heading"><div><h2>Notes</h2><p class="muted">Everything you've captured, in one place.</p></div><a class="btn" href="#new">+ New</a></div>
+    <div class="notes-heading"><div><h2>Memory</h2><p class="muted">Everything you've captured, searchable and yours.</p></div><a class="btn" href="#new">+ New</a></div>
     <label class="notes-search-wrap"><span class="sr-only">Search notes</span><input class="search" id="q" type="search" placeholder="Search titles and contents…" autocomplete="off"></label>
     <div class="notes-toolbar"><div class="notes-filters" id="notes-filters" role="group" aria-label="Filter notes"></div><a class="notes-inbox-link" href="#inbox">Review inbox →</a></div>
     <p class="notes-result-count muted" id="notes-count" aria-live="polite"></p>
@@ -1744,7 +1759,7 @@ function setQuickMode(mode) {
   $("#chips").hidden = mode !== "log";
   $("#timebtn").hidden = mode !== "log";
   $("#when").hidden = true;
-  $("#logbtn").textContent = mode === "note" ? "Save note" : mode === "task" ? "Add task" : "Log";
+  $("#logbtn").textContent = mode === "note" ? "Save thought" : mode === "task" ? "Add task" : "Log activity";
   $("#entry").placeholder = mode === "note" ? "Capture a thought…" : mode === "task" ? "What needs doing?" : "What happened?";
   $("#entry").focus();
 }
