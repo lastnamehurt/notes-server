@@ -128,8 +128,13 @@ try {
   await rpc("notifications/initialized", {}, true);
 
   const tools = (await rpc("tools/list", {})).tools.map(t => t.name).sort();
-  const expected = ["complete_reminder", "delete_note", "get_logs", "get_note", "list_notes", "list_reminders", "log", "save_note", "search_notes", "sync_notes", "update_note"];
+  const expected = ["check_health", "complete_reminder", "delete_note", "get_logs", "get_note", "list_notes", "list_reminders", "log", "save_note", "search_notes", "sync_notes", "update_note"];
   check(JSON.stringify(tools) === JSON.stringify(expected), `tools/list: all ${expected.length} tools (${tools.join(", ")})`);
+
+  const diagnostics = await call("check_health");
+  check(!diagnostics.error && diagnostics.data.checks?.some(c => c.id === "github"), "check_health returns shared diagnostics");
+  const webDiagnostics = await fetch(BASE + "/app/api/diagnostics");
+  check(webDiagnostics.status === 401, "Diagnostics require an authenticated session");
 
   const saved = await call("save_note", { content: "# Acceptance check\nmarker-7f3a\n- [ ] Water plants @2099-01-01 9am", category: "inbox" });
   check(!saved.error && /^inbox\/\d{4}-\d{2}-\d{2}-acceptance-check\.md$/.test(saved.data.name), "save_note creates a note: " + saved.text);

@@ -1,3 +1,4 @@
+import { runDiagnostics } from "./diagnostics";
 import OAuthProvider, { AuthorizationError, CimdFetchError } from "@cloudflare/workers-oauth-provider";
 import { McpServer } from "@modelcontextprotocol/server";
 import { createMcpHandler } from "agents/mcp/server";
@@ -42,6 +43,7 @@ function serverFor(env: Env): McpServer {
     try { return { content: [{ type: "text" as const, text: JSON.stringify(await fn()) }] }; }
     catch (e) { return { isError: true, content: [{ type: "text" as const, text: e instanceof Error ? e.message : "Operation failed" }] }; }
   };
+  server.registerTool("check_health", { description: "Run read-only diagnostics for GitHub, privacy, authentication, reminders and notifications", inputSchema: {} }, () => result(() => runDiagnostics(env)));
   server.registerTool("save_note", { description: "Create a Markdown note and commit it to GitHub. Lines like '- [ ] task @2026-10-14 9am' become phone reminders.", inputSchema: { content: z.string(), category: z.enum(CATEGORIES).default("inbox") } },
     ({ content, category }) => result(async () => scheduleNote(env, await notes.save(content, category), content)));
   server.registerTool("search_notes", { description: "Find notes containing all search words", inputSchema: { query: z.string() } },

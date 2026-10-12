@@ -37,6 +37,7 @@ export function startFakeGithub(port) {
     const send = (status, obj, headers = {}) => { res.writeHead(status, { "content-type": "application/json", ...headers }); res.end(JSON.stringify(obj ?? {})); };
     calls.push(req.method + " " + url.pathname);
     if (req.headers.authorization !== TOKEN) return send(401, { message: "Bad credentials" });
+    if (url.pathname === "/repos/me/notes") return send(200, { private: true, permissions: { push: true } });
     const m = /^\/repos\/me\/notes\/(contents|git\/trees|tarball)\/(.+)$/.exec(url.pathname);
     if (!m) return send(404, { message: "Not Found" });
     if (m[1] === "git/trees") return send(200, { truncated: false, tree: [...files.keys()].map(path => ({ path, type: "blob" })) });
