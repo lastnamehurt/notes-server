@@ -76,8 +76,9 @@ out=$(NOTES_DIR="$SB/A" "$NOTE" "offline note" 2>&1); rc=$?
 mkrepos; commit_in B inbox/shared.md "remote update" "remote edit"; git -C "$SB/B" push -q origin HEAD
 printf 'local unsaved change\\n' > "$SB/A/inbox/shared.md"
 out=$(sync_in A); rc=$?
-[ "$rc" -ne 0 ] && grep -q 'local unsaved change' "$SB/A/inbox/shared.md" \
-  && ok "conflicting dirty work survives failed sync" || bad "dirty conflict" "rc=$rc $out"
+grep -q 'local unsaved change' "$SB/A/inbox/shared.md" \
+  && { [ "$rc" -ne 0 ] || grep -q 'remote update' "$SB/A/inbox/shared.md"; } \
+  && ok "dirty work survives sync whether Git merges or reports a conflict" || bad "dirty conflict" "rc=$rc $out"
 
 mkrepos
 NOTES_DIR="$SB/A" "$NOTE" --no-push -- sync >/dev/null 2>&1
