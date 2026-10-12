@@ -68,8 +68,8 @@ try {
   check(/^\d+ due today · 1 do now$/.test(pushes[0]?.body || ""), "counts-only body: " + pushes[0]?.body);
   check((pushes[0]?.click || "").endsWith("/app#today"), "tapping opens Today: " + pushes[0]?.click);
   await page.click('[data-brief-test="morning"]');
-  await page.waitForSelector(".toast", { timeout: 5000 });
-  check(/Wait a minute/.test(await page.locator(".toast").last().textContent()), "a second test within a minute is refused");
+  const refused = await page.waitForFunction(() => [...document.querySelectorAll(".toast")].some(t => /Wait a minute/.test(t.textContent)), null, { timeout: 5000 }).then(() => true, () => false);
+  check(refused, "a second test within a minute is refused");
   check(pushes.length === 1, "and nothing more was sent");
   await page.locator("#brief-out").scrollIntoViewIfNeeded();
   await page.screenshot({ path: ROOT + "test-results/briefings-on.png", fullPage: false });

@@ -24,6 +24,7 @@ REMINDERS push a notification to the owner's phone. Any unchecked task line with
   - [ ] Renew car registration @2026-10-14 9am     one-off; time optional (9am default)
   - [ ] Take meds @daily 8am, 8pm                  repeating; also @weekdays, @weekends, @mon,wed,fri
 Times: 9am, 5:30pm or 17:30; several separated by commas. Checking the box ([x]), removing the line or deleting the note stops it. Past one-off times are ignored. Notifications have a Done button that records the item in that day's log.
+A task line may end with an ID like " ^t7k2q": it links the task to Apple Reminders. When editing a note, keep each ID at the end of its own line; never remove, change or copy one.
 
 BRIEFINGS: optional morning and evening push digests (overdue, due today, do-now, done, tomorrow), off by default. When the owner asks what's on today or how the day went, call prepare_briefing and narrate it briefly; when they ask to turn briefings on, off or change the time, call configure_briefings.
 

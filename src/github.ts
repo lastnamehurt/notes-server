@@ -11,7 +11,7 @@ export interface Env extends ReminderEnv {
   /** "true" enables OAuth dynamic client registration (local MCP acceptance test only). */
   ALLOW_CLIENT_REGISTRATION?: string;
   MCP_BEARER_TOKEN: string;
-  /** Separate read-only secret for Apple Shortcuts task export. */
+  /** Separate secret for the Apple Reminders Shortcut: the task feed and two-way sync (Daybook tasks only). */
   SHORTCUTS_TOKEN?: string;
   /** Friendlier name for MCP_BEARER_TOKEN, used by the Deploy to Cloudflare form. */
   PASSWORD?: string;
@@ -151,8 +151,17 @@ export class GithubNotes {
    * search, scans and log views cost the same few outside calls whether there are 10 notes or 10,000.
    */
   async snapshot():Promise<Map<string,string>> {
-    this.snap ??= (async () => {
-      const response = await fetch((this.env.GITHUB_API_URL || "https://api.github.com") + "/repos/" + this.env.NOTES_REPO.trim() + "/tarball/" + encodeURIComponent(this.branch), {
+    this.snap ??= this.archive(this.branch);
+    try { return await this.snap; } catch (e) { this.snap = undefined; throw e; }
+  }
+  /** Every note exactly as of one commit (no caching lag, unlike the branch archive). */
+  snapshotAt(commitSha:string):Promise<Map<string,string>> {
+    if (!/^[0-9a-f]{40}$/.test(commitSha)) throw new Error("Invalid commit");
+    return this.archive(commitSha);
+  }
+  private archive(ref:string):Promise<Map<string,string>> {
+    return (async () => {
+      const response = await fetch((this.env.GITHUB_API_URL || "https://api.github.com") + "/repos/" + this.env.NOTES_REPO.trim() + "/tarball/" + encodeURIComponent(ref), {
         headers: { "Authorization": "Bearer " + this.env.GITHUB_TOKEN, "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "personal-notes-mcp" }
       });
       // GitHub can return 404 for inaccessible private repositories or missing branches.
@@ -166,7 +175,26 @@ export class GithubNotes {
       for (const [path, content] of files) if (validPath(path)) notes.set(path, content);
       return notes;
     })();
-    try { return await this.snap; } catch (e) { this.snap = undefined; throw e; }
+  }
+  /** The branch's latest commit, or null for an empty repository. */
+  async headSha():Promise<string|null> {
+    try { return (await this.api("/git/ref/heads/" + encodeURIComponent(this.branch))).object.sha; }
+    catch (e) { if (e instanceof Error && /^(GitHub conflict|Note or notes repository not found)/.test(e.message)) return null; throw e; }
+  }
+  /**
+   * Write several notes as one commit on top of `parent`. The branch only moves if it still points at
+   * `parent`; otherwise GitHub refuses and this throws "GitHub conflict", so the caller can re-read and retry.
+   */
+  async commitFiles(parent:string, files:Map<string,string>, message:string):Promise<string> {
+    for (const [name, content] of files) { if (!validPath(name)) throw new Error("Invalid note path"); validateContent(content); }
+    const json = (body:unknown):RequestInit => ({method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    const { tree } = await this.api("/git/commits/" + parent);
+    const next = await this.api("/git/trees", json({ base_tree: tree.sha,
+      tree: [...files].map(([path, content]) => ({ path, mode: "100644", type: "blob", content: content.trimEnd() + "\n" })) }));
+    const commit = await this.api("/git/commits", json({ message, tree: next.sha, parents: [parent] }));
+    await this.api("/git/refs/heads/" + encodeURIComponent(this.branch), { ...json({ sha: commit.sha, force: false }), method: "PATCH" });
+    this.snap = undefined;
+    return commit.sha;
   }
   /** Notes with their content, newest name first; optionally only under `prefix`, or skipping `skipPrefix`. */
   async all(skipPrefix?:string, prefix?:string):Promise<{name:string;content:string}[]> {

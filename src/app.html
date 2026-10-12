@@ -653,8 +653,9 @@ function render(md) {
     if ((m = /^\s*[-*]\s+\[( |x|X)\]\s+(.*)$/.exec(line))) {
       flush(); if (!list) { out.push("<ul>"); list = true; }
       const checked = m[1] !== " ";
-      const s = SCHED.exec(m[2]);
-      const text = s ? m[2].slice(0, s.index) : m[2];
+      const body = m[2].replace(/\s+\^[a-z0-9]{4,12}\s*$/, ""); // hide the sync task ID
+      const s = SCHED.exec(body);
+      const text = s ? body.slice(0, s.index) : body;
       out.push(`<li class="task${checked ? " checked" : ""}"><label><input type="checkbox" data-line="${i}" ${checked ? "checked" : ""}><span>${inline(text)}${s ? ` <span class="when">${esc(niceSched(s[1]))}</span>` : ""}</span></label></li>`);
       return;
     }
