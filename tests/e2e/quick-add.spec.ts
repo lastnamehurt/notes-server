@@ -37,4 +37,19 @@ test.describe('Quick Add on a configured Daybook instance', () => {
     await page.goto('/app#reminders');
     await expect(page.getByText(unique + '-task')).toBeVisible();
   });
+
+  test('a task can get a date in one tap and lands under Scheduled', async ({ page }) => {
+    const unique = 'E2E-' + Date.now() + '-tomorrow';
+    await page.locator('[data-quick-mode="task"]').click();
+    await expect(page.locator('[data-quick-when="none"]')).toHaveAttribute('aria-pressed', 'true');
+    await page.locator('[data-quick-when="tomorrow"]').click();
+    await page.locator('#entry').fill(unique);
+    await page.locator('#logbtn').click();
+    await expect(page.locator('.toast').filter({ hasText: 'Added for tomorrow' })).toBeVisible();
+    await expect(page.locator('#timebtn')).toBeHidden();
+    await page.goto('/app#reminders');
+    await expect(page.locator('.rem').filter({ hasText: unique })).toBeVisible();
+    // Stored codes like @2026-10-13 or @priority:plan never show on the Tasks page.
+    await expect(page.locator('.unified-task, .rem').filter({ hasText: /@\d{4}-\d{2}-\d{2}|@priority:|@daily|@weekdays/ })).toHaveCount(0);
+  });
 });
