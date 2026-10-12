@@ -632,7 +632,7 @@ async function api(path, opts = {}) {
 function savedMessage(res, base) {
   const n = res && res.reminders ? res.reminders.length : 0;
   let msg = base + (n ? ", " + n + " reminder" + (n > 1 ? "s" : "") + " set" : "");
-  if (res && res.warning) msg += /NTFY_TOPIC/.test(res.warning) ? ". Phone notifications are off (turn them on in Setup)." : ". " + res.warning;
+  if (res && res.warning) msg += /NTFY_TOPIC/.test(res.warning) ? ". Phone notifications are off (turn them on in Settings)." : ". " + res.warning;
   return msg;
 }
 
@@ -951,7 +951,7 @@ views.today = async () => {
     html += '<p class="later">Coming up</p><ol class="rail">' + later.map(r =>
       h`<li class="ev up"><time>${longDay(r.at).replace(/^\w+, /, "")}</time><div><a class="what" href="#note/${r.note}" style="color:inherit;text-decoration:none">${r.text}</a><span class="sub">${fmt12(hhmm(r.at))}</span></div></li>`).join("") + "</ol>";
   }
-  if (!cfg.push) html += `<p class="hint">Reminders show here, but phone notifications are off.${cfg.canSetup ? ' Turn them on in <a href="#settings">Setup</a>.' : ""}</p>`;
+  if (!cfg.push) html += `<p class="hint">Reminders show here, but phone notifications are off.${cfg.canSetup ? ' Turn them on in <a href="#settings">Settings</a>.' : ""}</p>`;
   // Presentation only: preserve the raw @date tokens in Markdown for MCP and reminders.
   const taskDate = text => {
     // Accept @YYYY-MM-DD HH:mm (24-hour) and @YYYY-MM-DD h:mm am/pm.
@@ -1525,11 +1525,6 @@ views.setup = async () => {
     <p class="lede">${first ? "About 5 minutes. Your notes are saved to your own private GitHub repository; nobody else can see them." : "Change where notes are saved, your time zone, or phone notifications."}</p>
 
     ${raw(githubBlock)}
-    <section class="step" id="diagnostics"><h3>System diagnostics</h3>
-      <p>Check your private repository, authentication, reminders and notification setup. Checks do not modify your notes.</p>
-      <button class="btn quiet" id="run-diagnostics" type="button">Run diagnostics</button>
-      <div id="diagnostics-results" role="status" aria-live="polite"></div>
-    </section>
     ${raw(cfg.configured ? `<section class="step" id="briefings"><h3>Daily briefings</h3>
       <p>A short push each morning and evening: what's overdue, due today, done, and coming tomorrow. Skipped on days with nothing to report.</p>
       <div id="brief-body"><p class="muted">Loading…</p></div></section>` : "")}
@@ -1555,6 +1550,11 @@ views.setup = async () => {
 
     ${raw(first ? "" : assistantBlock(location.origin + "/mcp"))}
 
+    ${raw(first ? "" : `<section class="step" id="diagnostics"><h3>Check everything is working</h3>
+      <p>Checks your notes repository, sign-in, reminders and notifications. Nothing is changed.</p>
+      <button class="btn quiet" id="run-diagnostics" type="button">Run checks</button>
+      <div id="diagnostics-results" role="status" aria-live="polite"></div>
+    </section>`)}
     <button class="btn" id="save" type="button" style="width:100%;padding:15px">Save and finish</button>
     <p class="err" id="saveerr" role="alert"></p>
     <div id="after"></div>
@@ -1639,7 +1639,7 @@ views.setup = async () => {
         ntfyTopic: $("#usentfy").checked && !(pushoverUser && pushoverToken) ? topic : "",
         pushoverUser, pushoverToken } });
       cfg = await api("/config"); drawDate(); $("#tabs").hidden = false; $("#settingsTab").hidden = !cfg.configured;
-      showDone(mcpUrl);
+      showDone(location.origin + "/mcp");
     } catch (e) { if (e instanceof Locked) return showLock(); $("#saveerr").textContent = e.message; }
     b.disabled = false; b.textContent = "Save and finish";
   };
@@ -1660,31 +1660,6 @@ function showDone(mcpUrl) {
       <div class="copyrow"><code>${location.origin + "/app"}</code><button class="btn quiet" id="copyapp" type="button">Copy</button></div>
       <p>On your phone, put it on your home screen. iPhone: tap <b>Share</b>, then <b>Add to Home Screen</b>. Android: tap <b>⋮</b>, then <b>Add to Home screen</b>.</p></section>
     <a class="btn a-btn" href="#today" style="width:100%;text-align:center;padding:15px">Open my notes</a></div>`;
-  // Delegate from the persistent main container so Settings re-renders cannot
-  // leave a visible diagnostics button without a click handler.
-  if (!main.dataset.diagnosticsWired) {
-    main.dataset.diagnosticsWired = "true";
-    main.addEventListener("click", async event => {
-      const button = event.target.closest("#run-diagnostics");
-      if (!button || !main.contains(button) || button.disabled) return;
-      const output = main.querySelector("#diagnostics-results");
-      if (!output) return;
-      button.disabled = true;
-      button.textContent = "Checking…";
-      output.textContent = "Checking your system…";
-      try {
-        const report = await api("/diagnostics");
-        if (!Array.isArray(report.checks)) throw new Error("Unexpected diagnostics response");
-        output.innerHTML = report.checks.map(item =>
-          h`<p><b>${item.status === "pass" ? "✓" : item.status === "fail" ? "✕" : "!"} ${item.id}</b>: ${item.message}</p>`).join("") || "<p>No checks returned.</p>";
-      } catch (error) {
-        output.textContent = "Diagnostics failed: " + (error.message || String(error));
-      } finally {
-        button.disabled = false;
-        button.textContent = "Run diagnostics";
-      }
-    });
-  }
   $("#copymcp").onclick = e => copy(mcpUrl, e.target);
   wireConnectButtons(main, mcpUrl);
   $("#copyapp").onclick = e => copy(location.origin + "/app", e.target);
@@ -1697,6 +1672,30 @@ function showDone(mcpUrl) {
   };
 }
 views.settings = views.setup;
+
+// "Run checks" in Settings: delegated from the persistent main container, wired once at load,
+// so the button works however Settings was reached and survives re-renders.
+main.addEventListener("click", async event => {
+  const button = event.target.closest("#run-diagnostics");
+  if (!button || !main.contains(button) || button.disabled) return;
+  const output = main.querySelector("#diagnostics-results");
+  if (!output) return;
+  button.disabled = true;
+  button.textContent = "Checking…";
+  output.textContent = "Checking your system…";
+  try {
+    const report = await api("/diagnostics");
+    if (!Array.isArray(report.checks)) throw new Error("Unexpected diagnostics response");
+    output.innerHTML = report.checks.map(item =>
+      h`<p><b>${item.status === "pass" ? "✓" : item.status === "fail" ? "✕" : "!"} ${item.id}</b>: ${item.message}</p>`).join("") || "<p>No checks returned.</p>";
+  } catch (error) {
+    output.textContent = "Diagnostics failed: " + (error.message || String(error));
+  } finally {
+    button.disabled = false;
+    button.textContent = "Run checks";
+  }
+});
+
 
 /* ---------- Daily briefings (Settings) ---------- */
 const BRIEF_LABEL = { morning: "Morning briefing", evening: "Evening wrap-up" };
@@ -1763,7 +1762,7 @@ async function showLock(message) {
   main.innerHTML = h`<form class="lock" id="lockform"><p>Enter the password you chose when you set up the app.</p>
     <label for="key">Password</label><input id="key" type="password" autocomplete="current-password" required>
     <button class="btn" type="submit">Unlock</button>${err}
-    <p class="hint">Forgot it? In the Cloudflare dashboard, open your Worker → Settings → Variables and Secrets, and set a new MCP_BEARER_TOKEN (or PASSWORD).</p></form>`;
+    <p class="hint">Forgot it? <a href="https://github.com/lastnamehurt/notes-server#good-to-know" target="_blank" rel="noopener">Here's how to set a new one</a>.</p></form>`;
   $("#key").focus();
   $("#lockform").onsubmit = async e => {
     e.preventDefault();

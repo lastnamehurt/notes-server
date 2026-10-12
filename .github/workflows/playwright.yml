@@ -37,6 +37,9 @@ jobs:
           exit 1
       - name: Run browser acceptance
         run: npm run test:e2e
+      - name: First-run onboarding walk-through (phone)
+        if: ${{ !inputs.base_url }}
+        run: npm run test:onboarding
       - name: Upload failure evidence
         if: always()
         uses: actions/upload-artifact@v4

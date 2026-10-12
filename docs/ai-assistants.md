@@ -15,7 +15,7 @@ Status means what we have actually checked. "Reported" means a third-party guide
 ## Connecting Claude
 
 1. Open [claude.ai](https://claude.ai) in a browser and go to **Settings → Connectors**.
-2. Choose **Add custom connector**. Name it **Notes** and paste your app's address with `/mcp` on the end, for example `https://personal-notes-mcp.yourname.workers.dev/mcp`.
+2. Choose **Add custom connector**. Name it **Daybook** and paste your app's address with `/mcp` on the end, for example `https://personal-notes-mcp.yourname.workers.dev/mcp`.
 3. A sign-in page opens. Enter your password and tap **Allow**.
 
 The Claude connector still asks for the password, even when the phone app uses GitHub sign-in.
