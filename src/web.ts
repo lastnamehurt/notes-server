@@ -1,3 +1,4 @@
+import { runDiagnostics } from "./diagnostics";
 // Web app at /app: a phone-first UI over the same notes, logs and reminders the MCP tools use.
 // Unlocked with MCP_BEARER_TOKEN; the session is an HMAC-signed, HttpOnly, SameSite=Strict cookie.
 
@@ -209,6 +210,7 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
         await rescan(env);
         return json({ restored });
       }
+      case "GET /diagnostics": return json(await runDiagnostics(env));
       case "GET /health": {
         const [github, pushError] = await Promise.allSettled([notes.list(), scheduler(env).lastError()]);
         return json({ github: github.status === "fulfilled" ? "ok" : "error",
