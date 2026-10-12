@@ -1,10 +1,14 @@
-# Your own notes app, connected to Claude
+# Daybook — Your own private notes app
 
 Ask Claude to remember things, set reminders that buzz your phone, and log meals, meds and moods. Everything is saved to **your own private space**: nobody else can read it, including whoever sent you this link.
 
 It's free, takes about 15 minutes, and needs no coding. You'll tap through a few websites; this page tells you exactly what to tap.
 
 This repository also includes the **`note` / `notes` command-line client** for your local notes clone. See [CLI installation and usage](CLI.md).
+
+**[🌐 Daybook website](https://lastnamehurt.github.io/notes-server/)** · **[🚀 Get started](https://deploy.workers.cloudflare.com/?url=https://github.com/lastnamehurt/notes-server)**
+
+New here? Start with the [Daybook website](https://lastnamehurt.github.io/notes-server/) for a quick introduction, or follow the complete setup steps below.
 
 ## What you need
 
