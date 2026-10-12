@@ -296,8 +296,7 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
     <a href="#notes">Notes</a>
     <a href="#goals">Goals</a>
     <a href="#reminders">Reminders</a>
-    <a href="#connect" id="connectTab" hidden>Connect</a>
-    <a href="#settings" id="settingsTab" hidden>Setup</a>
+    <a href="#settings" id="settingsTab" hidden>Settings</a>
   </nav>
   <main id="main" aria-live="polite"></main>
 </div>
@@ -1011,7 +1010,7 @@ views.setup = async () => {
       <select id="tz">${raw(zones().map(z => h`<option ${z === tz ? "selected" : ""}>${z}</option>`).join(""))}</select></section>
 
     <section class="step" id="s4"><h3><span class="n">${n.push}</span>Reminders on your phone</h3>
-      <p class="muted">Optional and free. You can do this later in Setup.</p>
+      <p class="muted">Optional and free. You can do this later in Settings.</p>
       <ol>
         <li>Install the free <b>ntfy</b> app: <a href="${NTFY_IOS}" target="_blank" rel="noopener">iPhone</a> or <a href="${NTFY_ANDROID}" target="_blank" rel="noopener">Android</a>. Allow notifications when it asks.</li>
         <li>In ntfy, tap <b>+</b> and paste this name. It's long so nobody can guess it; keep it private.</li>
@@ -1022,6 +1021,8 @@ views.setup = async () => {
         <p class="muted">Pushover is a paid app ($5 once). Enter your user key and an application token from pushover.net.</p>
         <input type="text" id="pouser" placeholder="User key" autocomplete="off">
         <input type="text" id="potoken" placeholder="Application API token" autocomplete="off"></details></section>
+
+    ${raw(first ? "" : assistantBlock(location.origin + "/mcp"))}
 
     <button class="btn" id="save" type="button" style="width:100%;padding:15px">Save and finish</button>
     <p class="err" id="saveerr" role="alert"></p>
@@ -1092,6 +1093,7 @@ views.setup = async () => {
   $("#check").onclick = check;
   $("#tok").addEventListener("paste", () => setTimeout(check, 50));
   if (prev.hasToken) check();
+  if (!first) wireAssistant(location.origin + "/mcp");
   $("#copytopic").onclick = e => copy(topic, e.target);
 
 
@@ -1104,7 +1106,7 @@ views.setup = async () => {
         token: $("#tok") ? $("#tok").value.trim() : "", repo: chosenRepo, timezone: $("#tz").value,
         ntfyTopic: $("#usentfy").checked && !(pushoverUser && pushoverToken) ? topic : "",
         pushoverUser, pushoverToken } });
-      cfg = await api("/config"); drawDate(); $("#tabs").hidden = false; $("#settingsTab").hidden = !cfg.canSetup; $("#connectTab").hidden = !cfg.configured;
+      cfg = await api("/config"); drawDate(); $("#tabs").hidden = false; $("#settingsTab").hidden = !cfg.configured;
       showDone(mcpUrl);
     } catch (e) { if (e instanceof Locked) return showLock(); $("#saveerr").textContent = e.message; }
     b.disabled = false; b.textContent = "Save and finish";
@@ -1187,7 +1189,8 @@ async function startGithubLogin() {
   const res = await fetch("/app/login/github/start", { method: "POST" });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) { button.disabled = false; return showLock(body.error || "Couldn't reach GitHub. Try again."); }
-  $("#ghcode").innerHTML = h`<p>On GitHub, open <a href="${body.verificationUri}" target="_blank" rel="noopener">${body.verificationUri}</a> and enter <b>${body.userCode}</b>. Then come back here.</p>`;
+  $("#ghcode").innerHTML = h`<p>Copy this code, then open GitHub to authorize the sign-in.</p><div class="copyrow"><code class="ghcode">${body.userCode}</code><button class="btn quiet" type="button" id="copy-login-code">Copy code</button></div><p><a class="btn quiet a-btn" href="${body.verificationUri}" target="_blank" rel="noopener">Open GitHub</a></p><p class="muted">If GitHub opens in this tab, return here after approving. Sign-in will continue automatically.</p>`;
+  $("#copy-login-code").onclick = e => copy(body.userCode, e.currentTarget);
   pollGithubLogin(body.deviceCode, body.interval);
 }
 async function pollGithubLogin(deviceCode, interval) {
@@ -1253,7 +1256,7 @@ async function start() {
   cfg = await api("/config");
   drawDate();
   $("#tabs").hidden = !cfg.configured; $("#lockbtn").hidden = false;
-  $("#settingsTab").hidden = !cfg.canSetup; $("#connectTab").hidden = !cfg.configured;
+  $("#settingsTab").hidden = !cfg.configured;
 }
 
 /* ---------- Composer ---------- */
