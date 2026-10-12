@@ -50,8 +50,8 @@ function serverFor(env: Env): McpServer {
     () => result(() => notes.list()));
   server.registerTool("get_note", { description: "Read a Markdown note", inputSchema: { name: z.string() } },
     ({ name }) => result(async () => (await notes.get(name)).content));
-  server.registerTool("update_note", { description: "Replace note contents and commit", inputSchema: { name: z.string(), content: z.string() } },
-    ({ name, content }) => result(async () => scheduleNote(env, await notes.update(name, content), content)));
+  server.registerTool("update_note", { description: "Replace note contents and commit", inputSchema: { name: z.string(), content: z.string(), expected_sha: z.string().optional() } },
+    ({ name, content, expected_sha }) => result(async () => scheduleNote(env, await notes.update(name, content, expected_sha), content)));
   server.registerTool("delete_note", { description: "Delete a note and commit", inputSchema: { name: z.string() } },
     ({ name }) => result(async () => { await notes.delete(name); await scheduler(env).removeNote(name); return name; }));
   server.registerTool("log", { description: "Add a timestamped entry to today's log (food, drink, meds, exercise, mood...). Tag with #food #drink #med etc. Optional date YYYY-MM-DD and time HH:MM for past items.", inputSchema: { entry: z.string(), date: z.string().optional(), time: z.string().optional() } },
