@@ -6,7 +6,7 @@ import { runDiagnostics } from "./diagnostics";
 // Unlocked with MCP_BEARER_TOKEN; the session is an HMAC-signed, HttpOnly, SameSite=Strict cookie.
 
 import { GithubNotes, CATEGORIES, type Category, type Env } from "./github";
-import { appendLog, recentLogs, editLog } from "./log";
+import { appendLog, recentLogs, editLog, journalPath, journalWithActivity, LOG_PREFIX } from "./log";
 import { scheduler, scheduleNote, loadSettings, saveSettings, rescan, checkPassword, completeReminder, addReminder, startOfToday, effectiveEnv } from "./core";
 import { applySettings, notesConfigured, type Settings } from "./settings";
 import { listRepos, prepareRepo, startDeviceFlow, pollDeviceFlow, ensureNotesRepo, githubClientId, githubLogin, ownsNotesRepo } from "./setup";
@@ -322,6 +322,51 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
         return json(await appendLog(notes, entry, { date, time, timeZone: env.NOTES_TIMEZONE }));
       }
       case "GET /logs": return json(await recentLogs(notes, Number(url.searchParams.get("days") ?? 7), env.NOTES_TIMEZONE));
+      case "GET /journal/backfill": {
+        const logs = (await notes.all(undefined, LOG_PREFIX))
+          .filter(n => /^journal\/log\/\d{4}-\d{2}-\d{2}\.md$/.test(n.name))
+          .sort((a, b) => a.name.localeCompare(b.name));
+        const journals = new Map((await notes.all(undefined, "journal/daily/")).map(n => [n.name, n.content]));
+        const pending = logs.filter(n => {
+          const date = n.name.slice(LOG_PREFIX.length, -3);
+          const current = journals.get(journalPath(date)) ?? null;
+          return current !== journalWithActivity(current, date, n.content);
+        });
+        return json({ total: logs.length, pending: pending.length, dates: pending.map(n => n.name.slice(LOG_PREFIX.length, -3)) });
+      }
+      case "POST /journal/backfill": {
+        const { dates } = await request.json<{ dates?: string[] }>();
+        if (!Array.isArray(dates) || dates.length === 0 || dates.length > 10 ||
+            dates.some(d => typeof d !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(d)) ||
+            new Set(dates).size !== dates.length) return fail("Choose 1–10 distinct journal dates", 400);
+        const results: { date: string; status: string; error?: string }[] = [];
+        for (const date of dates) {
+          try {
+            const source = await notes.get(LOG_PREFIX + date + ".md");
+            const path = journalPath(date);
+            let status = "unchanged";
+            for (let attempt = 0; attempt < 3; attempt++) {
+              let current: { content: string; sha: string } | null = null;
+              try { current = await notes.get(path); }
+              catch (e) { if (!(e instanceof Error && e.message.startsWith("Note or notes repository not found"))) throw e; }
+              const next = journalWithActivity(current?.content ?? null, date, source.content);
+              if (current?.content === next) break;
+              try {
+                await notes.put(path, next, current?.sha);
+                status = current ? "updated" : "created";
+                break;
+              } catch (e) {
+                if (!(e instanceof Error && e.message.startsWith("GitHub conflict")) || attempt === 2) throw e;
+              }
+            }
+            results.push({ date, status });
+          } catch (e) {
+            results.push({ date, status: "failed", error: e instanceof Error ? e.message : "Unknown error" });
+          }
+        }
+        return json({ results });
+      }
+
       case "GET /reminders": {
         // Upcoming, plus what already went off today and what was marked done, so Today can show both.
         const since = startOfToday(env);
