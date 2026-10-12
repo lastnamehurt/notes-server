@@ -175,15 +175,19 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
     const notes = new GithubNotes(env);
     switch (route) {
       case "GET /notes": return json(await notes.list());
-      case "GET /note": return json({ name: url.searchParams.get("name"), content: (await notes.get(url.searchParams.get("name") ?? "")).content });
+      case "GET /note": {
+        const name = url.searchParams.get("name") ?? "";
+        const { content, sha } = await notes.get(name);
+        return json({ name, content, sha });
+      }
       case "POST /note": {
         const { content, category } = await request.json<{ content: string; category: string }>();
         if (!CATEGORIES.includes(category as Category)) return fail("Pick a folder for the note");
         return json(await scheduleNote(env, await notes.save(content, category as Category), content));
       }
       case "PUT /note": {
-        const { name, content } = await request.json<{ name: string; content: string }>();
-        return json(await scheduleNote(env, await notes.update(name, content), content));
+        const { name, content, sha } = await request.json<{ name: string; content: string; sha?: string }>();
+        return json(await scheduleNote(env, await notes.update(name, content, sha), content));
       }
       case "DELETE /note": {
         const name = url.searchParams.get("name") ?? "";
