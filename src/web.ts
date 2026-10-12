@@ -236,7 +236,7 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
         const path = typePath(type);
         try { await notes.get(path); return fail("Log type already exists", 409); }
         catch (e) { if (!(e instanceof Error && e.message.startsWith("Note or notes repository not found"))) throw e; }
-        await notes.put(path, "# " + type + "\\n");
+        await notes.put(path, "# " + type + "\n");
         return json({name:type});
       }
       case "POST /typed-log": {
