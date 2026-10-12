@@ -205,7 +205,7 @@ h2.group b { color: var(--ink); }
 .log-to-task,.log-to-note{border:1px solid var(--rule);border-radius:9px;background:var(--sheet);color:var(--ink-2);font:inherit;font-size:12px;padding:7px 9px;flex-shrink:0}
 .inbox-item{padding:16px 0;border-bottom:1px solid var(--rule)}.inbox-item>a{color:var(--ink);text-decoration:none}.inbox-item p{font-size:14px;color:var(--ink-2);white-space:pre-wrap;overflow-wrap:anywhere}.inbox-actions{display:flex;gap:8px;flex-wrap:wrap}.inbox-actions button{border:1px solid var(--rule);background:var(--sheet);color:var(--ink);padding:10px 12px;border-radius:10px;font:inherit;font-size:13px;min-height:42px}.inbox-actions button:disabled{opacity:.5}
 .unified-task{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--rule)}.unified-task>a{flex:1;min-width:0;overflow-wrap:anywhere;color:var(--ink)}.unified-task .task-priority{max-width:105px}.task-done{background:var(--sheet);color:var(--ink);border:1px solid var(--rule);border-radius:9px;padding:9px}.task-group h4{margin:14px 0 4px}@media(max-width:420px){.unified-task{flex-wrap:wrap}.unified-task>a{flex-basis:100%}}
-.quick-modes{display:flex;gap:6px;margin-bottom:8px}.quick-modes button{flex:1;border:1px solid var(--rule);border-radius:10px;background:var(--sheet);color:var(--ink);padding:9px;font:inherit}.quick-modes button[aria-pressed="true"]{background:var(--mark);color:white;border-color:var(--mark)}
+.quick-modes{display:flex;gap:6px;margin-bottom:8px}.quick-modes button{flex:1;border:1px solid var(--rule);border-radius:10px;background:var(--sheet);color:var(--ink);padding:9px;font:inherit}.quick-modes button[aria-pressed="true"]{background:var(--mark);color:var(--mark-ink);border-color:var(--mark);font-weight:700}
 /* Today mobile density: actions remain available without dominating the timeline. */
 .rail .ev{grid-template-columns:58px minmax(0,1fr) auto;column-gap:14px;align-items:center;padding:11px 0;min-height:42px}
 .rail .ev::after{left:65px;top:19px;width:8px;height:8px}
@@ -444,6 +444,19 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
 #brief-preview{width:100%;margin-bottom:12px}
 .brief-out{white-space:pre-wrap;background:var(--sheet);border:1px solid var(--rule);border-radius:12px;padding:12px;font:inherit;font-size:14px;margin-top:12px}
 .journal-day{border:1px solid #8885;border-radius:16px;padding:16px;margin:12px 0}.journal-day-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}.journal-day-heading h3{margin:0}.journal-activities{line-height:1.8}.journal-reflection{white-space:pre-wrap;line-height:1.5}@media(max-width:700px){.tabs .advanced-tab{display:none}}
+/* Add a task form: wrapping single-choice buttons */
+.task-form fieldset.pick{border:0;padding:0;margin:0 0 14px}
+.task-form legend{font-weight:600;margin-bottom:8px;padding:0}
+.choice{display:flex;flex-wrap:wrap;gap:8px}
+.choice button{min-height:42px;padding:8px 14px;border:1.5px solid var(--rule);border-radius:999px;background:var(--sheet);color:var(--ink);font:inherit;font-weight:600}
+.choice button[aria-pressed="true"]{background:var(--mark);border-color:var(--mark);color:var(--mark-ink)}
+.task-hint{margin:-4px 0 14px;font-size:14px}
+#task-when{margin-bottom:8px;flex-wrap:wrap;overflow:visible}
+.unified-task .task-priority{flex:1 1 140px;min-width:0;max-width:220px}.unified-task .task-done{flex:none;min-height:42px;padding:9px 16px}
+.pri-badge{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--sheet);color:var(--mark);border:1px solid var(--rule);vertical-align:middle}
+.unified-task .when{font-size:13px;color:var(--mark);font-weight:600;white-space:nowrap}
+button.today-focus-dot{background:none;border:0;padding:0;min-width:44px;min-height:44px;display:grid;place-items:center;cursor:pointer;flex:none;line-height:1}
+button.today-focus-dot:disabled{color:var(--mark)}
 </style>
 </head>
 <body>
@@ -480,7 +493,7 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
 <form class="composer" id="composer" hidden autocomplete="off" data-collapsed="true">
   <button class="composer-toggle" id="composer-toggle" type="button" aria-expanded="true" aria-controls="composer-fields"><span id="composer-label">Capture something</span><span id="composer-chevron" aria-hidden="true">⌄</span></button>
   <div class="in">
-    <div class="quick-modes" role="group" aria-label="Save as"><button type="button" data-quick-mode="note" aria-pressed="true">Thought</button><button type="button" data-quick-mode="task" aria-pressed="false">Task</button><button type="button" data-quick-mode="log" aria-pressed="false">Activity</button></div><div class="chips" id="chips" role="group" aria-label="Tags" hidden></div>
+    <div class="quick-modes" role="group" aria-label="Save as"><button type="button" data-quick-mode="note" aria-pressed="true">Thought</button><button type="button" data-quick-mode="task" aria-pressed="false">Task</button><button type="button" data-quick-mode="log" aria-pressed="false">Activity</button></div><div class="chips" id="chips" role="group" aria-label="Tags" hidden></div><div class="chips" id="task-when" role="group" aria-label="When" hidden><button type="button" class="chip" data-quick-when="none" aria-pressed="true">No date</button><button type="button" class="chip" data-quick-when="today" aria-pressed="false">Today</button><button type="button" class="chip" data-quick-when="tomorrow" aria-pressed="false">Tomorrow</button><button type="button" class="chip" data-quick-when="more" aria-pressed="false">More…</button></div>
     <div class="row">
       <button type="button" class="timebtn" id="timebtn" hidden aria-label="Time: now. Tap to change">Now</button>
       <input type="time" id="when" hidden aria-label="Time">
@@ -645,6 +658,15 @@ function niceSched(spec) {
     : ({ daily: "daily", everyday: "daily", weekdays: "weekdays", weekends: "weekends" }[when.toLowerCase()] || when.replace(/,/g, ", "));
   return day + (t ? ", " + t : "");
 }
+const PRIORITY_LABEL = { do: "Do now", plan: "Plan", delegate: "Handle later", someday: "Someday" };
+/** A task's words without the stored codes, and its schedule in plain words: "Call airline" + "Oct 12, 11:30pm". */
+function taskParts(text) {
+  let body = text.replace(/\s+\^[a-z0-9]{4,12}\s*$/, "");
+  const p = /(?:^|\s)@priority:(do|plan|delegate|someday)\b/i.exec(body);
+  if (p) body = (body.slice(0, p.index) + body.slice(p.index + p[0].length)).trim();
+  const s = SCHED.exec(body);
+  return { title: s ? body.slice(0, s.index).trim() : body.trim(), when: s ? niceSched(s[1]) : "", priority: p ? p[1].toLowerCase() : "" };
+}
 function render(md) {
   const out = []; let list = false; let para = [];
   const flush = () => { if (para.length) { out.push("<p>" + para.map(inline).join("<br>") + "</p>"); para = []; } };
@@ -655,10 +677,9 @@ function render(md) {
     if ((m = /^\s*[-*]\s+\[( |x|X)\]\s+(.*)$/.exec(line))) {
       flush(); if (!list) { out.push("<ul>"); list = true; }
       const checked = m[1] !== " ";
-      const body = m[2].replace(/\s+\^[a-z0-9]{4,12}\s*$/, ""); // hide the sync task ID
-      const s = SCHED.exec(body);
-      const text = s ? body.slice(0, s.index) : body;
-      out.push(`<li class="task${checked ? " checked" : ""}"><label><input type="checkbox" data-line="${i}" ${checked ? "checked" : ""}><span>${inline(text)}${s ? ` <span class="when">${esc(niceSched(s[1]))}</span>` : ""}</span></label></li>`);
+      // Show the task's words with its date and priority as plain labels, never the stored codes.
+      const t = taskParts(m[2]);
+      out.push(`<li class="task${checked ? " checked" : ""}"><label><input type="checkbox" data-line="${i}" ${checked ? "checked" : ""}><span>${inline(t.title)}${t.when ? ` <span class="when">${esc(t.when)}</span>` : ""}${t.priority ? ` <span class="pri-badge">${esc(PRIORITY_LABEL[t.priority])}</span>` : ""}</span></label></li>`);
       return;
     }
     if ((m = /^\s*[-*]\s+(.*)$/.exec(line))) { flush(); if (!list) { out.push("<ul>"); list = true; } out.push("<li>" + inline(m[1]) + "</li>"); return; }
@@ -699,12 +720,7 @@ function sheetError(msg) {
   el.textContent = msg;
 }
 
-async function taskFromLog(entry, date) {
-  const text = entry.replace(/^✓\s*/, "").trim(); if (!text) return;
-  const content = "# " + text.slice(0,110) + "\n\n- [ ] " + text + "\n\nSource: Journal " + date + "\n";
-  const created = await api("/note", {method:"POST",body:{content,category:"inbox"}});
-  return created.name;
-}
+
 function captureSheet(prefill = "", source = "") {
   openSheet(h`<form id="capture-form"><h2>Capture thought</h2><label class="field"><span>Thought or idea</span><textarea id="capture-text" rows="5" autofocus>${prefill}</textarea></label><div class="sheet-actions"><button class="btn quiet" type="button" id="capture-cancel">Cancel</button><button class="btn" type="submit" id="capture-save">Save to inbox</button></div></form>`, modal => {
     modal.querySelector("#capture-cancel").onclick = closeSheet;
@@ -718,67 +734,96 @@ function captureSheet(prefill = "", source = "") {
     };
   });
 }
-/** Add a reminder (to `note`, or the inbox "Reminders" note). */
-function reminderSheet(note, onSaved) {
-  const nowMs = Date.now();
-  const today = dayKey(nowMs);
-  const nextHour = (Number(hhmm(nowMs).slice(0, 2)) + 1) % 24;
-  const time = String(nextHour).padStart(2, "0") + ":00";
-  const date = nextHour === 0 ? addDays(today, 1) : today;
-  let repeat = false;
+/** Plain-language confirmation for an added task: "Added for tomorrow at 5pm", "Added to Tasks". */
+function addedMessage(when, date, time, repeatSay) {
+  const at = time ? " at " + fmt12(time) : "";
+  if (when === "repeat") return "Added · " + repeatSay.toLowerCase() + at;
+  if (when === "today") return "Added for today" + (at || " (9am reminder)");
+  if (when === "tomorrow") return "Added for tomorrow" + (at || " (9am reminder)");
+  if (when === "pick") return "Added for " + new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(date + "T12:00:00Z")) + (at || " (9am reminder)");
+  return "Added to Tasks";
+}
+/** Turn the form's choices into the schedule the server stores, or an error message for the person. */
+function scheduleFor(when, { date, time, days }) {
+  const today = dayKey(Date.now());
+  if (when === "none") return { schedule: "" };
+  if (when === "repeat") {
+    const d = [...days].sort();
+    if (!d.length) return { error: "Pick at least one day." };
+    if (!time) return { error: "Pick a time for the repeating reminder." };
+    const spec = d.length === 7 ? "daily" : d.join() === "1,2,3,4,5" ? "weekdays" : d.join() === "0,6" ? "weekends" : d.map(i => DAY_IDS[i]).join(",");
+    return { schedule: spec + " " + time };
+  }
+  const day = when === "today" ? today : when === "tomorrow" ? addDays(today, 1) : date;
+  if (!day) return { error: "Pick a day." };
+  if (!time && day === today && hhmm(Date.now()) >= "09:00") return { error: "It's past 9am, so pick a time for today." };
+  return { schedule: day + (time ? " " + time : ""), day };
+}
+/**
+ * The one "Add a task" form, used from Tasks, a note page and the Today log. Plain choices only:
+ * when (no date, today, tomorrow, a day, or repeating), an optional time, an optional priority.
+ */
+function taskSheet({ note, prefill = "", when: startWhen = "none", onSaved } = {}) {
+  const today = dayKey(Date.now());
+  let when = startWhen, priority = "";
   const days = new Set([0, 1, 2, 3, 4, 5, 6]);
-  openSheet(h`<form method="dialog" novalidate>
-      <h2 id="sheet-title">New task</h2>
-      <label class="field"><span>Task</span><input id="r-text" autofocus required placeholder="Take meds, call the shop…" enterkeyhint="next"></label>
-      <div class="seg" role="group" aria-label="How often"><button type="button" data-rep="0" aria-pressed="true">Once</button><button type="button" data-rep="1" aria-pressed="false">Repeats</button></div>
-      <div id="r-once" class="two"><label class="field"><span>Day</span><input type="date" id="r-date" value="${date}" min="${today}"></label>
-        <label class="field"><span>Time</span><input type="time" id="r-time1" value="${time}"></label></div>
-      <div id="r-rep" hidden>
+  const WHEN = [["none", "No date"], ["today", "Today"], ["tomorrow", "Tomorrow"], ["pick", "Pick a day"], ["repeat", "Repeats"]];
+  const PRI = [["", "None"], ["do", "Do now"], ["plan", "Plan"], ["delegate", "Handle later"], ["someday", "Someday"]];
+  openSheet(h`<form method="dialog" novalidate class="task-form">
+      <h2 id="sheet-title">Add a task</h2>
+      <label class="field"><span>What needs doing?</span><input id="t-text" value="${prefill}" autofocus required placeholder="Call the dentist, buy milk…" enterkeyhint="done"></label>
+      <fieldset class="pick"><legend>When</legend><div class="choice" role="group" aria-label="When">${raw(WHEN.map(([v, l]) => h`<button type="button" data-when="${v}" aria-pressed="${v === when}">${l}</button>`).join(""))}</div></fieldset>
+      <label class="field" id="t-dayfield" hidden><span>Day</span><input type="date" id="t-date" value="${addDays(today, 2)}" min="${today}"></label>
+      <div id="t-days" hidden>
         <div class="days" role="group" aria-label="Days">${raw(DAYS.map((d, i) => `<button type="button" data-day="${i}" aria-pressed="true" aria-label="${DAY_NAMES[i]}">${d}</button>`).join(""))}</div>
-        <p class="repeat-say" id="r-say">Every day</p>
-        <label class="field"><span>Time</span><input type="time" id="r-time2" value="${time}"></label>
+        <p class="repeat-say" id="t-say">Every day</p>
       </div>
-      <div class="sheet-actions"><button type="button" class="btn quiet" data-close>Cancel</button><button class="btn" id="r-save" type="submit">Add task reminder</button></div>
+      <label class="field" id="t-timefield" hidden><span id="t-timelabel">Time (optional)</span><input type="time" id="t-time"></label>
+      <p class="muted task-hint" id="t-hint"></p>
+      <fieldset class="pick"><legend>Priority <span class="muted">(optional)</span></legend><div class="choice" role="group" aria-label="Priority">${raw(PRI.map(([v, l]) => h`<button type="button" data-pri="${v}" aria-pressed="${v === priority}">${l}</button>`).join(""))}</div></fieldset>
+      <p class="muted task-hint">${note ? "It's added to this note." : "It's saved to your Tasks list."}</p>
+      <div class="sheet-actions"><button type="button" class="btn quiet" data-close>Cancel</button><button class="btn" id="t-save" type="submit">Add task</button></div>
     </form>`, el => {
-    const say = () => {
+    const daySay = () => {
       const d = [...days].sort();
-      $("#r-say").textContent = d.length === 7 ? "Every day" : d.join() === "1,2,3,4,5" ? "Weekdays" : d.join() === "0,6" ? "Weekends"
+      return d.length === 7 ? "Every day" : d.join() === "1,2,3,4,5" ? "Weekdays" : d.join() === "0,6" ? "Weekends"
         : d.length ? "On " + d.map(i => DAY_NAMES[i]).join(", ").replace(/, ([^,]*)$/, " and $1") : "Pick at least one day";
     };
-    el.querySelectorAll("[data-rep]").forEach(b => b.onclick = () => {
-      repeat = b.dataset.rep === "1";
-      el.querySelectorAll("[data-rep]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
-      $("#r-once").hidden = repeat; $("#r-rep").hidden = !repeat;
+    const show = () => {
+      el.querySelectorAll("[data-when]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.when === when)));
+      $("#t-dayfield").hidden = when !== "pick";
+      $("#t-days").hidden = when !== "repeat";
+      $("#t-timefield").hidden = when === "none";
+      $("#t-timelabel").textContent = when === "repeat" ? "Time" : "Time (optional)";
+      $("#t-hint").textContent = when === "none" ? "No reminder. Find it any time under Tasks."
+        : when === "repeat" ? "You'll get a reminder each time." : "Leave the time empty for a 9am reminder.";
+    };
+    el.querySelectorAll("[data-when]").forEach(b => b.onclick = () => { when = b.dataset.when; show(); });
+    el.querySelectorAll("[data-pri]").forEach(b => b.onclick = () => {
+      priority = b.dataset.pri;
+      el.querySelectorAll("[data-pri]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
     });
     el.querySelectorAll("[data-day]").forEach(b => b.onclick = () => {
       const i = +b.dataset.day;
       days.has(i) ? days.delete(i) : days.add(i);
       b.setAttribute("aria-pressed", String(days.has(i)));
-      say();
+      $("#t-say").textContent = daySay();
     });
     el.querySelector("[data-close]").onclick = closeSheet;
+    show();
     el.querySelector("form").onsubmit = async e => {
       e.preventDefault();
-      const text = $("#r-text").value.trim();
-      if (!text) return sheetError("Say what to remind you about.");
-      let schedule;
-      if (!repeat) {
-        const d = $("#r-date").value, t = $("#r-time1").value;
-        if (!d || !t) return sheetError("Pick a day and a time.");
-        schedule = d + " " + t;
-      } else {
-        const d = [...days].sort(), t = $("#r-time2").value;
-        if (!d.length) return sheetError("Pick at least one day.");
-        if (!t) return sheetError("Pick a time.");
-        const spec = d.length === 7 ? "daily" : d.join() === "1,2,3,4,5" ? "weekdays" : d.join() === "0,6" ? "weekends" : d.map(i => DAY_IDS[i]).join(",");
-        schedule = spec + " " + t;
-      }
-      $("#r-save").disabled = true;
+      const text = $("#t-text").value.trim();
+      if (!text) return sheetError("Say what needs doing.");
+      const date = $("#t-date").value, time = $("#t-time").value;
+      const { schedule, error } = scheduleFor(when, { date, time, days });
+      if (error) return sheetError(error);
+      $("#t-save").disabled = true;
       try {
-        const res = await api("/reminder", { method: "POST", body: { text, schedule, note } });
-        closeSheet(); toast(savedMessage({ ...res, reminders: [1] }, "Reminder added").replace(", 1 reminder set", ""));
+        const res = await api("/task", { method: "POST", body: { text, schedule, priority, note } });
+        closeSheet(); toast(addedMessage(when, date, time, daySay()));
         onSaved && onSaved(res);
-      } catch (err) { if (err instanceof Locked) { closeSheet(); return unlockSheet(); } sheetError(err.message); $("#r-save").disabled = false; }
+      } catch (err) { if (err instanceof Locked) { closeSheet(); return unlockSheet(); } sheetError(err.message); $("#t-save").disabled = false; }
     };
   });
 }
@@ -911,7 +956,8 @@ views.today = async () => {
     const relative = delta < 0 ? "Overdue" : delta === 0 ? "Today" : delta === 1 ? "Tomorrow" : delta <= 7 ? "In " + delta + " days" : "";
     const calendar = new Intl.DateTimeFormat(undefined,{weekday:"short",month:"short",day:"numeric",year:date.getFullYear() !== today.getFullYear() ? "numeric" : undefined}).format(date);
     const time = new Intl.DateTimeFormat(undefined,{hour:"numeric",minute:"2-digit"}).format(date);
-    return (relative ? relative + " · " : "") + calendar + " · " + time;
+    // "Today · 8:00 AM" and "Tomorrow · 9:00 AM" need no calendar date; further out it helps.
+    return (relative ? relative + " · " : "") + (delta === 0 || delta === 1 ? "" : calendar + " · ") + time;
   };
   // GTD inbox and Eisenhower focus; priorities are explicit, never guessed from note content.
   try {
@@ -921,7 +967,7 @@ views.today = async () => {
       ["plan", "Plan", "Important, not urgent"],
       ["delegate", "Handle or delegate", "Urgent, lower importance"],
       ["someday", "Someday / maybe", "Not urgent"],
-      ["inbox", "Inbox · clarify", "Unsorted tasks"]
+      ["inbox", "No priority", "Unsorted tasks"]
     ];
     const todayStart = new Date(); todayStart.setHours(0,0,0,0);
     const tomorrowStart = new Date(todayStart); tomorrowStart.setDate(tomorrowStart.getDate()+1);
@@ -940,7 +986,7 @@ views.today = async () => {
       activeTasks.push({note:r.note,text:r.text,priority:"",due:{date:new Date(r.at),title:r.text},reminder:r});
     }
     activeTasks.sort((a,b) => (a.due?.date.getTime() ?? Infinity)-(b.due?.date.getTime() ?? Infinity));
-    const topTasks = activeTasks.slice(0,4).map(t => h`<li class="today-focus-row"><span class="today-focus-dot" aria-hidden="true">○</span><div class="today-focus-content"><a href="#note/${t.note}">${t.due ? t.due.title : t.text}</a>${t.due ? raw(h`<span class="muted today-focus-due">${displayTaskDate(t.due.date)}</span>`) : ""}</div><span class="today-focus-priority">${t.due && t.due.date < Date.now() ? "Overdue" : t.priority === "do" ? "Do now" : "Due today"}</span></li>`).join("");
+    const topTasks = activeTasks.slice(0,4).map(t => h`<li class="today-focus-row"><button type="button" class="today-focus-dot" data-note="${t.note}" data-line="${t.line ?? ""}" data-text="${t.reminder ? t.reminder.text : ""}" data-at="${t.reminder ? t.reminder.at : ""}" aria-label="Mark ${t.due ? t.due.title : t.text} done">○</button><div class="today-focus-content"><a href="#note/${t.note}">${t.due ? t.due.title : t.text}</a>${t.due ? raw(h`<span class="muted today-focus-due">${displayTaskDate(t.due.date)}</span>`) : ""}</div><span class="today-focus-priority">${t.due && t.due.date < Date.now() ? "Overdue" : t.priority === "do" ? "Do now" : "Due today"}</span></li>`).join("");
     const dateLabel = new Intl.DateTimeFormat(undefined,{weekday:"long",month:"long",day:"numeric"}).format(new Date());
     html = h`<section class="today-dashboard promised-today">
       <div class="today-date-label">${dateLabel}</div>
@@ -956,10 +1002,20 @@ views.today = async () => {
   main.innerHTML = html;
   main.querySelectorAll(".log-to-task").forEach(button => button.onclick = async () => {
     button.disabled = true;
-    try { const name = await taskFromLog(button.dataset.entry, button.dataset.date); nextToast = "Task added to Focus inbox"; location.hash = "#note/" + name; }
-    catch(err) { handle(err); button.disabled = false; }
+    // Opens the Add a task form with the log entry filled in, so a date or priority can be set.
+    taskSheet({ prefill: button.dataset.entry.replace(/^✓\s*/, "").trim(), onSaved: () => views.today() });
+    button.disabled = false;
   });
   main.querySelectorAll(".log-to-note").forEach(button => button.onclick = () => captureSheet(button.dataset.entry, "Journal " + button.dataset.date));
+  // Focus circles complete the task: a reminder's occurrence, or the task line itself.
+  main.querySelectorAll(".today-focus-dot").forEach(b => b.onclick = async () => {
+    b.disabled = true; b.textContent = "✓";
+    try {
+      if (b.dataset.at) await complete(b.dataset.note, b.dataset.text, +b.dataset.at);
+      else { const note = await api("/note?name=" + encodeURIComponent(b.dataset.note)); await setTask(b.dataset.note, note.content, Number(b.dataset.line), true, note.sha); }
+      views.today();
+    } catch (e) { handle(e); b.disabled = false; b.textContent = "○"; }
+  });
   main.querySelectorAll(".task-priority").forEach(select => select.onchange = async () => {
     select.disabled = true;
     try {
@@ -994,7 +1050,8 @@ views.journal = async () => {
     const date = day.name.slice("journal/daily/".length, -3);
     const activities = day.content.split("\n").filter(line => /^- \d{2}:\d{2} /.test(line));
     const reflection = day.content.replace(/<!-- daybook:activity:start -->[\s\S]*?<!-- daybook:activity:end -->/g, "").replace(/^# .*\n?/, "").trim();
-    return h`<article class="journal-day"><div class="journal-day-heading"><h3>${date}</h3><a href="#note/${day.name}">Open entry →</a></div>${reflection ? `<p class="journal-reflection">${reflection}</p>` : ""}${activities.length ? `<ul class="journal-activities">${activities.map(line => `<li>${line.slice(2)}</li>`).join("")}</ul>` : '<p class="muted">No activities recorded.</p>'}</article>`;
+    // Nested markup goes through raw(h`…`) so it renders as HTML while the note's text stays escaped.
+    return h`<article class="journal-day"><div class="journal-day-heading"><h3>${date}</h3><a href="#note/${day.name}">Open entry →</a></div>${reflection ? raw(h`<p class="journal-reflection">${reflection}</p>`) : ""}${activities.length ? raw(h`<ul class="journal-activities">${raw(activities.map(line => h`<li>${line.slice(2)}</li>`).join(""))}</ul>`) : raw('<p class="muted">No activities recorded.</p>')}</article>`;
   }).join("");
 };
 views.logs = async () => {
@@ -1219,21 +1276,17 @@ views.reminders = async () => {
   main.innerHTML = '<p class="empty">Loading tasks…</p>';
   const [priorityTasks, reminders] = await Promise.all([api("/priorities"), api("/reminders")]);
   const scheduled = reminders.upcoming || [];
-  const groups = [["do","Do now"],["plan","Plan"],["delegate","Handle later"],["someday","Someday / maybe"],["inbox","Inbox · unprioritized"]];
-  const unscheduled = priorityTasks.filter(t => !scheduled.some(r => r.note === t.note && r.text.trim() === t.text.trim()));
-  let html = h`<div class="bar"><h2>Tasks</h2><button class="btn" id="newtask">+ New task</button></div><p class="muted">All open tasks, whether or not they have a reminder. Prioritize them here or in Focus.</p>`;
+  const groups = [["do","Do now"],["plan","Plan"],["delegate","Handle later"],["someday","Someday / maybe"],["inbox","No priority"]];
+  // A task with a reminder is listed once, under Scheduled; match on its words without the date.
+  const unscheduled = priorityTasks.filter(t => !scheduled.some(r => r.note === t.note && r.text.trim() === taskParts(t.text).title));
+  let html = h`<div class="bar"><h2>Tasks</h2><button class="btn" id="newtask">+ Add task</button></div><p class="muted">Everything you need to do. Tasks with a date are under Scheduled.</p>`;
   html += h`<section class="step"><h3>Open tasks · ${unscheduled.length}</h3>${raw(groups.map(([id,label]) => {
     const matching = unscheduled.filter(t => t.priority === id);
-    return matching.length ? h`<div class="task-group"><h4>${label} · ${matching.length}</h4>${raw(matching.map(t => h`<div class="unified-task"><a href="#note/${t.note}">${t.text}</a><select class="task-priority" data-note="${t.note}" data-line="${t.line}" aria-label="Priority for ${t.text}">${raw(groups.map(([value,title]) => h`<option value="${value}" ${value === id ? "selected" : ""}>${title}</option>`).join(""))}</select><button class="task-done" data-note="${t.note}" data-line="${t.line}">Done</button></div>`).join(""))}</div>` : "";
+    return matching.length ? h`<div class="task-group"><h4>${label} · ${matching.length}</h4>${raw(matching.map(t => h`<div class="unified-task"><a href="#note/${t.note}">${taskParts(t.text).title}${taskParts(t.text).when ? raw(h` <span class="when">${taskParts(t.text).when}</span>`) : ""}</a><select class="task-priority" data-note="${t.note}" data-line="${t.line}" aria-label="Priority for ${taskParts(t.text).title}">${raw(groups.map(([value,title]) => h`<option value="${value}" ${value === id ? "selected" : ""}>${title}</option>`).join(""))}</select><button class="task-done" data-note="${t.note}" data-line="${t.line}" aria-label="Mark ${taskParts(t.text).title} done">Done</button></div>`).join(""))}</div>` : "";
   }).join(""))}</section>`;
   html += h`<section class="step"><h3>Scheduled tasks · ${scheduled.length}</h3>${raw(scheduled.length ? scheduled.map(r => h`<div class="rem"><time>${longDay(r.at)} · ${fmt12(hhmm(r.at))}</time><div><a class="what" href="#note/${r.note}">${r.text}</a><span class="sub">${titleFrom(r.note)}${r.repeat ? ", repeats" : ""}</span></div><button class="mk" data-note="${r.note}" data-text="${r.text}" data-at="${r.at}">Done</button></div>`).join("") : '<p class="muted">No scheduled tasks.</p>')}</section>`;
   main.innerHTML = html;
-  $("#newtask").onclick = () => openSheet(h`<form id="newtask-form"><h2>New task</h2><label class="field"><span>What needs doing?</span><input id="newtask-text" autofocus required></label><div class="sheet-actions"><button class="btn quiet" type="button" id="newtask-cancel">Cancel</button><button class="btn" type="submit">Add task</button></div></form>`, modal => {
-    modal.querySelector("#newtask-cancel").onclick = closeSheet;
-    modal.querySelector("#newtask-form").onsubmit = async e => { e.preventDefault(); const text = modal.querySelector("#newtask-text").value.trim(); if (!text) return; const button = modal.querySelector('button[type="submit"]'); button.disabled = true;
-      try { await api("/note",{method:"POST",body:{category:"inbox",content:"# " + text.slice(0,110) + "\n\n- [ ] " + text + "\n"}}); closeSheet(); toast("Task added"); await views.reminders(); } catch(err) { handle(err); button.disabled = false; }
-    };
-  });
+  $("#newtask").onclick = () => taskSheet({ onSaved: () => views.reminders() });
   main.querySelectorAll(".task-priority").forEach(select => select.onchange = async () => { select.disabled = true; try { const note = await api("/note?name=" + encodeURIComponent(select.dataset.note)); await api("/priorities",{method:"POST",body:{name:select.dataset.note,line:Number(select.dataset.line),priority:select.value,sha:note.sha}}); await views.reminders(); } catch(err) { handle(err); select.disabled = false; } });
   main.querySelectorAll(".task-done").forEach(button => button.onclick = async () => { button.disabled = true; try { const name = button.dataset.note; const note = await api("/note?name=" + encodeURIComponent(name)); await setTask(name,note.content,Number(button.dataset.line),true,note.sha); await views.reminders(); } catch(err) { handle(err); button.disabled = false; } });
   main.querySelectorAll(".mk").forEach(b => b.onclick = async () => { b.disabled = true; try { await complete(b.dataset.note,b.dataset.text,+b.dataset.at); await views.reminders(); } catch(err) { handle(err); b.disabled = false; } });
@@ -1259,7 +1312,7 @@ async function editor(name, category) {
     main.innerHTML = h`<div class="edbar"><div class="left"><a class="link back" href="${backTo}">${backLabel}</a></div><div class="right"><button class="btn small" id="edit">Edit</button></div></div>
       <p class="where">In ${folderName(folder)}${dateFrom(name) ? ", created " + dateFrom(name) : ""}</p>
       ${raw(`<div class="doc" id="doc" title="Tap to edit">${content.trim() ? render(content) : '<p class="empty">This note is empty. Tap to write.</p>'}</div>`)}
-      <div class="actions"><button class="btn quiet" id="addrem">Add reminder</button>${raw(!isGoal ? '<button class="btn quiet" id="promote-goal">Promote to goal</button>' : "")}${raw(isGoal ? '<button class="btn quiet" id="addupd">Add update</button>' : "")}</div>
+      <div class="actions"><button class="btn quiet" id="addrem">Add task</button>${raw(!isGoal ? '<button class="btn quiet" id="promote-goal">Promote to goal</button>' : "")}${raw(isGoal ? '<button class="btn quiet" id="addupd">Add update</button>' : "")}</div>
       <button class="danger-link" id="del">Delete note</button>`;
     $("#edit").onclick = () => edit();
     $("#doc").onclick = e => { if (!e.target.closest("input, a, label")) edit(); };
@@ -1278,7 +1331,7 @@ async function editor(name, category) {
       try { const result = await api("/note", {method:"POST",body:{content:goalContent,category:"goals"}}); nextToast = "Goal created; original note preserved"; location.hash = "#note/" + result.name; }
       catch(err) { handle(err); button.disabled = false; }
     };
-    $("#addrem").onclick = () => reminderSheet(name, async () => { const loaded = await api("/note?name=" + encodeURIComponent(name)); content = loaded.content; revision = loaded.sha; read(); });
+    $("#addrem").onclick = () => taskSheet({ note: name, onSaved: async () => { const loaded = await api("/note?name=" + encodeURIComponent(name)); content = loaded.content; revision = loaded.sha; read(); } });
     if (isGoal) $("#addupd").onclick = () => progressSheet(name, content, next => { content = next; revision = undefined; read(); });
     $("#del").onclick = async () => {
       if (!confirm("Delete this note? Any reminders in it stop too.")) return;
@@ -1295,7 +1348,7 @@ async function editor(name, category) {
       ${raw(isNew ? h`<label class="field"><span>Folder</span><select id="cat">${raw(cats.map(c => h`<option value="${c}" ${c === folder ? "selected" : ""}>${folderName(c)}</option>`).join(""))}</select></label>` : "")}
       <label for="title" style="position:absolute;left:-9999px">Title</label><input class="title-in" id="title" value="${title}" placeholder="Title">
       <label for="body" style="position:absolute;left:-9999px">Note</label><textarea class="body-in" id="body" placeholder="Write anything. Start a line with - [ ] to make a checkbox.">${body}</textarea>
-      <p class="hint">For a timed reminder, save and tap Add reminder.</p>
+      <p class="hint">To add a task with a date or reminder, save and tap Add task.</p>
     </form>`;
     const ta = $("#body");
     const grow = () => { ta.style.height = "auto"; ta.style.height = Math.max(ta.scrollHeight + 4, window.innerHeight * 0.4) + "px"; };
@@ -1757,6 +1810,7 @@ function setQuickMode(mode) {
   quickMode = mode;
   quickModes.forEach(b => b.setAttribute("aria-pressed", String(b.dataset.quickMode === mode)));
   $("#chips").hidden = mode !== "log";
+  $("#task-when").hidden = mode !== "task";
   $("#timebtn").hidden = mode !== "log";
   $("#when").hidden = true;
   $("#logbtn").textContent = mode === "note" ? "Save thought" : mode === "task" ? "Add task" : "Log activity";
@@ -1777,13 +1831,24 @@ timebtn.onclick = () => {
   timebtn.hidden = true; when.hidden = false; when.focus();
   if (when.showPicker) try { when.showPicker(); } catch {}
 };
-const resetWhen = () => { when.value = ""; when.hidden = true; timebtn.hidden = false; };
+const resetWhen = () => { when.value = ""; when.hidden = true; timebtn.hidden = quickMode !== "log"; setQuickWhen("none"); };
+// Task mode: one tap for no date, today or tomorrow; "More options…" opens the full Add a task form.
+let quickWhen = "none";
+function setQuickWhen(v) {
+  quickWhen = v;
+  document.querySelectorAll("[data-quick-when]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.quickWhen === v)));
+}
+document.querySelectorAll("[data-quick-when]").forEach(b => b.onclick = () => {
+  if (b.dataset.quickWhen !== "more") return setQuickWhen(b.dataset.quickWhen);
+  const prefill = $("#entry").value.trim();
+  taskSheet({ prefill, when: quickWhen, onSaved: () => { $("#entry").value = ""; setQuickWhen("none"); views.today(); } });
+});
 const composerToggle = $("#composer-toggle");
 function setComposerCollapsed(collapsed) {
   $("#composer").dataset.collapsed = String(collapsed);
   composerToggle.setAttribute("aria-expanded", String(!collapsed));
   $("#composer-chevron").textContent = collapsed ? "+" : "−";
-  $("#composer-label").textContent = "Quick Add";
+  $("#composer-label").textContent = "Capture something";
   try { localStorage.setItem("daybook-composer-collapsed", String(collapsed)); } catch {}
 }
 try { setComposerCollapsed(localStorage.getItem("daybook-composer-collapsed") !== "false"); } catch { setComposerCollapsed(true); }
@@ -1801,10 +1866,15 @@ $("#composer").onsubmit = async e => {
       if (!when.hidden && when.value && when.value !== hhmm(Date.now())) body.time = when.value;
       await api("/log", {method:"POST",body});
       toast("Logged");
+    } else if (quickMode === "task") {
+      const { schedule, error } = scheduleFor(quickWhen, {});
+      if (error) { toast(error); $("#logbtn").disabled = false; return; }
+      await api("/task", { method: "POST", body: { text: value, schedule } });
+      toast(addedMessage(quickWhen));
     } else {
-      const content = quickMode === "task" ? "# " + value.slice(0,110) + "\n\n- [ ] " + value + "\n" : "# " + value.split("\n")[0].slice(0,110) + "\n\n" + value.split("\n").slice(1).join("\n");
+      const content = "# " + value.split("\n")[0].slice(0,110) + "\n\n" + value.split("\n").slice(1).join("\n");
       await api("/note", {method:"POST",body:{content,category:"inbox"}});
-      toast(quickMode === "task" ? "Task added" : "Note saved to inbox");
+      toast("Note saved to inbox");
     }
     input.value = ""; resetWhen(); chips.querySelectorAll(".chip").forEach(b => b.setAttribute("aria-pressed","false"));
     await views.today();
