@@ -7,6 +7,7 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
+    "check:html": "node scripts/check-inline-scripts.mjs",
     "test": "tsx --test test/reminder-parse.test.ts test/log-action.test.ts test/setup.test.ts test/snapshot.test.ts test/github-login.test.ts test/delivery.test.ts test/concurrency.test.ts test/backup.test.ts test/weekly-review.test.ts",
     "setup": "node scripts/setup.mjs",
     "test:mcp": "node test/e2e/mcp-acceptance.mjs",
