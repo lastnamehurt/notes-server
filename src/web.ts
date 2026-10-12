@@ -15,6 +15,7 @@ import { makeBackup, parseBackup, restoreMissing } from "./backup";
 import { signSession, verifySession } from "./action";
 import { APP_HTML, MANIFEST } from "./ui";
 import { pushConfigured, parseReminders } from "./reminder-parse";
+import { runAppleSync, SyncError } from "./apple-sync-run";
 
 const COOKIE = "notes_session";
 const SESSION_DAYS = 30;
@@ -42,6 +43,18 @@ const HTML_HEADERS = {
   "X-Content-Type-Options": "nosniff"
 };
 
+/** Check the Shortcuts secret (SHORTCUTS_TOKEN). Returns an error response, or null when allowed. */
+async function shortcutAuth(request: Request, env: Env): Promise<Response | null> {
+  if (!env.SHORTCUTS_TOKEN || env.SHORTCUTS_TOKEN.length < 32) return fail("Shortcut sync is not configured", 404);
+  const supplied = request.headers.get("Authorization")?.replace(/^Bearer /i, "") ?? "";
+  // Hash both inputs before comparison to avoid timing differences from prefix matches.
+  const digest = async (value: string) => new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
+  const [expected, actual] = await Promise.all([digest(env.SHORTCUTS_TOKEN), digest(supplied)]);
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= expected[i] ^ actual[i];
+  return diff === 0 ? null : fail("Unauthorized", 401);
+}
+
 export async function handleApp(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/+$/, "") || "/app";
@@ -51,16 +64,32 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
   if (path === "/app/manifest.webmanifest")
     return new Response(MANIFEST, { headers: { "Content-Type": "application/manifest+json" } });
 
+  // Apple Reminders two-way sync, called by an iPhone Shortcut. Shortcuts sends no Origin header, so this
+  // sits before the same-origin check and authenticates with its own secret instead of the app password.
+  if (path === "/app/shortcuts/sync" && request.method === "POST") {
+    const denied = await shortcutAuth(request, env);
+    if (denied) return denied;
+    const configured = await effectiveEnv(env);
+    if (!notesConfigured(configured)) return fail("Notes not configured", 409);
+    if (Number(request.headers.get("Content-Length") || 0) > 2_000_000) return fail("Request too large", 413);
+    let body: unknown;
+    try { body = await request.json(); } catch { return fail("Send the reminders as JSON", 400); }
+    try {
+      return json(await runAppleSync(body, {
+        notes: new GithubNotes(configured), scheduler: scheduler(configured), timeZone: configured.NOTES_TIMEZONE,
+        url: id => url.origin + "/app#task/" + id,
+        noteChanged: (name, content) => scheduleNote(configured, name, content)
+      }));
+    } catch (e) {
+      if (e instanceof SyncError) return fail(e.message, e.status);
+      return fail(e instanceof Error ? e.message : String(e), 502);
+    }
+  }
+
   // Read-only Shortcut feed. A separate secret avoids exposing the app/MCP password to Shortcuts.
   if (path === "/app/shortcuts/tasks" && request.method === "GET") {
-    if (!env.SHORTCUTS_TOKEN || env.SHORTCUTS_TOKEN.length < 32) return fail("Shortcut sync is not configured", 404);
-    const supplied = request.headers.get("Authorization")?.replace(/^Bearer /i, "") ?? "";
-    // Hash both inputs before comparison to avoid timing differences from prefix matches.
-    const digest = async (value: string) => new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
-    const [expected, actual] = await Promise.all([digest(env.SHORTCUTS_TOKEN), digest(supplied)]);
-    let diff = 0;
-    for (let i = 0; i < expected.length; i++) diff |= expected[i] ^ actual[i];
-    if (diff !== 0) return fail("Unauthorized", 401);
+    const denied = await shortcutAuth(request, env);
+    if (denied) return denied;
     const configured = await effectiveEnv(env);
     if (!notesConfigured(configured)) return fail("Notes not configured", 409);
     const notes = await new GithubNotes(configured).all();
