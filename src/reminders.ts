@@ -194,13 +194,15 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
           }
           await this.ctx.storage.put(firedKey(r), { note: r.note, text: r.text, at: r.at, repeat: Boolean(r.repeat) } satisfies Fired);
         }
-        await this.ctx.storage.delete(k);
-        await this.ctx.storage.delete(deliveredKey(r));
+        // Schedule the next occurrence before deleting the current one; if storage
+        // fails, the acknowledged current occurrence can safely be retried.
         if (r.repeat) {
           const at = nextOccurrence(r.repeat, env.NOTES_TIMEZONE || DEFAULT_TIMEZONE, Math.max(r.at, Date.now()));
           const next = { ...r, at };
           await this.ctx.storage.put(key(next), next);
         }
+        await this.ctx.storage.delete(k);
+        await this.ctx.storage.delete(deliveredKey(r));
       }
       catch (e) {
         failed = true;
