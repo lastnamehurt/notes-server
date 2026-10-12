@@ -66,14 +66,18 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
     const notes = await new GithubNotes(configured).all();
     const timezone = configured.NOTES_TIMEZONE || "America/Los_Angeles";
     const tasks = tasksFromNotes(notes);
-    const due = new Map(notes.flatMap(n => parseReminders(n.name, n.content, timezone)
-      .filter(rem => !rem.repeat).map(rem => [rem.note + ":" + rem.text, rem.at] as const)));
-    return json({ version: 1, timezone, tasks: tasks.map(task => {
-      const title = task.text.replace(/\\s+@\\d{4}-\\d{2}-\\d{2}(?:\\s+\\d{1,2}(?::\\d{2})?\\s*(?:am|pm)?)?\\b/i, "").trim();
-      const at = due.get(task.note + ":" + title);
+    const exported = tasks.map(task => {
+      const source = notes.find(n => n.name === task.note);
+      const rawLine = source?.content.split("\n")[task.line] || "";
+      const parsed = parseReminders(task.note, rawLine, timezone);
+      const oneOff = parsed.find(rem => !rem.repeat);
+      const title = task.text.replace(/\s+@\d{4}-\d{2}-\d{2}(?:\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?)?\b/i, "").trim();
+      const repeat = parsed.find(rem => rem.repeat);
       return { id: task.note + ":" + task.line, title, priority: task.priority,
-        dueAt: at === undefined ? null : new Date(at).toISOString(), sourceNote: task.note };
-    }) });
+        dueAt: oneOff ? new Date(oneOff.at).toISOString() : null,
+        repeating: Boolean(repeat), sourceNote: task.note };
+    });
+    return json({ version: 1, timezone, tasks: exported });
 
   }
 
