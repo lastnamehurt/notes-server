@@ -126,8 +126,10 @@ main { padding: 22px 0 calc(170px + env(safe-area-inset-bottom)); }
 .composer .in { max-width: 640px; margin: 0 auto; }
 .composer-toggle { display: flex; width: 100%; align-items: center; justify-content: space-between; min-height: 40px; padding: 0 4px; border: 0; background: transparent; color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
 .composer[data-collapsed="true"] .in { display: none; }
-.composer[data-collapsed="true"] { padding: 4px 12px; width: min(calc(100% - 24px), 320px); }
-.composer[data-collapsed="true"] .composer-toggle { min-height: 40px; }
+.composer[data-collapsed="true"] { padding: 2px 12px; width: max-content; min-width: 140px; max-width: calc(100% - 24px); border-radius: 999px; }
+.composer[data-collapsed="true"] .composer-toggle { min-height: 42px; gap: 20px; }
+.composer:not([data-collapsed="true"]) { max-height: min(45dvh, 310px); overflow-y: auto; }
+.composer[hidden] { display: none !important; }
 
 .chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 8px; }
 .chip { flex: none; min-height: 44px; border: 1px solid var(--rule); background: var(--sheet); border-radius: 999px; padding: 5px 12px; font-size: 15px; color: var(--ink-2); }
@@ -307,7 +309,8 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
   <main id="main" aria-live="polite"></main>
 </div>
 
-<form class="composer" id="composer" hidden autocomplete="off" data-collapsed="false">\n  <button class="composer-toggle" id="composer-toggle" type="button" aria-expanded="true" aria-controls="composer-fields"><span>Quick log</span><span id="composer-chevron" aria-hidden="true">⌄</span></button>
+<form class="composer" id="composer" hidden autocomplete="off" data-collapsed="true">
+  <button class="composer-toggle" id="composer-toggle" type="button" aria-expanded="true" aria-controls="composer-fields"><span id="composer-label">+ Quick log</span><span id="composer-chevron" aria-hidden="true">⌄</span></button>
   <div class="in">
     <div class="chips" id="chips" role="group" aria-label="Tags"></div>
     <div class="row">
@@ -1317,10 +1320,11 @@ const composerToggle = $("#composer-toggle");
 function setComposerCollapsed(collapsed) {
   $("#composer").dataset.collapsed = String(collapsed);
   composerToggle.setAttribute("aria-expanded", String(!collapsed));
-  $("#composer-chevron").textContent = collapsed ? "⌃" : "⌄";
+  $("#composer-chevron").textContent = collapsed ? "+" : "−";
+  $("#composer-label").textContent = collapsed ? "Quick log" : "Quick log";
   try { localStorage.setItem("daybook-composer-collapsed", String(collapsed)); } catch {}
 }
-try { setComposerCollapsed(localStorage.getItem("daybook-composer-collapsed") === "true"); } catch {}
+try { setComposerCollapsed(localStorage.getItem("daybook-composer-collapsed") !== "false"); } catch { setComposerCollapsed(true); }
 composerToggle.onclick = () => setComposerCollapsed($("#composer").dataset.collapsed !== "true");
 $("#composer").onsubmit = async e => {
   e.preventDefault();
