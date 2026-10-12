@@ -173,6 +173,16 @@ h2.group b { color: var(--ink); }
 .list a .t { font-weight: 600; overflow-wrap: anywhere; }
 .list a .d { color: var(--ink-2); font-size: 15px; white-space: nowrap; }
 
+/* Focus: a single compact row per task, with separators between tasks only. */
+.focus .focus-tasks { margin: 10px 0 0; }
+.focus .focus-task { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 0; border-bottom: 1px solid color-mix(in srgb, var(--rule) 55%, transparent); }
+.focus .focus-task:last-child { border-bottom: 0; padding-bottom: 0; }
+.focus .focus-task-content { flex: 1; min-width: 0; }
+.focus .focus-task-content > a { display: block; padding: 0; border: 0; line-height: 1.4; overflow-wrap: anywhere; }
+.focus .task-due { font-size: 13px; margin-top: 4px; line-height: 1.35; }
+.focus .task-priority { flex: none; width: auto; max-width: 120px; min-height: 36px; padding: 6px 8px; font-size: 13px; border-radius: 9px; }
+@media (max-width: 420px) { .focus .focus-task { align-items: flex-start; } .focus .task-priority { max-width: 100px; } }
+
 /* Goals */
 .goal { padding: 18px; border: 1px solid var(--rule); border-radius: 16px; background: var(--sheet); box-shadow: var(--shadow); margin: 0 0 12px; }
 .goal h3 { margin: 0 0 4px; font: 400 24px/1.2 "DM Serif Display", Georgia, serif; letter-spacing: -.01em; }
@@ -730,7 +740,7 @@ views.today = async () => {
       const matching = tasks.filter(t => t.priority === id).map(t => ({...t, due:taskDate(t.text)})).sort((a,b) => (a.due?.date.getTime() ?? Infinity) - (b.due?.date.getTime() ?? Infinity));
       if (!matching.length) return "";
       return h`<details class="step" ${id === "do" || id === "inbox" ? "open" : ""}><summary><b>${label}</b> · ${matching.length} <span class="muted">${subtitle}</span></summary>
-        <ul class="list">${raw(matching.slice(0, 30).map(t => h`<li><a href="#note/${t.note}">${t.due ? t.due.title : t.text}</a>${t.due ? raw(h`<div class="muted task-due">◷ ${displayTaskDate(t.due.date)}</div>`) : ""}
+        <ul class="list focus-tasks">${raw(matching.slice(0, 30).map(t => h`<li class="focus-task"><div class="focus-task-content"><a href="#note/${t.note}">${t.due ? t.due.title : t.text}</a>${t.due ? raw(h`<div class="muted task-due">◷ ${displayTaskDate(t.due.date)}</div>`) : ""}</div>
           <select class="task-priority" data-note="${t.note}" data-line="${t.line}" aria-label="Priority for ${t.text}">
             ${raw(groups.map(([value, title]) => h`<option value="${value}" ${id === value ? "selected" : ""}>${title}</option>`).join(""))}
           </select></li>`).join(""))}</ul></details>`;
