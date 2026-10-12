@@ -12,6 +12,7 @@ import { notesConfigured } from "./settings";
 import { handleApp } from "./web";
 import { DEFAULT_TIMEZONE } from "./reminder-parse";
 import { verifyAction } from "./action";
+import { runWeeklyReview } from "./weekly-review";
 export { ReminderScheduler } from "./reminders";
 
 const INSTRUCTIONS = `The owner's personal notes and life tracking, stored as Markdown in GitHub. Times are in the owner's time zone (America/Los_Angeles unless configured).
@@ -238,6 +239,12 @@ export default {
   // Hourly rescan catches notes edited outside the MCP server (CLI pushes, GitHub web edits).
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
     const merged = await effectiveEnv(env);
-    if (notesConfigured(merged)) ctx.waitUntil(rescan(merged));
+    if (notesConfigured(merged)) {
+      ctx.waitUntil(Promise.allSettled([rescan(merged), runWeeklyReview(merged)]).then(results => {
+        for (const result of results) {
+          if (result.status === "rejected") console.error("Scheduled Daybook job failed", result.reason);
+        }
+      }));
+    }
   }
 } satisfies ExportedHandler<Env>;
