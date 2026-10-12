@@ -1,6 +1,6 @@
 # Apple Reminders ↔ Daybook: two-way sync
 
-**Status:** Design, not implemented. Phase 1 is a two-way sync built on iPhone Shortcuts: no native app, no Apple developer account, no new paid services. Keep the existing push notifications (Pushover or ntfy) on until the acceptance tests below pass.
+**Status:** Phase 1 is built: a two-way sync driven by an iPhone Shortcut, with no native app, no Apple developer account and no new paid services. Setup steps are in [apple-reminders-shortcuts.md](apple-reminders-shortcuts.md). Keep the existing push notifications (Pushover or ntfy) on until it has run cleanly on your phone for a while.
 
 ## Why
 
@@ -22,8 +22,8 @@ One sync run:
 
 1. The Shortcut finds every reminder in the Daybook list (open and completed) and posts a snapshot to `POST /app/shortcuts/sync`.
 2. The Worker does a three-way compare per task: Daybook now, Apple now, and the **base** (the state both sides agreed on after the last run).
-3. The Worker writes any Apple-side changes into the Markdown notes (one commit), saves the new base, and returns an action list.
-4. The Shortcut applies the actions: create, update, complete, reopen, delete or tag.
+3. The Worker writes every Daybook change from the run (new IDs, Apple-side edits, new tasks, log entries) as **one commit** on top of the commit it read, saves the new base, and returns an action list. If the notes changed in the meantime, GitHub refuses the commit and the run re-reads and re-plans (up to three times).
+4. The Shortcut applies the actions: create, update, delete or tag.
 
 Full snapshots instead of an incremental change feed are deliberate. A personal list is at most a few hundred tasks, and the Worker already reads all notes as one archive, so a full compare is cheap and can't drift.
 
@@ -41,17 +41,17 @@ Full snapshots instead of an incremental change feed are deliberate. A personal 
 ### Actions (Worker → Shortcut)
 
 ```json
-{ "actions": [
-  { "op": "create", "taskId": "a91fz", "title": "Pay rent", "due": "2026-11-01T09:00:00-07:00", "priority": "high" },
-  { "op": "update", "taskId": "t7k2q", "title": "Call airline about seats", "due": null },
-  { "op": "complete", "taskId": "b3m8x" },
-  { "op": "reopen", "taskId": "c0p4d" },
-  { "op": "delete", "taskId": "d2r5w" },
-  { "op": "tag", "index": 3, "taskId": "e8h1k" }
-] }
+{ "version": 1, "runId": "sync-1791790301", "actions": [
+  { "op": "create", "taskId": "a91fz2", "url": "https://<worker>/app#task/a91fz2", "title": "Pay rent",
+    "due": "2026-11-01", "allDay": true, "priority": "high", "completed": false },
+  { "op": "update", "index": 0, "taskId": "t7k2q", "title": "Call airline about seats",
+    "due": "2026-10-16T14:00:00-07:00", "allDay": false, "priority": "none", "completed": false },
+  { "op": "delete", "index": 4, "taskId": "d2r5w" },
+  { "op": "tag", "index": 3, "taskId": "e8h1k", "url": "https://<worker>/app#task/e8h1k" }
+], "summary": { "reminders": 5, "created": 1, "updated": 1, "deleted": 1, "tagged": 1, "daybookChanges": 2, "conflicts": 0 } }
 ```
 
-`tag` writes the marker onto a reminder that was created in Apple Reminders, so it matches on every later run.
+`index` points back into the list the Shortcut sent, so it never has to search. `update` always carries the reminder's full state (completing and reopening are just `completed`), which keeps the Shortcut to one code path. `tag` writes the marker onto a reminder that was created in Apple Reminders, so it matches on every later run.
 
 ## Identity
 
@@ -63,7 +63,7 @@ Full snapshots instead of an incremental change feed are deliberate. A personal 
 
 ## Base state
 
-The Worker stores the last agreed state per task (title, due, completed, priority, plus a hash) in the existing `OAUTH_KV` namespace under a `sync:` prefix, or a dedicated KV namespace if preferred. No new paid storage. Losing the base is safe: the next run treats both sides as changed and falls back to the conflict rule, which keeps both values.
+The Worker stores the last agreed state per task (title, due, completed, priority, note) in the existing reminder scheduler Durable Object, under `sync:` keys. It's strongly consistent, unlike KV, and costs nothing extra. The same object holds a two-minute lock so overlapping runs can't interleave, and remembers each `runId`'s response for a day so a retried request gets the same answer instead of applying twice. Losing the base is safe: the next run treats both sides as changed and Daybook wins, without duplicating anything.
 
 ## Merge rules
 
@@ -79,15 +79,15 @@ Per field, comparing each side against the base:
 
 Lifecycle:
 
-- **New in Daybook** (open, has a schedule or is in the Daybook scope) → `create` in Apple.
+- **New in Daybook** (open, with a date, repeat schedule or priority) → gets an ID, then `create` in Apple.
 - **New in Apple** (no marker) → new task appended to the `inbox` note, then `tag` it.
 - **Completed in Apple** → runs the same path as `complete_reminder` (logs it, ticks a one-off's box).
 - **Reopened on either side** → unchecks the other side.
 - **Deleted in Daybook** → `delete` in Apple.
-- **Deleted in Apple** → the Daybook task is **never** deleted. It stops syncing and gets a `#removed-in-reminders` log entry; re-adding it to the list resumes sync.
-- **Repeating tasks** sync as their **next occurrence** only. Completing it in Apple completes that occurrence; the next run moves the reminder's due date to the following occurrence. No recurrence-rule mapping is needed.
+- **Deleted in Apple** → the Daybook task is **never** deleted. It stops syncing and gets a `#removed-in-reminders` log entry; changing it in Daybook sends it back. Clearing a reminder that is done on both sides is routine and isn't logged.
+- **Repeating tasks** sync as their **current occurrence** only: the latest one that already went off and isn't done (so it shows as overdue), otherwise the next one. Older missed occurrences roll off. Completing it in Apple marks that occurrence done in the scheduler, and the same run moves the reminder to the following occurrence and reopens it. The repeat rule is never written from Apple; a new time set there is reset. No recurrence-rule mapping is needed.
 - **Priority:** do ↔ high, plan ↔ medium, delegate and someday → low, none ↔ inbox. An Apple change to "low" keeps the existing Daybook value if it was already delegate or someday.
-- **All-day vs timed:** a Daybook task with a date and no time is an all-day reminder, and the reverse. Times are interpreted in `NOTES_TIMEZONE`, so DST changes don't shift them.
+- **All-day vs timed:** a Daybook task with a date and no time is an all-day reminder, and the reverse. A date-only task and the same date at 9am count as equal, because some iOS versions can only store a reminder's date with a time. Times are interpreted in `NOTES_TIMEZONE`, so DST changes don't shift them.
 
 Echo loops can't happen: after a run, the base equals both sides, so the next run sees no change.
 
@@ -95,7 +95,8 @@ Echo loops can't happen: after a run, the base equals both sides, so the next ru
 
 - `POST /app/shortcuts/sync`, authenticated with the existing separate `SHORTCUTS_TOKEN`, upgraded from read-only to read-write for the Daybook list only. It can never reach other notes, settings or the GitHub token.
 - Each request carries a `runId`. Replaying the same `runId` returns the same actions without applying changes twice.
-- Markdown writes reuse the current SHA-checked write path and retry on conflict by re-reading, never by overwriting.
+- Markdown writes go in one commit that only moves the branch if nothing else changed it (`force: false`); on conflict the run re-reads, never overwrites.
+- If a run would delete more than half of the synced reminders (and more than five), it stops with an error instead. This protects the Apple list if the notes ever read back empty.
 - Rotating `SHORTCUTS_TOKEN` in Cloudflare revokes the Shortcut immediately.
 - Synced task titles and dates become subject to the user's iCloud settings and retention; say so in the setup guide.
 
@@ -131,11 +132,11 @@ Watch check-offs reach the phone through iCloud and sync on the next phone run.
 
 ## Phases
 
-- **Phase 1 (now):** task IDs and parser updates; `POST /app/shortcuts/sync` with the merge engine and unit tests; the Shortcut and its setup guide; replaces the one-way feed.
+- **Phase 1 (built):** task IDs and parser updates (`src/task-id.ts`); the merge engine (`src/apple-sync.ts`) and run (`src/apple-sync-run.ts`) behind `POST /app/shortcuts/sync`; the Shortcut setup guide. The read-only feed stays available.
 - **Phase 2 (only if Phase 1 falls short):** a native iOS EventKit companion for background sync. It needs a $99/yr Apple Developer account, TestFlight or 7-day re-signing, and ongoing Xcode upkeep, and other self-hosters couldn't install it without that. The same sync endpoint serves it unchanged.
 - **Phase 3:** after a few weeks of clean runs, decide whether task reminders can rely on Apple Reminders alone, keeping push notifications for non-task alerts.
 
-## Open decisions
+## Decisions
 
-- Which tasks are in scope: every open task, or only tasks with a date or a priority? (Recommended: dated or priority tasks, to keep the list useful.)
-- Which note receives tasks created in Apple Reminders (default: `inbox`).
+- **Scope:** open tasks with a date, a repeat schedule or a priority. Plain tasks stay in Daybook only.
+- **New reminders from Apple** go into the inbox's Reminders note (the same note "add reminder" uses), created if needed.

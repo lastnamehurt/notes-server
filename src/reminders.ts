@@ -64,6 +64,10 @@ const FAIL_WINDOW_MS = 15 * 60 * 1000;
 export interface PushError { at: number; message: string; reminder: string; }
 
 const KEEP_FIRED_MS = 48 * 3600 * 1000;
+// Apple Reminders sync. Prefixes must not overlap the reminder ("r:"), done ("d:"), fired ("f:") or "sent:" keys.
+const SYNC_BASE = "sync:base:";
+const SYNC_LOCK = "sync:lock";
+const SYNC_RUN = "sync:run:";
 // "Done" marker for one occurrence, so a reminder completed early doesn't push when its time comes.
 const doneKey = (note: string, text: string, at: number) => "d:" + at + SEP + note + SEP + text;
 const firedKey = (r: Reminder) => "f:" + r.at + SEP + r.note + SEP + r.text;
@@ -175,6 +179,46 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
   /** Occurrences marked done with times at or after `since`. */
   async doneSince(since: number): Promise<{ note: string; text: string; at: number }[]> {
     return [...(await this.ctx.storage.list<{ note: string; text: string; at: number }>({ prefix: "d:" })).values()].filter(d => d.at >= since);
+  }
+
+  /* ---------- Apple Reminders sync state (see apple-sync.ts) ---------- */
+
+  /** The last state both sides agreed on, per task ID. */
+  async syncBase(): Promise<Record<string, unknown>> {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of await this.ctx.storage.list({ prefix: SYNC_BASE })) out[k.slice(SYNC_BASE.length)] = v;
+    return out;
+  }
+
+  /** Replace the whole base. */
+  async putSyncBase(base: Record<string, unknown>): Promise<void> {
+    const old = [...(await this.ctx.storage.list({ prefix: SYNC_BASE })).keys()].filter(k => !(k.slice(SYNC_BASE.length) in base));
+    for (let i = 0; i < old.length; i += 128) await this.ctx.storage.delete(old.slice(i, i + 128));
+    const entries = Object.entries(base).map(([id, v]) => [SYNC_BASE + id, v] as const);
+    for (let i = 0; i < entries.length; i += 128) await this.ctx.storage.put(Object.fromEntries(entries.slice(i, i + 128)));
+  }
+
+  /**
+   * Start a sync run. Returns the saved response if this run already finished (a retried request),
+   * "busy" if another run holds the lock, or "go". The lock expires so a crashed run can't block sync.
+   */
+  async syncStart(runId: string, lockMs: number): Promise<{ status: "go" | "busy" | "replay"; response?: unknown }> {
+    const done = await this.ctx.storage.get<{ at: number; response: unknown }>(SYNC_RUN + runId);
+    if (done) return { status: "replay", response: done.response };
+    const lock = await this.ctx.storage.get<{ runId: string; until: number }>(SYNC_LOCK);
+    if (lock && lock.until > Date.now() && lock.runId !== runId) return { status: "busy" };
+    await this.ctx.storage.put(SYNC_LOCK, { runId, until: Date.now() + lockMs });
+    return { status: "go" };
+  }
+
+  /** Finish a run: remember its response for replays (a day), release the lock, prune old runs. */
+  async syncFinish(runId: string, response: unknown | null): Promise<void> {
+    if (response !== null) await this.ctx.storage.put(SYNC_RUN + runId, { at: Date.now(), response });
+    const lock = await this.ctx.storage.get<{ runId: string }>(SYNC_LOCK);
+    if (lock?.runId === runId) await this.ctx.storage.delete(SYNC_LOCK);
+    const runs = await this.ctx.storage.list<{ at: number }>({ prefix: SYNC_RUN });
+    const stale = [...runs].filter(([, v]) => v.at < Date.now() - 86_400_000).map(([k]) => k);
+    if (stale.length) await this.ctx.storage.delete(stale.slice(0, 128));
   }
 
   async alarm(): Promise<void> {
