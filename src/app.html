@@ -227,7 +227,8 @@ h2.group b { color: var(--ink); }
 .focus .task-due{font-size:12px;margin-top:2px}
 .focus .task-priority{max-width:96px;min-height:40px;padding:6px;font-size:12px}
 @media(max-width:420px){.rail .ev{grid-template-columns:50px minmax(0,1fr) auto;gap:11px}.rail .ev::after{left:55px}.focus .focus-task{align-items:center}}
-\n/* Today is a daily dashboard; quadrant planning belongs in Tasks. */
+
+/* Today is a daily dashboard; quadrant planning belongs in Tasks. */
 .today-dashboard{margin-bottom:14px}
 .today-focus-heading,.today-activity-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 10px}
 .today-focus-heading h2,.today-activity-heading h2{margin:0;font-size:21px}
@@ -415,6 +416,23 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
 .promised-today .today-activity-heading{margin:20px 0 0}
 @media(max-width:420px){.promised-today{padding:16px;border-radius:20px}}
 
+/* Timeline geometry: one source of truth. The rail line and dots are placed from the
+   time-column width (--tl-time) and the gap (--tl-gap), so they can never overlap text. */
+.rail{--tl-time:64px;--tl-gap:32px;--tl-dot:10px;--tl-line:21px}
+.rail::before{left:calc(var(--tl-time) + var(--tl-gap) / 2 - 1px);top:14px;bottom:14px}
+.rail .ev{grid-template-columns:var(--tl-time) minmax(0,1fr) auto;column-gap:var(--tl-gap);align-items:start;padding:12px 0;min-height:0}
+.rail .ev::after{left:calc(var(--tl-time) + var(--tl-gap) / 2 - var(--tl-dot) / 2);top:calc(12px + (var(--tl-line) - var(--tl-dot)) / 2);width:var(--tl-dot);height:var(--tl-dot)}
+.rail .ev time{font-size:13px;line-height:var(--tl-line)}
+.rail .ev .what{display:block;font-size:15px;line-height:var(--tl-line)}
+.rail .ev .entry .what{display:inline}
+.rail .ev .sub{margin-top:3px;line-height:1.35}
+.rail .ev .body{column-gap:14px;align-items:center}
+.rail .ev .mk,.rail .ev>.log-actions{align-self:center}
+.rail + .rail{margin-top:0}
+.now{margin:18px 0}
+.later{margin:28px 0 6px}
+@media(max-width:480px){.rail{--tl-time:52px;--tl-gap:28px}}
+@media(max-width:360px){.rail{--tl-time:46px;--tl-gap:24px}}
 </style>
 </head>
 <body>
