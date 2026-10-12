@@ -457,6 +457,13 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
 .unified-task .when{font-size:13px;color:var(--mark);font-weight:600;white-space:nowrap}
 button.today-focus-dot{background:none;border:0;padding:0;min-width:44px;min-height:44px;display:grid;place-items:center;cursor:pointer;flex:none;line-height:1}
 button.today-focus-dot:disabled{color:var(--mark)}
+.connect-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0 8px}
+.connect-btn{display:flex;flex-direction:column;gap:4px;padding:14px 16px;border:1.5px solid var(--rule);border-radius:14px;background:var(--sheet);color:var(--ink);text-decoration:none;min-height:44px}
+.connect-btn b{font-size:17px}
+.connect-btn span{font-size:13px;color:var(--ink-2);line-height:1.35}
+.connect-btn:hover,.connect-btn:focus-visible{border-color:var(--mark)}
+.connect-note{font-size:14px;margin:0 0 14px}
+@media(max-width:520px){.connect-grid{grid-template-columns:1fr}.connect-btn{flex-direction:row;align-items:baseline;justify-content:space-between;gap:12px}.connect-btn span{text-align:right}}
 </style>
 </head>
 <body>
@@ -1398,24 +1405,52 @@ async function copy(text, btn) {
   catch { toast("Press and hold to copy"); }
 }
 
+/*
+ * One-tap connect buttons. Cursor has a real install link (cursor.com/install-mcp with the server config),
+ * so its button adds Daybook in one step. Claude and ChatGPT have no link that fills in a connector
+ * address, so their buttons copy the address and open the exact page where it's pasted.
+ */
+const CONNECT_TARGETS = {
+  claude: { url: "https://claude.ai/customize/connectors", toast: "Address copied. In Claude, tap + Add, then Add custom connector, name it Daybook and paste." },
+  chatgpt: { url: "https://chatgpt.com/plugins", toast: "Address copied. In ChatGPT, tap +, then Add custom MCP server, paste and choose OAuth." }
+};
+const cursorInstallUrl = mcpUrl => "https://cursor.com/install-mcp?name=daybook&config=" + encodeURIComponent(btoa(JSON.stringify({ url: mcpUrl })));
+const connectButtons = mcpUrl => h`<div class="connect-grid">
+    <a class="connect-btn" data-connect="claude" href="${CONNECT_TARGETS.claude.url}" target="_blank" rel="noopener"><b>Claude</b><span>Copies your address and opens Claude's connectors</span></a>
+    <a class="connect-btn" data-connect="chatgpt" href="${CONNECT_TARGETS.chatgpt.url}" target="_blank" rel="noopener"><b>ChatGPT</b><span>Copies your address and opens ChatGPT's plugins</span></a>
+    <a class="connect-btn" data-connect="cursor" href="${cursorInstallUrl(mcpUrl)}" target="_blank" rel="noopener"><b>Cursor</b><span>Adds Daybook to Cursor in one step</span></a>
+  </div>
+  <p class="muted connect-note">Each assistant then shows a Daybook sign-in page: enter your password and tap Allow.</p>`;
+/** Copy happens in the same tap as opening the page, so phones allow both. */
+function wireConnectButtons(root, mcpUrl) {
+  root.querySelectorAll("[data-connect]").forEach(a => a.onclick = () => {
+    const target = CONNECT_TARGETS[a.dataset.connect];
+    if (!target) return; // Cursor: the link itself does everything
+    try { navigator.clipboard.writeText(mcpUrl).then(() => toast(target.toast), () => toast("Copy this address first: " + mcpUrl)); }
+    catch { toast("Copy this address first: " + mcpUrl); }
+  });
+}
+
 /* Connect an AI assistant (Settings only). The address is the only thing shared: never put the password in a snippet. */
 const assistantBlock = (mcpUrl) => {
   const cursor = JSON.stringify({ mcpServers: { notes: { url: mcpUrl } } }, null, 2);
   return h`<section class="step" id="s6"><h3>Connect an AI assistant</h3>
-    <p class="muted">Use this address in your assistant. You'll enter your password on its sign-in page, never in a config file.</p>
+    <p class="muted">Tap your assistant. You'll enter your password on Daybook's sign-in page, never in the assistant.</p>
+    ${raw(connectButtons(mcpUrl))}
+    <p class="muted">Your Daybook address, if you need to paste it yourself:</p>
     <div class="copyrow"><code>${mcpUrl}</code><button class="btn quiet" id="copymcp2" type="button">Copy</button></div>
-    <details class="more"><summary>Claude</summary>
-      <ol><li>Open <b>Settings → Connectors</b> and choose <b>Add custom connector</b>.</li>
-        <li>Name it <b>Notes</b> and paste the address above.</li>
+    <details class="more"><summary>Claude, step by step</summary>
+      <ol><li>Open <b>Customize → Connectors</b>, tap <b>+ Add</b> and choose <b>Add custom connector</b>.</li>
+        <li>Name it <b>Daybook</b> and paste the address above.</li>
         <li>Enter your password on the sign-in page and tap <b>Allow</b>.</li></ol></details>
-    <details class="more"><summary>ChatGPT</summary>
+    <details class="more"><summary>ChatGPT, step by step</summary>
       <ol><li>Go to <b>Plugins</b>, select <b>+</b>, then <b>Add custom MCP server</b>.</li>
         <li>Paste the address above and choose <b>OAuth</b>.</li>
         <li>Choose <b>Create as a plugin</b>, then enter your password when asked.</li></ol></details>
     <details class="more"><summary>Gemini</summary>
       <p class="muted">Gemini's custom apps are for personal Google accounts in the US (18+), and may ask for credentials this server doesn't issue yet.</p></details>
-    <details class="more"><summary>Cursor</summary>
-      <p class="muted">Add this to <code>~/.cursor/mcp.json</code>:</p>
+    <details class="more"><summary>Cursor, by hand</summary>
+      <p class="muted">If the Cursor button doesn't open Cursor, add this to <code>~/.cursor/mcp.json</code>:</p>
       <pre class="snippet" style="overflow:auto;white-space:pre">${cursor}</pre>
       <button class="btn quiet" id="copycursor" type="button">Copy</button></details></section>`;
 };
@@ -1423,6 +1458,7 @@ const assistantBlock = (mcpUrl) => {
 function wireAssistant(mcpUrl) {
   const cursorJson = JSON.stringify({ mcpServers: { notes: { url: mcpUrl } } }, null, 2);
   $("#copymcp2").onclick = e => copy(mcpUrl, e.target);
+  wireConnectButtons(main, mcpUrl);
   $("#copycursor").onclick = e => copy(cursorJson, e.target);
 }
 
@@ -1603,14 +1639,11 @@ function showDone(mcpUrl) {
     <h2>You're set up</h2>
     <section class="step ok"><h3><span class="n">✓</span>Notes are saving to your private repository</h3>
       ${raw(cfg.push ? `<p>Send yourself a test reminder to check your phone gets it.</p><button class="btn quiet" id="test" type="button">Send test notification</button>` : `<p class="muted">Phone notifications are off. You can turn them on in Settings.</p>`)}</section>
-    <section class="step"><h3><span class="n">2</span>Connect Claude</h3>
-      <ol>
-        <li>In Claude, open <b>Settings → Connectors</b> and choose <b>Add custom connector</b>.</li>
-        <li>Name it <b>Notes</b> and paste this address:</li>
-      </ol>
+    <section class="step"><h3><span class="n">2</span>Connect your AI assistant</h3>
+      <p>Tap the one you use. Claude and ChatGPT open with your address copied, ready to paste; Cursor adds it for you.</p>
+      ${raw(connectButtons(mcpUrl))}
       <div class="copyrow"><code>${mcpUrl}</code><button class="btn quiet" id="copymcp" type="button">Copy</button></div>
-      <ol start="3"><li>A sign-in page opens. Enter the same password you use here and tap <b>Allow</b>.</li>
-        <li>Try it: ask Claude <i>"remind me to drink water at 3pm"</i>.</li></ol></section>
+      <p class="muted">Then try it: ask <i>"remind me to drink water at 3pm"</i>.</p></section>
     <section class="step"><h3><span class="n">3</span>Keep this app handy</h3>
       <p>This is your notes app's address. Save it somewhere, like a note to yourself:</p>
       <div class="copyrow"><code>${location.origin + "/app"}</code><button class="btn quiet" id="copyapp" type="button">Copy</button></div>
@@ -1642,6 +1675,7 @@ function showDone(mcpUrl) {
     });
   }
   $("#copymcp").onclick = e => copy(mcpUrl, e.target);
+  wireConnectButtons(main, mcpUrl);
   $("#copyapp").onclick = e => copy(location.origin + "/app", e.target);
   const t = $("#test");
   if (t) t.onclick = async () => {
