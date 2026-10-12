@@ -69,7 +69,7 @@ function serverFor(env: Env): McpServer {
       const path = typePath(type);
       try { await notes.get(path); return {name:type,alreadyExists:true}; }
       catch (e) { if (!(e instanceof Error && e.message.startsWith("Note or notes repository not found"))) throw e; }
-      await notes.put(path, "# " + type + "\\n");
+      await notes.put(path, "# " + type + "\n");
       return {name:type};
     }));
   server.registerTool("log_to", { description: "Add a timestamped entry to a named log type, creating a tagged journal entry", inputSchema: { type: z.string(), entry: z.string(), date: z.string().optional(), time: z.string().optional() } },
