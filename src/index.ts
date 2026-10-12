@@ -23,6 +23,7 @@ REMINDERS push a notification to the owner's phone. Any unchecked task line with
   - [ ] Renew car registration @2026-10-14 9am     one-off; time optional (9am default)
   - [ ] Take meds @daily 8am, 8pm                  repeating; also @weekdays, @weekends, @mon,wed,fri
 Times: 9am, 5:30pm or 17:30; several separated by commas. Checking the box ([x]), removing the line or deleting the note stops it. Past one-off times are ignored. Notifications have a Done button that records the item in that day's log.
+A task line may end with an ID like " ^t7k2q": it links the task to Apple Reminders. When editing a note, keep each ID at the end of its own line; never remove, change or copy one.
 
 LOG (log / get_logs tools): timestamped entries in one note per day (journal/log/YYYY-MM-DD.md). Tag each entry: #food #drink #med #exercise #sleep #mood #goal, or another short tag that fits. Example: log("burrito and a beer #food #drink"). Pass date/time when the owner describes something earlier ("had eggs at 8" → time "08:00"). Items completed from a reminder's Done button appear as "✓ <reminder text> #done". When the owner says they did something that has a reminder (e.g. took their meds), call complete_reminder instead of log so the reminder stops.
 
