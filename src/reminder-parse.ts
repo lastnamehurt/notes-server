@@ -112,7 +112,9 @@ function parseDays(spec: string): number[] | null {
 export function parseReminders(note: string, content: string, timeZone = DEFAULT_TIMEZONE, now = Date.now()): Reminder[] {
   const out: Reminder[] = [];
   for (const line of content.split("\n")) {
-    // Priority is task metadata, not part of the schedule or reminder title.\n    const cleanLine = line.replace(/(?:^|\\s)@priority:(?:do|plan|delegate|someday)\\b/gi, "");\n    const m = LINE.exec(cleanLine);
+    // Priority is task metadata, not part of the schedule or reminder title.
+    const cleanLine = line.replace(/(?:^|\s)@priority:(?:do|plan|delegate|someday)\b/gi, "");
+    const m = LINE.exec(cleanLine);
     if (!m) continue;
     const [, rawText, spec, rawTimes] = m;
     const text = rawText.trim();
