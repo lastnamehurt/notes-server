@@ -7,6 +7,7 @@ import { scheduler, scheduleNote, loadSettings, saveSettings, rescan, checkPassw
 import { applySettings, notesConfigured, type Settings } from "./settings";
 import { listRepos, prepareRepo, startDeviceFlow, pollDeviceFlow, ensureNotesRepo, githubClientId, githubLogin, ownsNotesRepo } from "./setup";
 import { sendPush } from "./reminders";
+import { makeBackup, parseBackup, restoreMissing } from "./backup";
 import { signSession, verifySession } from "./action";
 import { APP_HTML, MANIFEST } from "./ui";
 import { pushConfigured } from "./reminder-parse";
@@ -194,6 +195,26 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
         await notes.delete(name);
         await scheduler(env).removeNote(name);
         return json({ name });
+      }
+      case "GET /backup": {
+        const backup = makeBackup(await notes.all());
+        return new Response(JSON.stringify(backup), { headers: {
+          "Content-Type": "application/json", "Content-Disposition": "attachment; filename=notes-backup.json",
+          "Cache-Control": "no-store" } });
+      }
+      case "POST /restore": {
+        const backup = parseBackup(await request.json());
+        const existing = new Set(await notes.list());
+        const restored = await restoreMissing(backup, existing, (name, content) => notes.put(name, content));
+        await rescan(env);
+        return json({ restored });
+      }
+      case "GET /health": {
+        const [github, pushError] = await Promise.allSettled([notes.list(), scheduler(env).lastError()]);
+        return json({ github: github.status === "fulfilled" ? "ok" : "error",
+          reminders: pushError.status === "fulfilled" ? (pushError.value ? "degraded" : "ok") : "error",
+          pushConfigured: pushConfigured(env),
+          noteCount: github.status === "fulfilled" ? github.value.length : null }, github.status === "fulfilled" ? 200 : 503);
       }
       case "GET /search": return json(await notes.search(url.searchParams.get("q") ?? ""));
       case "POST /log": {
