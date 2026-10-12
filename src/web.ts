@@ -74,6 +74,7 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
       return { id: task.note + ":" + task.line, title, priority: task.priority,
         dueAt: at === undefined ? null : new Date(at).toISOString(), sourceNote: task.note };
     }) });
+
   }
 
   // Mutating requests must come from this origin (SameSite=Strict already blocks cross-site cookies).
