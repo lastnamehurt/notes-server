@@ -5,7 +5,7 @@ import OAuthProvider, { AuthorizationError, CimdFetchError } from "@cloudflare/w
 import { McpServer } from "@modelcontextprotocol/server";
 import { createMcpHandler } from "agents/mcp/server";
 import { z } from "zod";
-import { GithubNotes, CATEGORIES, type Env } from "./github";
+import { GithubNotes, CATEGORIES, localDate, type Env } from "./github";
 import { appendLog, recentLogs } from "./log";
 import { scheduler, fmt, scheduleNote, rescan, effectiveEnv, checkPassword, completeReminder } from "./core";
 import { notesConfigured } from "./settings";
@@ -57,7 +57,7 @@ function serverFor(env: Env): McpServer {
     const now = new Date();
     const dates = new Set(Array.from({length:7}, (_, offset) => {
       const day = new Date(now.getTime() - offset * 86400000);
-      return new Intl.DateTimeFormat("en-CA", {timeZone:zone,year:"numeric",month:"2-digit",day:"2-digit"}).format(day);
+      return localDate(zone, day);
     }));
     const date = [...dates][0];
     const snapshot = await notes.all();
