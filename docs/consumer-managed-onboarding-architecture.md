@@ -84,3 +84,7 @@ All write operations require auth, CSRF protection where applicable, validation,
 Managed D1-only vs D1+R2; auth provider; domain; storage regions; retention and encryption policy; consumer push strategy; pricing and quotas; attachments; BYO GitHub availability; operational support and compliance.
 
 Non-goals for this documentation PR: implementing code, deploying infrastructure, changing existing repository/Worker configuration, or migrating real consumer data.
+
+## Implementation status (UX slice)
+
+A first mobile UX slice was added to `src/app.html` on this branch: Journal navigation and daily timeline from existing `journal/daily/` entries, Memory label for the notes browser, and clearer Thought / Task / Activity capture choices. The existing self-hosted setup, authentication, storage and MCP integrations remain unchanged. Managed consumer sign-up, storage isolation, natural-language auto-classification, and one-tap AI OAuth connections are **not implemented**. The Journal view currently shows the most recent 30 daily entries. This work requires browser and regression testing before merging.
