@@ -11,7 +11,8 @@ export interface Env extends ReminderEnv {
   /** "true" enables OAuth dynamic client registration (local MCP acceptance test only). */
   ALLOW_CLIENT_REGISTRATION?: string;
   MCP_BEARER_TOKEN: string;
-  /** Separate read-only secret for Apple Shortcuts task export. */\n  SHORTCUTS_TOKEN?: string;
+  /** Separate read-only secret for Apple Shortcuts task export. */
+  SHORTCUTS_TOKEN?: string;
   /** Friendlier name for MCP_BEARER_TOKEN, used by the Deploy to Cloudflare form. */
   PASSWORD?: string;
   NOTES_REPO: string;
