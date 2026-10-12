@@ -986,6 +986,12 @@ views.logs = async () => {
     </section>
     <section class="step"><h3>Last 7 days</h3><div id="time-summary"></div></section>
     <section class="step"><h3>My logs</h3><div id="log-type-list" class="log-types">Loading…</div></section>
+    <details class="step"><summary>Backfill journal history</summary>
+      <p class="muted">Create daily journal entries from older logs. Existing reflections are preserved. Preview changes before applying.</p>
+      <button class="btn quiet" type="button" id="journal-backfill-preview">Preview backfill</button>
+      <p id="journal-backfill-status" role="status" aria-live="polite"></p>
+      <button class="btn" type="button" id="journal-backfill-run" hidden>Backfill journals</button>
+    </details>
     <details class="step"><summary>+ Create a log type</summary><div class="log-create"><input id="new-log-type" placeholder="e.g. cardio, food, sleep" aria-label="New log type"><button class="btn quiet" id="add-log-type" type="button">Create</button></div></details>
   </div>`;
   const refresh = async () => {
@@ -994,6 +1000,38 @@ views.logs = async () => {
      $("#time-summary").innerHTML = h`<p><strong>${(summary.trackedMinutes/60).toFixed(1)} hours tracked</strong> across ${summary.sessionCount} sessions</p>${raw(summary.byType.map(t => h`<div class="log-type-row"><span>${t.type}</span><strong>${(t.minutes/60).toFixed(1)}h</strong></div>`).join(""))}`;
     $("#log-type").innerHTML = types.map(t => h`<option value="${t.name}">${t.name}</option>`).join("");
     $("#log-type-list").innerHTML = types.length ? types.map(t => h`<div class="log-type-row"><strong>${t.name}</strong><span>${t.count} entries</span></div>`).join("") : "<p>No logs yet. Create your first type above.</p>";
+  };
+  let backfillDates = [];
+  $("#journal-backfill-preview").onclick = async () => {
+    try {
+      const result = await api("/journal/backfill");
+      backfillDates = result.dates;
+      $("#journal-backfill-status").textContent = result.pending
+        ? result.pending + " of " + result.total + " logged days need journal updates."
+        : "All " + result.total + " logged days are already synchronized.";
+      $("#journal-backfill-run").hidden = !result.pending;
+    } catch (e) { handle(e); }
+  };
+  $("#journal-backfill-run").onclick = async () => {
+    const button = $("#journal-backfill-run");
+    if (!backfillDates.length || !confirm("Backfill " + backfillDates.length + " daily journals? Existing reflections will be preserved.")) return;
+    button.disabled = true;
+    let completed = 0, failed = [];
+    try {
+      for (let i = 0; i < backfillDates.length; i += 10) {
+        const batch = backfillDates.slice(i, i + 10);
+        const response = await api("/journal/backfill", { method: "POST", body: { dates: batch } });
+        completed += response.results.filter(r => r.status !== "failed").length;
+        failed.push(...response.results.filter(r => r.status === "failed").map(r => r.date));
+        $("#journal-backfill-status").textContent = "Processed " + Math.min(i + 10, backfillDates.length) + "/" + backfillDates.length + " days…";
+      }
+      $("#journal-backfill-status").textContent = completed + " journal days synchronized." +
+        (failed.length ? " Failed dates: " + failed.join(", ") + ". You can retry the backfill." : "");
+      button.hidden = true;
+      backfillDates = [];
+      toast("Journal backfill finished");
+    } catch (e) { handle(e); $("#journal-backfill-status").textContent = "Backfill interrupted. Preview again to resume safely."; }
+    finally { button.disabled = false; }
   };
   $("#add-log-type").onclick = async () => {
     try { await api("/log-types", {method:"POST",body:{name:$("#new-log-type").value}}); $("#new-log-type").value=""; await refresh(); toast("Log type created"); }
