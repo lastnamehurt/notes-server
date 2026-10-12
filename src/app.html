@@ -457,6 +457,15 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
 .unified-task .when{font-size:13px;color:var(--mark);font-weight:600;white-space:nowrap}
 button.today-focus-dot{background:none;border:0;padding:0;min-width:44px;min-height:44px;display:grid;place-items:center;cursor:pointer;flex:none;line-height:1}
 button.today-focus-dot:disabled{color:var(--mark)}
+/* Tasks rows: a tap-to-complete circle, the full-width title, then date, priority and source as small labels. */
+.unified-task{display:grid;grid-template-columns:44px minmax(0,1fr);align-items:start;gap:0 8px;padding:10px 0;border-bottom:1px solid var(--rule);flex-wrap:nowrap}
+.unified-task .task-check{width:44px;height:44px;min-height:44px;border:0;border-radius:50%;background:none;color:var(--ink-2);font-size:24px;line-height:1;padding:0;display:grid;place-items:center;cursor:pointer}
+.unified-task .task-check:disabled{color:var(--mark)}
+.unified-task .task-main{min-width:0;padding-top:9px}
+.unified-task .task-title{display:block;color:var(--ink);text-decoration:none;font-weight:600;font-size:16px;line-height:1.35;overflow-wrap:anywhere}
+.unified-task .task-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:6px}
+.unified-task .task-meta .task-priority{flex:none;width:auto;max-width:none;min-width:0;min-height:32px;padding:3px 26px 3px 10px;border-radius:999px;font-size:13px;font-weight:600}
+.unified-task .task-from{font-size:13px;color:var(--ink-2)}
 </style>
 </head>
 <body>
@@ -1284,13 +1293,13 @@ views.reminders = async () => {
   let html = h`<div class="bar"><h2>Tasks</h2><button class="btn" id="newtask">+ Add task</button></div><p class="muted">Everything you need to do. Tasks with a date are under Scheduled.</p>`;
   html += h`<section class="step"><h3>Open tasks · ${unscheduled.length}</h3>${raw(groups.map(([id,label]) => {
     const matching = unscheduled.filter(t => t.priority === id);
-    return matching.length ? h`<div class="task-group"><h4>${label} · ${matching.length}</h4>${raw(matching.map(t => h`<div class="unified-task"><a href="#note/${t.note}">${taskParts(t.text).title}${taskParts(t.text).when ? raw(h` <span class="when">${taskParts(t.text).when}</span>`) : ""}</a><select class="task-priority" data-note="${t.note}" data-line="${t.line}" aria-label="Priority for ${taskParts(t.text).title}">${raw(groups.map(([value,title]) => h`<option value="${value}" ${value === id ? "selected" : ""}>${title}</option>`).join(""))}</select><button class="task-done" data-note="${t.note}" data-line="${t.line}" aria-label="Mark ${taskParts(t.text).title} done">Done</button></div>`).join(""))}</div>` : "";
+    return matching.length ? h`<div class="task-group"><h4>${label} · ${matching.length}</h4>${raw(matching.map(t => { const p = taskParts(t.text); return h`<div class="unified-task"><button type="button" class="task-done task-check" data-note="${t.note}" data-line="${t.line}" aria-label="Mark ${p.title} done">○</button><div class="task-main"><a class="task-title" href="#note/${t.note}">${p.title}</a><div class="task-meta">${p.when ? raw(h`<span class="when">${p.when}</span>`) : ""}<select class="task-priority" data-note="${t.note}" data-line="${t.line}" aria-label="Priority for ${p.title}">${raw(groups.map(([value,title]) => h`<option value="${value}" ${value === id ? "selected" : ""}>${title}</option>`).join(""))}</select><span class="task-from">${titleFrom(t.note)}</span></div></div></div>`; }).join(""))}</div>` : "";
   }).join(""))}</section>`;
   html += h`<section class="step"><h3>Scheduled tasks · ${scheduled.length}</h3>${raw(scheduled.length ? scheduled.map(r => h`<div class="rem"><time>${longDay(r.at)} · ${fmt12(hhmm(r.at))}</time><div><a class="what" href="#note/${r.note}">${r.text}</a><span class="sub">${titleFrom(r.note)}${r.repeat ? ", repeats" : ""}</span></div><button class="mk" data-note="${r.note}" data-text="${r.text}" data-at="${r.at}">Done</button></div>`).join("") : '<p class="muted">No scheduled tasks.</p>')}</section>`;
   main.innerHTML = html;
   $("#newtask").onclick = () => taskSheet({ onSaved: () => views.reminders() });
   main.querySelectorAll(".task-priority").forEach(select => select.onchange = async () => { select.disabled = true; try { const note = await api("/note?name=" + encodeURIComponent(select.dataset.note)); await api("/priorities",{method:"POST",body:{name:select.dataset.note,line:Number(select.dataset.line),priority:select.value,sha:note.sha}}); await views.reminders(); } catch(err) { handle(err); select.disabled = false; } });
-  main.querySelectorAll(".task-done").forEach(button => button.onclick = async () => { button.disabled = true; try { const name = button.dataset.note; const note = await api("/note?name=" + encodeURIComponent(name)); await setTask(name,note.content,Number(button.dataset.line),true,note.sha); await views.reminders(); } catch(err) { handle(err); button.disabled = false; } });
+  main.querySelectorAll(".task-done").forEach(button => button.onclick = async () => { button.disabled = true; button.textContent = "✓"; try { const name = button.dataset.note; const note = await api("/note?name=" + encodeURIComponent(name)); await setTask(name,note.content,Number(button.dataset.line),true,note.sha); await views.reminders(); } catch(err) { handle(err); button.disabled = false; } });
   main.querySelectorAll(".mk").forEach(b => b.onclick = async () => { b.disabled = true; try { await complete(b.dataset.note,b.dataset.text,+b.dataset.at); await views.reminders(); } catch(err) { handle(err); b.disabled = false; } });
 };
 /* ---------- Note: read, tap to edit ---------- */
