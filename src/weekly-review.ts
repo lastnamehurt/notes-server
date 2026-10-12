@@ -82,16 +82,16 @@ export async function runWeeklyReview(env: Env, now = Date.now()): Promise<boole
           title: "Daybook weekly review", message,
         });
         if (env.PUBLIC_URL) {
-          data.set("url", env.PUBLIC_URL.replace(/\\/$/, "") + "/app#today");
+          data.set("url", env.PUBLIC_URL.replace(/\/$/, "") + "/app#today");
           data.set("url_title", "Open Daybook");
         }
         const response = await fetch("https://api.pushover.net/1/messages.json", {method:"POST",body:data});
         if (!response.ok) throw new Error("Pushover HTTP " + response.status);
       } else if (env.NTFY_TOPIC) {
-        const endpoint = (env.NTFY_SERVER || "https://ntfy.sh").replace(/\\/$/, "") + "/" + encodeURIComponent(env.NTFY_TOPIC.trim().split("/").pop()!);
+        const endpoint = (env.NTFY_SERVER || "https://ntfy.sh").replace(/\/$/, "") + "/" + encodeURIComponent(env.NTFY_TOPIC.trim().split("/").pop()!);
         const headers: Record<string,string> = {"Title":"Daybook weekly review","Tags":"calendar"};
         if (env.NTFY_TOKEN) headers["Authorization"] = "Bearer " + env.NTFY_TOKEN;
-        if (env.PUBLIC_URL) headers["Click"] = env.PUBLIC_URL.replace(/\\/$/, "") + "/app#today";
+        if (env.PUBLIC_URL) headers["Click"] = env.PUBLIC_URL.replace(/\/$/, "") + "/app#today";
         const response = await fetch(endpoint,{method:"POST",headers,body:message});
         if (!response.ok) throw new Error("ntfy HTTP " + response.status);
       }
