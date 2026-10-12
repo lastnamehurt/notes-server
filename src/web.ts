@@ -1,3 +1,4 @@
+import { tasksFromNotes, changeTaskPriority } from "./priorities";
 import { runDiagnostics } from "./diagnostics";
 // Web app at /app: a phone-first UI over the same notes, logs and reminders the MCP tools use.
 // Unlocked with MCP_BEARER_TOKEN; the session is an HMAC-signed, HttpOnly, SameSite=Strict cookie.
@@ -176,6 +177,14 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
     if (!notesConfigured(env)) return fail("Finish setup first.", 409);
     const notes = new GithubNotes(env);
     switch (route) {
+      case "GET /priorities": return json(tasksFromNotes(await notes.all()));
+      case "POST /priorities": {
+        const { name, line, priority, sha } = await request.json<{name:string;line:number;priority:"do"|"plan"|"delegate"|"someday"|"inbox";sha?:string}>();
+        const current = await notes.get(name);
+        if (!sha || current.sha !== sha) return fail("Note changed; refresh and try again", 409);
+        const updated = changeTaskPriority(current.content, line, priority);
+        return json(await notes.update(name, updated, sha));
+      }
       case "GET /notes": return json(await notes.list());
       case "GET /note": {
         const name = url.searchParams.get("name") ?? "";

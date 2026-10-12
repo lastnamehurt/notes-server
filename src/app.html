@@ -666,7 +666,39 @@ views.today = async () => {
       h`<li class="ev up"><time>${longDay(r.at).replace(/^\w+, /, "")}</time><div><a class="what" href="#note/${r.note}" style="color:inherit;text-decoration:none">${r.text}</a><span class="sub">${fmt12(hhmm(r.at))}</span></div></li>`).join("") + "</ol>";
   }
   if (!cfg.push) html += `<p class="hint">Reminders show here, but phone notifications are off.${cfg.canSetup ? ' Turn them on in <a href="#settings">Setup</a>.' : ""}</p>`;
+  // GTD inbox and Eisenhower focus; priorities are explicit, never guessed from note content.
+  try {
+    const tasks = await api("/priorities");
+    const groups = [
+      ["do", "Do now", "Urgent and important"],
+      ["plan", "Plan", "Important, not urgent"],
+      ["delegate", "Handle or delegate", "Urgent, lower importance"],
+      ["someday", "Someday / maybe", "Not urgent"],
+      ["inbox", "Inbox · clarify", "Unsorted tasks"]
+    ];
+    const groupHtml = groups.map(([id, label, subtitle]) => {
+      const matching = tasks.filter(t => t.priority === id);
+      if (!matching.length) return "";
+      return h`<details class="step" ${id === "do" || id === "inbox" ? "open" : ""}><summary><b>${label}</b> · ${matching.length} <span class="muted">${subtitle}</span></summary>
+        <ul class="list">${raw(matching.slice(0, 30).map(t => h`<li><a href="#note/${t.note}">${t.text}</a>
+          <select class="task-priority" data-note="${t.note}" data-line="${t.line}" aria-label="Priority for ${t.text}">
+            ${raw(groups.map(([value, title]) => h`<option value="${value}" ${id === value ? "selected" : ""}>${title}</option>`).join(""))}
+          </select></li>`).join(""))}</ul></details>`;
+    }).join("");
+    html = '<section class="focus"><h2>Focus</h2><p class="muted">Capture tasks anywhere using Markdown checkboxes. Sort only what matters.</p>' +
+      (groupHtml || '<p class="muted">No open tasks yet. Add a checkbox task to any note.</p>') + '</section>' + html;
+  } catch { html = '<p class="hint">Priorities are temporarily unavailable.</p>' + html; }
   main.innerHTML = html;
+  main.querySelectorAll(".task-priority").forEach(select => select.onchange = async () => {
+    select.disabled = true;
+    try {
+      const note = await api("/note?name=" + encodeURIComponent(select.dataset.note));
+      await api("/priorities", { method: "POST", body: {
+        name: select.dataset.note, line: Number(select.dataset.line), priority: select.value, sha: note.sha
+      } });
+      await views.today();
+    } catch (e) { handle(e); select.disabled = false; }
+  });
   main.querySelectorAll(".mk").forEach(b => b.onclick = async () => {
     b.disabled = true;
     try { await complete(b.dataset.note, b.dataset.text, +b.dataset.at); views.today(); }
