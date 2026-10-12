@@ -123,8 +123,9 @@ export class GithubNotes {
     try { await this.get(name); return true; }
     catch (e) { if (e instanceof Error && e.message.startsWith("Note or notes repository not found")) return false; throw e; }
   }
-  async update(name:string, content:string):Promise<string> {
+  async update(name:string, content:string, expectedSha?:string):Promise<string> {
     const {sha} = await this.get(name);
+    if (expectedSha !== undefined && sha !== expectedSha) throw new Error("Note changed since it was opened; reload before saving");
     return this.put(name,content,sha);
   }
   async delete(name:string):Promise<string> {
