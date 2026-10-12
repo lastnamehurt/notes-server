@@ -970,7 +970,8 @@ views.logs = async () => {
     <details class="step"><summary>+ Create a log type</summary><div class="log-create"><input id="new-log-type" placeholder="e.g. cardio, food, sleep" aria-label="New log type"><button class="btn quiet" id="add-log-type" type="button">Create</button></div></details>
   </div>`;
   const refresh = async () => {
-    const [allTypes, summary] = await Promise.all([api("/log-types"), api("/time-summary")]);\n    const types = allTypes.filter(t => t.name !== "done");
+    const [allTypes, summary] = await Promise.all([api("/log-types"), api("/time-summary")]);
+    const types = allTypes.filter(t => t.name !== "done");
      $("#time-summary").innerHTML = h`<p><strong>${(summary.trackedMinutes/60).toFixed(1)} hours tracked</strong> across ${summary.sessionCount} sessions</p>${raw(summary.byType.map(t => h`<div class="log-type-row"><span>${t.type}</span><strong>${(t.minutes/60).toFixed(1)}h</strong></div>`).join(""))}`;
     $("#log-type").innerHTML = types.map(t => h`<option value="${t.name}">${t.name}</option>`).join("");
     $("#log-type-list").innerHTML = types.length ? types.map(t => h`<div class="log-type-row"><strong>${t.name}</strong><span>${t.count} entries</span></div>`).join("") : "<p>No logs yet. Create your first type above.</p>";
@@ -1306,7 +1307,8 @@ views.setup = async () => {
   const tz = prev.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
   const topic = prev.ntfyTopic || randomTopic();
   let chosenRepo = prev.notesRepo || "";
-  const managed = cfg.canSetup === false;\n  const connect = cfg.githubConnect && !managed;
+  const managed = cfg.canSetup === false;
+  const connect = cfg.githubConnect && !managed;
   // Step numbers: with Connect GitHub, one step covers the repository and its key.
   const n = connect ? { tz: 2, push: 3 } : first ? { tz: 3, push: 4 } : { tz: 2, push: 3 };
 
