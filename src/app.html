@@ -1366,20 +1366,30 @@ function showDone(mcpUrl) {
       <div class="copyrow"><code>${location.origin + "/app"}</code><button class="btn quiet" id="copyapp" type="button">Copy</button></div>
       <p>On your phone, put it on your home screen. iPhone: tap <b>Share</b>, then <b>Add to Home Screen</b>. Android: tap <b>⋮</b>, then <b>Add to Home screen</b>.</p></section>
     <a class="btn a-btn" href="#today" style="width:100%;text-align:center;padding:15px">Open my notes</a></div>`;
-  const diagnosticButton = $("#run-diagnostics");
-  if (diagnosticButton) {
-    const run = async () => {
-      diagnosticButton.disabled = true;
-      $("#diagnostics-results").textContent = "Checking…";
+  // Delegate from the persistent main container so Settings re-renders cannot
+  // leave a visible diagnostics button without a click handler.
+  if (!main.dataset.diagnosticsWired) {
+    main.dataset.diagnosticsWired = "true";
+    main.addEventListener("click", async event => {
+      const button = event.target.closest("#run-diagnostics");
+      if (!button || !main.contains(button) || button.disabled) return;
+      const output = main.querySelector("#diagnostics-results");
+      if (!output) return;
+      button.disabled = true;
+      button.textContent = "Checking…";
+      output.textContent = "Checking your system…";
       try {
         const report = await api("/diagnostics");
-        $("#diagnostics-results").innerHTML = report.checks.map(item =>
-          h`<p><b>${item.status === "pass" ? "✓" : item.status === "fail" ? "✕" : "!"} ${item.id}</b>: ${item.message}</p>`).join("");
-      } catch (error) { $("#diagnostics-results").textContent = "Diagnostics failed: " + error.message; }
-      diagnosticButton.disabled = false;
-    };
-    diagnosticButton.onclick = run;
-    if (first) run();
+        if (!Array.isArray(report.checks)) throw new Error("Unexpected diagnostics response");
+        output.innerHTML = report.checks.map(item =>
+          h`<p><b>${item.status === "pass" ? "✓" : item.status === "fail" ? "✕" : "!"} ${item.id}</b>: ${item.message}</p>`).join("") || "<p>No checks returned.</p>";
+      } catch (error) {
+        output.textContent = "Diagnostics failed: " + (error.message || String(error));
+      } finally {
+        button.disabled = false;
+        button.textContent = "Run diagnostics";
+      }
+    });
   }
   $("#copymcp").onclick = e => copy(mcpUrl, e.target);
   $("#copyapp").onclick = e => copy(location.origin + "/app", e.target);
