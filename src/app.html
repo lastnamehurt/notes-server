@@ -294,6 +294,7 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
   <nav class="tabs" id="tabs" hidden aria-label="Sections">
     <a href="#today">Today</a>
     <a href="#notes">Notes</a>
+    <a href="#logs">Logs</a>
     <a href="#goals">Goals</a>
     <a href="#reminders">Reminders</a>
     <a href="#settings" id="settingsTab" hidden>Settings</a>
@@ -712,6 +713,32 @@ views.today = async () => {
 };
 
 let allNotes = null;
+views.logs = async () => {
+  $("#composer").hidden = true;
+  main.innerHTML = h`<div class="setup"><h2>Logs</h2><p class="lede">Track anything. Each entry stays in your daily journal.</p>
+    <section class="step"><h3>New log type</h3><div class="copyrow"><input id="new-log-type" placeholder="e.g. cardio, food, sleep" aria-label="New log type"><button class="btn quiet" id="add-log-type" type="button">Create</button></div></section>
+    <section class="step"><h3>Add an entry</h3><label for="log-type">Log</label><select id="log-type"></select>
+      <label for="typed-entry">What happened?</label><textarea id="typed-entry" rows="3" placeholder="e.g. Walked 25 minutes"></textarea>
+      <button class="btn" id="save-typed-log" type="button">Save entry</button></section>
+    <section class="step"><h3>My logs</h3><div id="log-type-list">Loading…</div></section></div>`;
+  const refresh = async () => {
+    const types = await api("/log-types");
+    $("#log-type").innerHTML = types.map(t => h`<option value="${t.name}">${t.name}</option>`).join("");
+    $("#log-type-list").innerHTML = types.length ? types.map(t => h`<p><b>${t.name}</b> · ${t.count} entries</p>`).join("") : "<p>No logs yet. Create your first type above.</p>";
+  };
+  $("#add-log-type").onclick = async () => {
+    try { await api("/log-types", {method:"POST",body:{name:$("#new-log-type").value}}); $("#new-log-type").value=""; await refresh(); toast("Log type created"); }
+    catch(e) { handle(e); }
+  };
+  $("#save-typed-log").onclick = async () => {
+    try {
+      await api("/typed-log", {method:"POST",body:{type:$("#log-type").value,entry:$("#typed-entry").value}});
+      $("#typed-entry").value=""; await refresh(); toast("Logged");
+    } catch(e) { handle(e); }
+  };
+  await refresh();
+};
+
 views.notes = async () => {
   main.innerHTML = h`<div class="bar"><input class="search" id="q" type="search" placeholder="Search notes" aria-label="Search notes" style="margin:0"><a class="btn" href="#new" style="text-decoration:none;white-space:nowrap">New note</a></div><div id="nl"><p class="empty">Loading notes…</p></div>`;
   allNotes = await api("/notes");
