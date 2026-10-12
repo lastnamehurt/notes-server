@@ -112,21 +112,33 @@ export async function completeReminder(env: Env, note: string, text: string, at?
   return { ticked: false };
 }
 
-const REMINDERS_NOTE = /^inbox\/(?:\d{4}-\d{2}-\d{2}-)?reminders(?:-\d+)?\.md$/;
+/** The inbox note new tasks collect in: an existing "Tasks" or "Reminders" note, newest first. */
+export const TASKS_NOTE = /^inbox\/(?:\d{4}-\d{2}-\d{2}-)?(?:tasks|reminders)(?:-\d+)?\.md$/;
+export const TASK_PRIORITIES = ["do", "plan", "delegate", "someday"] as const;
 
-/** Add "- [ ] <text> @<schedule>" to a note (default: a "Reminders" note in the inbox). */
-export async function addReminder(env: Env, input: { text: string; schedule: string; note?: string }) {
+/**
+ * Add "- [ ] <text> [@<schedule>] [@priority:<p>]" to a note (default: the inbox Tasks note, created if needed).
+ * The schedule is optional; when given it must be readable and, for a one-off, in the future.
+ */
+export async function addTask(env: Env, input: { text: string; schedule?: string; priority?: string; note?: string }) {
   const text = (input.text ?? "").replace(/\s+/g, " ").trim();
-  if (!text) throw new Error("Say what the reminder is for");
-  const line = `- [ ] ${text} @${(input.schedule ?? "").trim()}`;
-  const parsed = parseReminders("check", line, tz(env));
-  if (!parsed.length) throw new Error("Couldn't read that date and time");
-  if (!parsed[0].repeat && parsed.every(r => r.at <= Date.now())) throw new Error("That time has already passed");
+  if (!text) throw new Error("Say what needs doing");
+  if (parseReminders("check", "- [ ] " + text, tz(env)).length)
+    throw new Error("Use the date and time options instead of typing @ in the task");
+  const schedule = (input.schedule ?? "").trim();
+  const priority = (input.priority ?? "").trim();
+  if (priority && !(TASK_PRIORITIES as readonly string[]).includes(priority)) throw new Error("Unknown priority");
+  const line = `- [ ] ${text}` + (schedule ? ` @${schedule}` : "") + (priority ? ` @priority:${priority}` : "");
+  if (schedule) {
+    const parsed = parseReminders("check", line, tz(env));
+    if (!parsed.length) throw new Error("Couldn't read that date and time");
+    if (!parsed[0].repeat && parsed.every(r => r.at <= Date.now())) throw new Error("That time has already passed");
+  }
   const notes = new GithubNotes(env);
-  let name = input.note || (await notes.list()).find(n => REMINDERS_NOTE.test(n));
+  const name = input.note || (await notes.list()).find(n => TASKS_NOTE.test(n));
   if (!name) {
-    const content = "# Reminders\n\n" + line + "\n";
-    return scheduleNote(env, await notes.save(content, "inbox"), content);
+    const content = "# Tasks\n\n" + line + "\n";
+    return { ...(await scheduleNote(env, await notes.save(content, "inbox"), content)), line };
   }
   const lines = (await notes.get(name)).content.trimEnd().split("\n");
   let at = lines.length;
@@ -134,5 +146,11 @@ export async function addReminder(env: Env, input: { text: string; schedule: str
   lines.splice(at, 0, line);
   const content = lines.join("\n") + "\n";
   await notes.update(name, content);
-  return scheduleNote(env, name, content);
+  return { ...(await scheduleNote(env, name, content)), line };
+}
+
+/** Add a task that must have a schedule (a reminder). */
+export async function addReminder(env: Env, input: { text: string; schedule: string; note?: string }) {
+  if (!(input.schedule ?? "").trim()) throw new Error("Couldn't read that date and time");
+  return addTask(env, input);
 }

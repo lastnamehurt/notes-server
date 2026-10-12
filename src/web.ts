@@ -7,7 +7,7 @@ import { runDiagnostics } from "./diagnostics";
 
 import { GithubNotes, CATEGORIES, type Category, type Env } from "./github";
 import { appendLog, recentLogs, editLog, journalPath, journalWithActivity, LOG_PREFIX } from "./log";
-import { scheduler, scheduleNote, loadSettings, saveSettings, rescan, checkPassword, completeReminder, addReminder, startOfToday, effectiveEnv } from "./core";
+import { scheduler, scheduleNote, loadSettings, saveSettings, rescan, checkPassword, completeReminder, addReminder, addTask, startOfToday, effectiveEnv } from "./core";
 import { applySettings, notesConfigured, type Settings } from "./settings";
 import { listRepos, prepareRepo, startDeviceFlow, pollDeviceFlow, ensureNotesRepo, githubClientId, githubLogin, ownsNotesRepo } from "./setup";
 import { sendPush } from "./reminders";
@@ -388,6 +388,7 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
         return json({ upcoming: await s.upcoming(), firedToday: await s.firedSince(since), doneToday: await s.doneSince(since) });
       }
       case "POST /reminder": return json(await addReminder(env, await request.json()));
+      case "POST /task": return json(await addTask(env, await request.json()));
       case "POST /complete": {
         const { note, text, at } = await request.json<{ note: string; text: string; at?: number }>();
         return json(await completeReminder(env, note, text, typeof at === "number" ? at : undefined));
