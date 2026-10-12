@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "daybook-e2e",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "workers_dev": true,
+  "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "REPLACE_WITH_DEDICATED_E2E_KV_ID" }],
+  "durable_objects": { "bindings": [{ "name": "REMINDERS", "class_name": "ReminderScheduler" }] },
+  "migrations": [{ "tag": "v1-reminders", "new_sqlite_classes": ["ReminderScheduler"] }],
+  "triggers": { "crons": [] },
+  "keep_vars": true
+}
