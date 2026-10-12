@@ -1,7 +1,7 @@
 import { GithubNotes, localDate, type Env } from "./github";
 import { tasksFromNotes } from "./priorities";
 import { pushConfigured, DEFAULT_TIMEZONE } from "./reminder-parse";
-import { sendPush } from "./reminders";
+
 
 type Note = { name: string; content: string };
 const DAY = 86400000;
@@ -75,12 +75,27 @@ export async function runWeeklyReview(env: Env, now = Date.now()): Promise<boole
   }
   if (pushConfigured(env)) {
     try {
-      await sendPush(env, {
-        note: path,
-        text: "Your Daybook weekly review is ready. Look back and choose next week's focus.",
-        at: now,
-      });
-    } catch (error) {
+      const message = "Your Daybook weekly review is ready. Open Daybook to reflect and set next week's focus.";
+      if (env.PUSHOVER_TOKEN && env.PUSHOVER_USER) {
+        const data = new URLSearchParams({
+          token: env.PUSHOVER_TOKEN, user: env.PUSHOVER_USER,
+          title: "Daybook weekly review", message,
+        });
+        if (env.PUBLIC_URL) {
+          data.set("url", env.PUBLIC_URL.replace(/\\/$/, "") + "/app#today");
+          data.set("url_title", "Open Daybook");
+        }
+        const response = await fetch("https://api.pushover.net/1/messages.json", {method:"POST",body:data});
+        if (!response.ok) throw new Error("Pushover HTTP " + response.status);
+      } else if (env.NTFY_TOPIC) {
+        const endpoint = (env.NTFY_SERVER || "https://ntfy.sh").replace(/\\/$/, "") + "/" + encodeURIComponent(env.NTFY_TOPIC.trim().split("/").pop()!);
+        const headers: Record<string,string> = {"Title":"Daybook weekly review","Tags":"calendar"};
+        if (env.NTFY_TOKEN) headers["Authorization"] = "Bearer " + env.NTFY_TOKEN;
+        if (env.PUBLIC_URL) headers["Click"] = env.PUBLIC_URL.replace(/\\/$/, "") + "/app#today";
+        const response = await fetch(endpoint,{method:"POST",headers,body:message});
+        if (!response.ok) throw new Error("ntfy HTTP " + response.status);
+      }
+    } catch(error) {
       console.error("Weekly review notification failed", error);
     }
   }
