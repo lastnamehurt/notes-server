@@ -128,7 +128,7 @@ try {
   await rpc("notifications/initialized", {}, true);
 
   const tools = (await rpc("tools/list", {})).tools.map(t => t.name).sort();
-  const expected = ["check_health", "complete_reminder", "delete_note", "get_logs", "get_note", "list_notes", "list_priorities", "list_reminders", "log", "save_note", "search_notes", "sync_notes", "update_note"];
+  const expected = ["check_health", "complete_reminder", "create_log_type", "delete_note", "get_logs", "get_note", "list_log_types", "list_notes", "list_priorities", "list_reminders", "log", "log_to", "save_note", "search_notes", "sync_notes", "update_note"];
   check(JSON.stringify(tools) === JSON.stringify(expected), `tools/list: all ${expected.length} tools (${tools.join(", ")})`);
 
   const diagnostics = await call("check_health");
