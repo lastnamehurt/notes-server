@@ -66,6 +66,9 @@ const KEEP_FIRED_MS = 48 * 3600 * 1000;
 // "Done" marker for one occurrence, so a reminder completed early doesn't push when its time comes.
 const doneKey = (note: string, text: string, at: number) => "d:" + at + SEP + note + SEP + text;
 const firedKey = (r: Reminder) => "f:" + r.at + SEP + r.note + SEP + r.text;
+// Persist successful provider acknowledgement before updating fired history.
+// A later storage failure must not resend an already acknowledged notification.
+const deliveredKey = (r: Reminder) => "sent:" + r.at + SEP + r.note + SEP + r.text;
 
 /** A reminder that already went off (kept ~2 days so Today can still offer Done). */
 export interface Fired { note: string; text: string; at: number; repeat: boolean; }
@@ -181,12 +184,18 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
       if (r.at > Date.now() + 1000) continue;
       try {
         const alreadyDone = await this.ctx.storage.get(doneKey(r.note, r.text, r.at));
+        const alreadyDelivered = await this.ctx.storage.get(deliveredKey(r));
         if (!alreadyDone) {
           // Without a push provider the reminder still "goes off" (shows as due in the app) and repeats roll forward.
-          if (pushConfigured(env)) { await sendPush(env, r, origin); await this.ctx.storage.delete(LAST_ERROR); }
+          if (pushConfigured(env) && !alreadyDelivered) {
+            await sendPush(env, r, origin);
+            await this.ctx.storage.put(deliveredKey(r), { at: r.at });
+            await this.ctx.storage.delete(LAST_ERROR);
+          }
           await this.ctx.storage.put(firedKey(r), { note: r.note, text: r.text, at: r.at, repeat: Boolean(r.repeat) } satisfies Fired);
         }
         await this.ctx.storage.delete(k);
+        await this.ctx.storage.delete(deliveredKey(r));
         if (r.repeat) {
           const at = nextOccurrence(r.repeat, env.NOTES_TIMEZONE || DEFAULT_TIMEZONE, Math.max(r.at, Date.now()));
           const next = { ...r, at };
