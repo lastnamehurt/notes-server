@@ -203,6 +203,7 @@ h2.group b { color: var(--ink); }
 @media(max-width:360px){.focus-visual .focus-quadrant{min-height:135px}.focus-visual .focus-quadrant strong{font-size:15px}}
 
 .log-to-note{border:1px solid var(--rule);border-radius:9px;background:var(--sheet);color:var(--ink-2);font:inherit;font-size:12px;padding:7px 9px;flex-shrink:0}
+.inbox-item{padding:16px 0;border-bottom:1px solid var(--rule)}.inbox-item>a{color:var(--ink);text-decoration:none}.inbox-item p{font-size:14px;color:var(--ink-2);white-space:pre-wrap;overflow-wrap:anywhere}.inbox-actions{display:flex;gap:8px;flex-wrap:wrap}.inbox-actions button{border:1px solid var(--rule);background:var(--sheet);color:var(--ink);padding:10px 12px;border-radius:10px;font:inherit;font-size:13px;min-height:42px}.inbox-actions button:disabled{opacity:.5}
 /* Goals */
 .goal { padding: 18px; border: 1px solid var(--rule); border-radius: 16px; background: var(--sheet); box-shadow: var(--shadow); margin: 0 0 12px; }
 .goal h3 { margin: 0 0 4px; font: 400 24px/1.2 "DM Serif Display", Georgia, serif; letter-spacing: -.01em; }
@@ -877,8 +878,37 @@ views.logs = async () => {
   await refresh();
 };
 
+views.inbox = async () => {
+  main.innerHTML = h`<div class="bar"><h2>Inbox</h2><button class="btn" id="inbox-capture">+ Capture</button></div><p class="muted">Decide what each thought becomes. Nothing is deleted when you organize it.</p><div id="inbox-items"><p class="empty">Loading inbox…</p></div>`;
+  $("#inbox-capture").onclick = () => captureSheet();
+  const names = (await api("/notes")).filter(name => name.startsWith("inbox/"));
+  const notes = await Promise.all(names.map(async name => ({name,...await api("/note?name=" + encodeURIComponent(name))})));
+  const pending = notes.filter(n => !/^Daybook-status:\s*(?:kept|task|goal|archived)\s*$/im.test(n.content));
+  $("#inbox-items").innerHTML = pending.length ? pending.map(n => {
+    const parts = splitTitle(n.content);
+    return h`<article class="inbox-item" data-note="${n.name}"><a href="#note/${n.name}"><strong>${parts.title || titleFrom(n.name)}</strong></a><p>${parts.body.slice(0,180)}</p><div class="inbox-actions"><button type="button" data-triage="kept">Keep as note</button><button type="button" data-triage="task">Make task</button><button type="button" data-triage="goal">Promote to goal</button><button type="button" data-triage="archived">Archive</button></div></article>`;
+  }).join("") : `<p class="empty">Inbox zero. Capture a thought whenever you need to.</p>`;
+  main.querySelectorAll("[data-triage]").forEach(button => button.onclick = async () => {
+    const item = button.closest("[data-note]"); const note = notes.find(n => n.name === item.dataset.note); if (!note) return;
+    const action = button.dataset.triage; const parts = splitTitle(note.content);
+    const title = parts.title || titleFrom(note.name);
+    item.querySelectorAll("button").forEach(b => b.disabled = true);
+    try {
+      if (action === "goal") {
+        const content = "# " + title + "\n\nWhy: " + (parts.body.trim().split("\n").find(Boolean) || "Add your motivation") + "\n\nSource note: " + note.name + "\n\n## Next steps\n\n## Progress\n";
+        await api("/note",{method:"POST",body:{content,category:"goals"}});
+      }
+      const taskLine = "- [ ] " + title.replace(/\s+/g," ").trim();
+      const appended = action === "task" ? "\n\n## Next action\n" + taskLine : "";
+      const updated = note.content.replace(/\s*$/,"") + appended + "\n\nDaybook-status: " + action + "\n";
+      await api("/note",{method:"PUT",body:{name:note.name,content:updated,sha:note.sha}});
+      toast(action === "task" ? "Task added to Focus inbox" : action === "goal" ? "Goal created" : action === "archived" ? "Archived" : "Kept as note");
+      await views.inbox();
+    } catch(err) { handle(err); item.querySelectorAll("button").forEach(b => b.disabled = false); }
+  });
+};
 views.notes = async () => {
-  main.innerHTML = h`<div class="bar"><input class="search" id="q" type="search" placeholder="Search notes" aria-label="Search notes" style="margin:0"><a class="btn" href="#new" style="text-decoration:none;white-space:nowrap">New note</a></div><div id="nl"><p class="empty">Loading notes…</p></div>`;
+  main.innerHTML = h`<div class="bar"><a class="btn quiet" href="#inbox">Review inbox →</a><input class="search" id="q" type="search" placeholder="Search notes" aria-label="Search notes" style="margin:0"><a class="btn" href="#new" style="text-decoration:none;white-space:nowrap">New note</a></div><div id="nl"><p class="empty">Loading notes…</p></div>`;
   allNotes = await api("/notes");
   const draw = names => {
     const byFolder = {};
@@ -1405,7 +1435,7 @@ async function route() {
   const [view, ...rest] = hash.split("/");
   const arg = rest.join("/");
   document.querySelectorAll("#tabs a").forEach(a => a.removeAttribute("aria-current"));
-  const tab = view === "new-goal" ? "goals" : view === "note" || view === "new" ? (arg.startsWith("goals") ? "goals" : "notes") : view;
+  const tab = view === "inbox" ? "notes" : view === "new-goal" ? "goals" : view === "note" || view === "new" ? (arg.startsWith("goals") ? "goals" : "notes") : view;
   const link = $(`#tabs a[href="#${tab}"]`);
   if (link) link.setAttribute("aria-current", "page");
   $("#composer").hidden = view !== "today" && hash !== "today";
