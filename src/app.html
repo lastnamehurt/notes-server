@@ -183,6 +183,25 @@ h2.group b { color: var(--ink); }
 .focus .task-priority { flex: none; width: auto; max-width: 120px; min-height: 36px; padding: 6px 8px; font-size: 13px; border-radius: 9px; }
 @media (max-width: 420px) { .focus .focus-task { align-items: flex-start; } .focus .task-priority { max-width: 100px; } }
 
+/* Visual Eisenhower focus: capture → quadrants → daily action. */
+.focus-visual .focus-capture,.focus-visual .focus-daily{background:var(--sheet);border:1px solid var(--rule);border-radius:20px;padding:22px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px}
+.focus-visual .focus-capture-icon,.focus-visual .focus-daily>span{font-size:26px;color:var(--mark)}
+.focus-visual .focus-capture strong,.focus-visual .focus-daily strong{font-size:20px}
+.focus-visual .focus-capture p,.focus-visual .focus-daily p{margin:0;color:var(--ink-2);font-size:14px}
+.focus-visual .focus-flow-arrow{text-align:center;color:var(--ink-2);font-size:24px;padding:10px}
+.focus-visual .focus-quadrants{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.focus-visual .focus-quadrant{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:5px;min-height:148px;padding:14px 9px;border-radius:17px;border:1px solid var(--rule);background:var(--sheet);color:var(--ink);cursor:pointer;font:inherit}
+.focus-visual .focus-quadrant.active,.focus-visual .focus-quadrant:focus-visible{outline:2px solid var(--mark);outline-offset:1px}
+.focus-visual .focus-quadrant-icon{font-size:25px;color:var(--mark)}
+.focus-visual .focus-quadrant strong{font-size:17px;line-height:1.2}
+.focus-visual .focus-quadrant-description{font-size:12px;color:var(--ink-2);line-height:1.3}
+.focus-visual .focus-quadrant-count{font-size:12px;font-weight:700;color:var(--mark)}
+.focus-visual .focus-inbox{width:100%;text-align:left;margin:16px 0;border:1px solid var(--rule);background:var(--sheet);color:var(--ink);border-radius:12px;padding:14px;font:inherit}
+.focus-visual .focus-detail{margin:12px 0;padding:18px;border:1px solid var(--rule);border-radius:16px;background:var(--sheet)}
+.focus-visual .focus-detail[hidden]{display:none}
+.focus-visual .focus-detail h3{margin:0 0 8px}
+@media(max-width:360px){.focus-visual .focus-quadrant{min-height:135px}.focus-visual .focus-quadrant strong{font-size:15px}}
+
 /* Goals */
 .goal { padding: 18px; border: 1px solid var(--rule); border-radius: 16px; background: var(--sheet); box-shadow: var(--shadow); margin: 0 0 12px; }
 .goal h3 { margin: 0 0 4px; font: 400 24px/1.2 "DM Serif Display", Georgia, serif; letter-spacing: -.01em; }
@@ -736,19 +755,56 @@ views.today = async () => {
       ["someday", "Someday / maybe", "Not urgent"],
       ["inbox", "Inbox · clarify", "Unsorted tasks"]
     ];
-    const groupHtml = groups.map(([id, label, subtitle]) => {
-      const matching = tasks.filter(t => t.priority === id).map(t => ({...t, due:taskDate(t.text)})).sort((a,b) => (a.due?.date.getTime() ?? Infinity) - (b.due?.date.getTime() ?? Infinity));
-      if (!matching.length) return "";
-      return h`<details class="step" ${id === "do" || id === "inbox" ? "open" : ""}><summary><b>${label}</b> · ${matching.length} <span class="muted">${subtitle}</span></summary>
-        <ul class="list focus-tasks">${raw(matching.slice(0, 30).map(t => h`<li class="focus-task"><div class="focus-task-content"><a href="#note/${t.note}">${t.due ? t.due.title : t.text}</a>${t.due ? raw(h`<div class="muted task-due">◷ ${displayTaskDate(t.due.date)}</div>`) : ""}</div>
-          <select class="task-priority" data-note="${t.note}" data-line="${t.line}" aria-label="Priority for ${t.text}">
-            ${raw(groups.map(([value, title]) => h`<option value="${value}" ${id === value ? "selected" : ""}>${title}</option>`).join(""))}
-          </select></li>`).join(""))}</ul></details>`;
+    const cards = [
+      ["do", "⚡", "Do now", "Urgent + important"],
+      ["plan", "▣", "Plan", "Important, not urgent"],
+      ["delegate", "◷", "Handle later", "Urgent, lower importance"],
+      ["someday", "▤", "Someday / Maybe", "Not urgent"]
+    ];
+    const quadrantCards = cards.map(([id, icon, label, subtitle]) => {
+      const count = tasks.filter(t => t.priority === id).length;
+      return h`<button type="button" class="focus-quadrant" data-focus-target="${id}" aria-controls="focus-detail-${id}" aria-expanded="false">
+        <span class="focus-quadrant-icon" aria-hidden="true">${icon}</span><strong>${label}</strong>
+        <span class="focus-quadrant-description">${subtitle}</span><span class="focus-quadrant-count">${count} ${count === 1 ? "task" : "tasks"}</span>
+      </button>`;
     }).join("");
-    html = '<section class="focus"><h2>Focus</h2><p class="muted">Capture tasks anywhere using Markdown checkboxes. Sort only what matters.</p>' +
-      (groupHtml || '<p class="muted">No open tasks yet. Add a checkbox task to any note.</p>') + '</section>' + html;
+    const detailHtml = groups.map(([id, label]) => {
+      const matching = tasks.filter(t => t.priority === id).map(t => ({...t, due:taskDate(t.text)})).sort((a,b) => (a.due?.date.getTime() ?? Infinity) - (b.due?.date.getTime() ?? Infinity));
+      return h`<section class="focus-detail" id="focus-detail-${id}" data-focus-panel="${id}" hidden>
+        <h3>${label} <span class="muted">· ${matching.length}</span></h3>
+        ${matching.length ? raw(h`<ul class="list focus-tasks">${raw(matching.slice(0,30).map(t => h`<li class="focus-task"><div class="focus-task-content"><a href="#note/${t.note}">${t.due ? t.due.title : t.text}</a>${t.due ? raw(h`<div class="muted task-due">◷ ${displayTaskDate(t.due.date)}</div>`) : ""}</div><select class="task-priority" data-note="${t.note}" data-line="${t.line}" aria-label="Priority for ${t.text}">${raw(groups.map(([value,title]) => h`<option value="${value}" ${id === value ? "selected" : ""}>${title}</option>`).join(""))}</select></li>`).join(""))}</ul>`) : raw('<p class="muted">Nothing here yet.</p>')}
+      </section>`;
+    }).join("");
+    const inboxCount = tasks.filter(t => t.priority === "inbox").length;
+    html = h`<section class="focus focus-visual"><h2>Focus</h2><p class="muted">Capture first. Decide what matters next.</p>
+      <div class="focus-capture"><span class="focus-capture-icon" aria-hidden="true">▣</span><strong>Capture everything</strong><p>Thoughts, tasks, ideas and appointments</p><button type="button" class="btn quiet" id="focus-capture-button">+ Quick capture</button></div>
+      <div class="focus-flow-arrow" aria-hidden="true">↓</div><div class="focus-quadrants">${raw(quadrantCards)}</div>
+      <div class="focus-flow-arrow" aria-hidden="true">↓</div>
+      <div class="focus-daily"><span aria-hidden="true">☀</span><strong>Your daily focus</strong><p>${tasks.filter(t=>t.priority==="do").length} things to act on now · ${tasks.filter(t=>t.priority==="plan").length} to plan</p><button type="button" class="btn quiet" data-focus-target="do" aria-controls="focus-detail-do" aria-expanded="false">View do now →</button></div>
+      <button type="button" class="focus-inbox" data-focus-target="inbox" aria-controls="focus-detail-inbox" aria-expanded="false">Inbox · ${inboxCount} unclassified ${inboxCount === 1 ? "task" : "tasks"} →</button>
+      <div class="focus-details">${raw(detailHtml)}</div></section>` + html;
   } catch { html = '<p class="hint">Priorities are temporarily unavailable.</p>' + html; }
   main.innerHTML = html;
+  main.querySelectorAll("[data-focus-target]").forEach(button => button.onclick = () => {
+    const id = button.dataset.focusTarget;
+    const panel = main.querySelector('[data-focus-panel="' + id + '"]');
+    if (!panel) return;
+    const opening = panel.hidden;
+    main.querySelectorAll("[data-focus-panel]").forEach(p => p.hidden = true);
+    main.querySelectorAll("[data-focus-target]").forEach(b => { b.classList.toggle("active", opening && b.dataset.focusTarget === id); b.setAttribute("aria-expanded", String(opening && b.dataset.focusTarget === id)); });
+    panel.hidden = !opening;
+    if (opening) panel.scrollIntoView({behavior:"smooth",block:"nearest"});
+  });
+  const captureButton = main.querySelector("#focus-capture-button");
+  if (captureButton) captureButton.onclick = () => {
+    const composer = $("#composer");
+    composer.hidden = false;
+    composer.dataset.collapsed = "false";
+    const toggle = $("#composer-toggle");
+    if (toggle) toggle.setAttribute("aria-expanded","true");
+    const field = composer.querySelector("textarea, input");
+    if (field) field.focus();
+  };
   main.querySelectorAll(".task-priority").forEach(select => select.onchange = async () => {
     select.disabled = true;
     try {
