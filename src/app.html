@@ -394,6 +394,7 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
   .toast { animation: rise .18s ease-out; }
   @keyframes rise { from { opacity: 0; transform: translate(-50%, 6px); } }
 }
+.undo-button{background:transparent;color:inherit;border:1px solid currentColor;border-radius:7px;padding:5px 10px;margin-left:8px;font:inherit;font-weight:700;cursor:pointer}.undo-button:disabled{opacity:.5}
 </style>
 </head>
 <body>
@@ -511,6 +512,32 @@ function toast(msg) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.remove(), 2800);
 }
 
+/* Revision-checked undo: never overwrite changes made after the original action. */
+let undoAction = null;
+function offerUndo(message, action) {
+  undoAction = action;
+  document.querySelectorAll(".toast").forEach(t => t.remove());
+  const t = document.createElement("div");
+  t.className = "toast"; t.role = "status";
+  const label = document.createElement("span"); label.textContent = message + " ";
+  const button = document.createElement("button");
+  button.type = "button"; button.textContent = "Undo"; button.className = "undo-button";
+  button.onclick = async () => {
+    if (undoAction !== action) return;
+    button.disabled = true;
+    try { await action(); undoAction = null; t.remove(); toast("Change undone"); }
+    catch (err) { undoAction = null; t.remove(); handle(err); }
+  };
+  t.append(label,button); document.body.append(t);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { if (undoAction === action) undoAction = null; t.remove(); }, 10000);
+}
+async function undoNoteChange(name, previous, expectedCurrent) {
+  const current = await api("/note?name=" + encodeURIComponent(name));
+  if (current.content.trimEnd() !== expectedCurrent.trimEnd()) throw new Error("This note changed again. Undo cancelled to protect newer edits.");
+  await api("/note", {method:"PUT",body:{name,content:previous,sha:current.sha}});
+}
+
 class Locked extends Error {}
 async function api(path, opts = {}) {
   const res = await fetch("/app/api" + path, {
@@ -596,6 +623,7 @@ async function setTask(name, content, i, done, sha) {
   lines[i] = lines[i].replace(/\[( |x|X)\]/, done ? "[x]" : "[ ]");
   const next = lines.join("\n");
   await api("/note", { method: "PUT", body: { name, content: next, sha } });
+  offerUndo(done ? "Task completed" : "Task reopened", async () => { await undoNoteChange(name, content, next); await editor(name); });
   return next;
 }
 
@@ -1168,7 +1196,9 @@ async function editor(name, category) {
           clearDirty(); allNotes = null; nextToast = savedMessage(res, "Saved"); location.hash = "#note/" + res.name;
         } else {
           const res = await api("/note", { method: "PUT", body: { name, content: next, sha: revision } });
-          content = next; revision = (await api("/note?name=" + encodeURIComponent(name))).sha; clearDirty(); read(); toast(savedMessage(res, "Saved"));
+          const previous = content;
+          content = next; revision = (await api("/note?name=" + encodeURIComponent(name))).sha; clearDirty(); read();
+          offerUndo(savedMessage(res, "Saved"), async () => { await undoNoteChange(name, previous, next); await editor(name); });
         }
       } catch (err) { handle(err); $("#save").disabled = false; }
     };
