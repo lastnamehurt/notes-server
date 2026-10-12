@@ -86,9 +86,17 @@ test("600 notes: search, scans and 90 days of logs stay within a handful of GitH
   assert.equal(calls, 2, "a new request reads a fresh archive");
 });
 
-test("an empty repository has no notes", async () => {
-  globalThis.fetch = (async () => new Response("{}", { status: 404 })) as typeof fetch;
+test("an empty repository archive has no notes", async () => {
+  const archive = tarGz({ "README.md": "# Notes\\n" });
+  globalThis.fetch = (async () => new Response(archive)) as typeof fetch;
   const notes = new GithubNotes({ GITHUB_TOKEN: "t", NOTES_REPO: "me/notes" } as Env);
   assert.deepEqual(await notes.search("anything"), []);
   assert.deepEqual(await notes.all(), []);
+});
+
+test("an inaccessible private notes archive fails closed", async () => {
+  globalThis.fetch = (async () => new Response("{}", { status: 404 })) as typeof fetch;
+  const notes = new GithubNotes({ GITHUB_TOKEN: "t", NOTES_REPO: "me/notes" } as Env);
+  await assert.rejects(notes.search("anything"), /archive unavailable/);
+  await assert.rejects(notes.all(), /archive unavailable/);
 });
