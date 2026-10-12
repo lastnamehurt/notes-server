@@ -1157,7 +1157,8 @@ async function startGithubLogin() {
   const res = await fetch("/app/login/github/start", { method: "POST" });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) { button.disabled = false; return showLock(body.error || "Couldn't reach GitHub. Try again."); }
-  $("#ghcode").innerHTML = h`<p>On GitHub, open <a href="${body.verificationUri}" target="_blank" rel="noopener">${body.verificationUri}</a> and enter <b>${body.userCode}</b>. Then come back here.</p>`;
+  $("#ghcode").innerHTML = h`<p>Copy this code, then open GitHub to authorize the sign-in.</p><div class="copyrow"><code class="ghcode">${body.userCode}</code><button class="btn quiet" type="button" id="copy-login-code">Copy code</button></div><p><a class="btn quiet a-btn" href="${body.verificationUri}" target="_blank" rel="noopener">Open GitHub</a></p><p class="muted">If GitHub opens in this tab, return here after approving. Sign-in will continue automatically.</p>`;
+  $("#copy-login-code").onclick = e => copy(body.userCode, e.currentTarget);
   pollGithubLogin(body.deviceCode, body.interval);
 }
 async function pollGithubLogin(deviceCode, interval) {
