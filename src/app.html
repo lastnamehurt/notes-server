@@ -121,6 +121,27 @@ main { padding: 22px 0 calc(170px + env(safe-area-inset-bottom)); }
 .now span { position: absolute; left: 0; top: -12px; background: var(--mark); color: var(--mark-ink); font-size: 13px; font-weight: 800; padding: 2px 7px; border-radius: 4px; }
 .later { margin: 28px 0 8px; font-size: 15px; color: var(--ink-2); }
 
+
+/* Logs: mobile-first, full-width capture with quieter secondary actions. */
+.logs-page { display: grid; gap: 18px; }
+.logs-page .step { margin: 0; }
+.logs-page .log-fields { display: grid; gap: 12px; }
+.logs-page .log-fields label { display: block; margin: 0 0 5px; }
+.logs-page input, .logs-page select, .logs-page textarea { box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; background: var(--sheet); color: var(--ink); border: 1px solid var(--rule); border-radius: 12px; padding: 12px; font: inherit; font-size: 16px; }
+.logs-page textarea { resize: vertical; min-height: 88px; }
+.logs-page .log-duration { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.logs-page .log-duration input { width: 112px; }
+.logs-page .log-duration .muted { flex: 1; min-width: 160px; margin: 0; font-size: 13px; }
+.logs-page .log-submit { display: flex; justify-content: flex-end; margin-top: 6px; }
+.logs-page .log-submit .btn { min-height: 44px; }
+.logs-page .log-create { display: flex; gap: 10px; align-items: center; }
+.logs-page .log-create input { flex: 1; }
+.logs-page .log-create button { flex: none; }
+.logs-page details.step summary { cursor: pointer; font-weight: 600; }
+.logs-page .log-types { display: grid; gap: 8px; }
+.logs-page .log-type-row { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--rule); }
+.logs-page .log-type-row:last-child { border-bottom: 0; }
+
 /* Composer: thumb zone. */
 .composer { position: fixed; z-index: 8; left: 50%; right: auto; bottom: calc(12px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(calc(100% - 24px), 640px); background: color-mix(in srgb, var(--sheet) 92%, transparent); border: 1px solid var(--rule); border-radius: 20px; padding: 12px 14px; box-shadow: 0 12px 36px rgb(36 38 51 / .13); backdrop-filter: blur(18px); }
 .composer .in { max-width: 640px; margin: 0 auto; }
@@ -723,17 +744,25 @@ views.today = async () => {
 let allNotes = null;
 views.logs = async () => {
   $("#composer").hidden = true;
-  main.innerHTML = h`<div class="setup"><h2>Logs</h2><p class="lede">Track anything. Each entry stays in your daily journal.</p>
-    <section class="step"><h3>New log type</h3><div class="copyrow"><input id="new-log-type" placeholder="e.g. cardio, food, sleep" aria-label="New log type"><button class="btn quiet" id="add-log-type" type="button">Create</button></div></section>
-    <section class="step"><h3>Add an entry</h3><label for="log-type">Log</label><select id="log-type"></select>
-      <label for="typed-entry">What happened?</label><textarea id="typed-entry" rows="3" placeholder="e.g. Walked 25 minutes"></textarea>
-      <button class="btn" id="save-typed-log" type="button">Save entry</button><div class="step"><h3>Time spent (optional)</h3><label for="duration-minutes">Minutes</label><input id="duration-minutes" type="number" min="1" max="1440" step="1" placeholder="e.g. 45"><p class="muted">Leave blank for a simple log. Duration ends now.</p></div><div id="time-summary"></div></section>
-    <section class="step"><h3>My logs</h3><div id="log-type-list">Loading…</div></section></div>`;
+  main.innerHTML = h`<div class="setup logs-page">
+    <div><h2>Logs</h2><p class="lede">See how you spend your time, one entry at a time.</p></div>
+    <section class="step"><h3>Record activity</h3>
+      <div class="log-fields">
+        <div><label for="log-type">Category</label><select id="log-type"></select></div>
+        <div><label for="typed-entry">What did you do?</label><textarea id="typed-entry" rows="2" placeholder="e.g. Walked around the neighborhood"></textarea></div>
+        <div><label for="duration-minutes">Time spent (optional)</label><div class="log-duration"><input id="duration-minutes" type="number" min="1" max="1440" step="1" inputmode="numeric" placeholder="Minutes"><p class="muted">Leave blank for a simple entry. Timed activities end now.</p></div></div>
+      </div>
+      <div class="log-submit"><button class="btn" id="save-typed-log" type="button">Save activity</button></div>
+    </section>
+    <section class="step"><h3>Last 7 days</h3><div id="time-summary"></div></section>
+    <section class="step"><h3>My logs</h3><div id="log-type-list" class="log-types">Loading…</div></section>
+    <details class="step"><summary>+ Create a log type</summary><div class="log-create"><input id="new-log-type" placeholder="e.g. cardio, food, sleep" aria-label="New log type"><button class="btn quiet" id="add-log-type" type="button">Create</button></div></details>
+  </div>`;
   const refresh = async () => {
     const [types, summary] = await Promise.all([api("/log-types"), api("/time-summary")]);
-    $("#time-summary").innerHTML = h`<h3>Last 7 days</h3><p>Tracked: ${summary.trackedMinutes.toFixed(0)} minutes</p>${raw(summary.byType.map(t => h`<p>${t.type}: ${(t.minutes/60).toFixed(1)} hours</p>`).join(""))}`;
+     $("#time-summary").innerHTML = h`<p><strong>${(summary.trackedMinutes/60).toFixed(1)} hours tracked</strong> across ${summary.sessionCount} sessions</p>${raw(summary.byType.map(t => h`<div class="log-type-row"><span>${t.type}</span><strong>${(t.minutes/60).toFixed(1)}h</strong></div>`).join(""))}`;
     $("#log-type").innerHTML = types.map(t => h`<option value="${t.name}">${t.name}</option>`).join("");
-    $("#log-type-list").innerHTML = types.length ? types.map(t => h`<p><b>${t.name}</b> · ${t.count} entries</p>`).join("") : "<p>No logs yet. Create your first type above.</p>";
+    $("#log-type-list").innerHTML = types.length ? types.map(t => h`<div class="log-type-row"><strong>${t.name}</strong><span>${t.count} entries</span></div>`).join("") : "<p>No logs yet. Create your first type above.</p>";
   };
   $("#add-log-type").onclick = async () => {
     try { await api("/log-types", {method:"POST",body:{name:$("#new-log-type").value}}); $("#new-log-type").value=""; await refresh(); toast("Log type created"); }
