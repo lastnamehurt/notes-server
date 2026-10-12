@@ -152,8 +152,10 @@ export class GithubNotes {
       const response = await fetch((this.env.GITHUB_API_URL || "https://api.github.com") + "/repos/" + this.env.NOTES_REPO.trim() + "/tarball/" + encodeURIComponent(this.branch), {
         headers: { "Authorization": "Bearer " + this.env.GITHUB_TOKEN, "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "personal-notes-mcp" }
       });
-      // An empty repository has no archive: there are simply no notes.
-      if (response.status === 404 || response.status === 409) return new Map();
+      // GitHub can return 404 for inaccessible private repositories or missing branches.
+      // Never silently present an access failure as an empty collection of notes.
+      if (response.status === 404) throw new Error("Notes archive unavailable; verify private repository access and configured branch");
+      if (response.status === 409) return new Map();
       if (!response.ok || !response.body) throw new Error("GitHub request failed (" + response.status + ")");
       if (Number(response.headers.get("Content-Length") || 0) > MAX_ARCHIVE_BYTES) throw new Error("Notes repository is too large to read at once");
       const files = await readTarGz(response.body);
