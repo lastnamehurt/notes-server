@@ -202,6 +202,7 @@ h2.group b { color: var(--ink); }
 .focus-visual .focus-detail h3{margin:0 0 8px}
 @media(max-width:360px){.focus-visual .focus-quadrant{min-height:135px}.focus-visual .focus-quadrant strong{font-size:15px}}
 
+.log-to-note{border:1px solid var(--rule);border-radius:9px;background:var(--sheet);color:var(--ink-2);font:inherit;font-size:12px;padding:7px 9px;flex-shrink:0}
 /* Goals */
 .goal { padding: 18px; border: 1px solid var(--rule); border-radius: 16px; background: var(--sheet); box-shadow: var(--shadow); margin: 0 0 12px; }
 .goal h3 { margin: 0 0 4px; font: 400 24px/1.2 "DM Serif Display", Georgia, serif; letter-spacing: -.01em; }
@@ -553,6 +554,19 @@ function sheetError(msg) {
   el.textContent = msg;
 }
 
+function captureSheet(prefill = "", source = "") {
+  openSheet(h`<form id="capture-form"><h2>Capture thought</h2><label class="field"><span>Thought or idea</span><textarea id="capture-text" rows="5" autofocus>${prefill}</textarea></label><div class="sheet-actions"><button class="btn quiet" type="button" id="capture-cancel">Cancel</button><button class="btn" type="submit" id="capture-save">Save to inbox</button></div></form>`, modal => {
+    modal.querySelector("#capture-cancel").onclick = closeSheet;
+    modal.querySelector("#capture-form").onsubmit = async e => {
+      e.preventDefault(); const value = modal.querySelector("#capture-text").value.trim(); if (!value) return;
+      const [first, ...rest] = value.split("\n");
+      const content = "# " + first.replace(/^#\s*/, "").slice(0, 110) + "\n\n" + rest.join("\n").trim() + (source ? "\n\nSource: " + source : "");
+      const button = modal.querySelector("#capture-save"); button.disabled = true;
+      try { const result = await api("/note", {method:"POST",body:{content,category:"inbox"}}); closeSheet(); nextToast = "Saved to Notes inbox"; location.hash = "#note/" + result.name; }
+      catch(err) { handle(err); button.disabled = false; }
+    };
+  });
+}
 /** Add a reminder (to `note`, or the inbox "Reminders" note). */
 function reminderSheet(note, onSaved) {
   const nowMs = Date.now();
@@ -703,7 +717,7 @@ views.today = async () => {
     if (it.kind === "log") {
       const tags = (it.text.match(/#[\w-]+/g) || []).join(" ");
       const what = it.text.replace(/\s*#[\w-]+/g, "").trim();
-      return h`<li class="ev${/^✓/.test(what) ? " done-ev" : ""}"><time>${fmt12(it.t)}</time><button class="entry" data-line="${it.line}" aria-label="Edit ${what} at ${fmt12(it.t)}"><span class="what">${what}</span> <span class="tags">${tags}</span></button></li>`;
+      return h`<li class="ev${/^✓/.test(what) ? " done-ev" : ""}"><time>${fmt12(it.t)}</time><button class="entry" data-line="${it.line}" aria-label="Edit ${what} at ${fmt12(it.t)}"><span class="what">${what}</span> <span class="tags">${tags}</span></button><button class="log-to-note" type="button" data-entry="${what}" data-date="${today}">To note</button></li>`;
     }
     const due = it.t <= nowT;
     return h`<li class="ev ${due ? "due" : "up"}"><time>${fmt12(it.t)}</time><div class="body"><div><span class="what">${it.r.text}</span>
@@ -777,7 +791,7 @@ views.today = async () => {
     }).join("");
     const inboxCount = tasks.filter(t => t.priority === "inbox").length;
     html = h`<section class="focus focus-visual"><h2>Focus</h2><p class="muted">Capture first. Decide what matters next.</p>
-      <div class="focus-capture"><span class="focus-capture-icon" aria-hidden="true">▣</span><strong>Capture everything</strong><p>Thoughts, tasks, ideas and appointments</p><button type="button" class="btn quiet" id="focus-capture-button">+ Quick capture</button></div>
+      <div class="focus-capture"><span class="focus-capture-icon" aria-hidden="true">▣</span><strong>Capture everything</strong><p>Thoughts, tasks, ideas and appointments</p><button type="button" class="btn quiet" id="focus-capture-button">+ Capture thought</button></div>
       <div class="focus-flow-arrow" aria-hidden="true">↓</div><div class="focus-quadrants">${raw(quadrantCards)}</div>
       <div class="focus-flow-arrow" aria-hidden="true">↓</div>
       <div class="focus-daily"><span aria-hidden="true">☀</span><strong>Your daily focus</strong><p>${tasks.filter(t=>t.priority==="do").length} things to act on now · ${tasks.filter(t=>t.priority==="plan").length} to plan</p><button type="button" class="btn quiet" data-focus-target="do" aria-controls="focus-detail-do" aria-expanded="false">View do now →</button></div>
@@ -796,15 +810,8 @@ views.today = async () => {
     if (opening) panel.scrollIntoView({behavior:"smooth",block:"nearest"});
   });
   const captureButton = main.querySelector("#focus-capture-button");
-  if (captureButton) captureButton.onclick = () => {
-    const composer = $("#composer");
-    composer.hidden = false;
-    composer.dataset.collapsed = "false";
-    const toggle = $("#composer-toggle");
-    if (toggle) toggle.setAttribute("aria-expanded","true");
-    const field = composer.querySelector("textarea, input");
-    if (field) field.focus();
-  };
+  if (captureButton) { captureButton.textContent = "+ Capture thought"; captureButton.onclick = () => captureSheet(); }
+  main.querySelectorAll(".log-to-note").forEach(button => button.onclick = () => captureSheet(button.dataset.entry, "Journal " + button.dataset.date));
   main.querySelectorAll(".task-priority").forEach(select => select.onchange = async () => {
     select.disabled = true;
     try {
@@ -1001,7 +1008,7 @@ async function editor(name, category) {
     main.innerHTML = h`<div class="edbar"><div class="left"><a class="link back" href="${backTo}">${backLabel}</a></div><div class="right"><button class="btn small" id="edit">Edit</button></div></div>
       <p class="where">In ${folderName(folder)}${dateFrom(name) ? ", created " + dateFrom(name) : ""}</p>
       ${raw(`<div class="doc" id="doc" title="Tap to edit">${content.trim() ? render(content) : '<p class="empty">This note is empty. Tap to write.</p>'}</div>`)}
-      <div class="actions"><button class="btn quiet" id="addrem">Add reminder</button>${raw(isGoal ? '<button class="btn quiet" id="addupd">Add update</button>' : "")}</div>
+      <div class="actions"><button class="btn quiet" id="addrem">Add reminder</button>${raw(!isGoal ? '<button class="btn quiet" id="promote-goal">Promote to goal</button>' : "")}${raw(isGoal ? '<button class="btn quiet" id="addupd">Add update</button>' : "")}</div>
       <button class="danger-link" id="del">Delete note</button>`;
     $("#edit").onclick = () => edit();
     $("#doc").onclick = e => { if (!e.target.closest("input, a, label")) edit(); };
@@ -1011,6 +1018,15 @@ async function editor(name, category) {
       catch (e) { handle(e); }
       read();
     });
+    if (!isGoal) $("#promote-goal").onclick = async () => {
+      if (!confirm("Create a goal from this note? The original stays in Notes.")) return;
+      const parts = splitTitle(content);
+      const title = parts.title || titleFrom(name) || "New goal";
+      const goalContent = "# " + title + "\n\nWhy: " + (parts.body.trim().split("\n").find(Boolean) || "Add your motivation") + "\n\nSource note: " + name + "\n\n## Next steps\n\n## Progress\n";
+      const button = $("#promote-goal"); button.disabled = true;
+      try { const result = await api("/note", {method:"POST",body:{content:goalContent,category:"goals"}}); nextToast = "Goal created; original note preserved"; location.hash = "#note/" + result.name; }
+      catch(err) { handle(err); button.disabled = false; }
+    };
     $("#addrem").onclick = () => reminderSheet(name, async () => { const loaded = await api("/note?name=" + encodeURIComponent(name)); content = loaded.content; revision = loaded.sha; read(); });
     if (isGoal) $("#addupd").onclick = () => progressSheet(name, content, next => { content = next; revision = undefined; read(); });
     $("#del").onclick = async () => {
