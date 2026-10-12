@@ -2,7 +2,7 @@
 export const LOG_TYPE_PREFIX = "journal/types/";
 export function normalizeLogType(name: string): string {
   const slug = name.trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
-  if (!slug || slug.length > 48) throw new Error("Log type must contain 1–48 letters, digits or hyphens");
+  if (slug === "done") throw new Error("Done is a task status, not a log category");\n  if (!slug || slug.length > 48) throw new Error("Log type must contain 1–48 letters, digits or hyphens");
   return slug;
 }
 export function typePath(name: string): string { return LOG_TYPE_PREFIX + normalizeLogType(name) + ".md"; }
@@ -22,5 +22,5 @@ export function parseLogTypes(notes: {name:string;content:string}[]): {name:stri
     }
   }
   for (const type of counts.keys()) declared.add(type);
-  return [...declared].sort().map(name => ({name,count:counts.get(name)||0}));
+  return [...declared].filter(name => name !== "done").sort().map(name => ({name,count:counts.get(name)||0}));
 }
