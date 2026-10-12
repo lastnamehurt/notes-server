@@ -719,10 +719,11 @@ views.logs = async () => {
     <section class="step"><h3>New log type</h3><div class="copyrow"><input id="new-log-type" placeholder="e.g. cardio, food, sleep" aria-label="New log type"><button class="btn quiet" id="add-log-type" type="button">Create</button></div></section>
     <section class="step"><h3>Add an entry</h3><label for="log-type">Log</label><select id="log-type"></select>
       <label for="typed-entry">What happened?</label><textarea id="typed-entry" rows="3" placeholder="e.g. Walked 25 minutes"></textarea>
-      <button class="btn" id="save-typed-log" type="button">Save entry</button></section>
+      <button class="btn" id="save-typed-log" type="button">Save entry</button><div class="step"><h3>Time spent (optional)</h3><label for="duration-minutes">Minutes</label><input id="duration-minutes" type="number" min="1" max="1440" step="1" placeholder="e.g. 45"><p class="muted">Leave blank for a simple log. Duration ends now.</p></div><div id="time-summary"></div></section>
     <section class="step"><h3>My logs</h3><div id="log-type-list">Loading…</div></section></div>`;
   const refresh = async () => {
-    const types = await api("/log-types");
+    const [types, summary] = await Promise.all([api("/log-types"), api("/time-summary")]);
+    $("#time-summary").innerHTML = h`<h3>Last 7 days</h3><p>Tracked: ${summary.trackedMinutes.toFixed(0)} minutes</p>${raw(summary.byType.map(t => h`<p>${t.type}: ${(t.minutes/60).toFixed(1)} hours</p>`).join(""))}`;
     $("#log-type").innerHTML = types.map(t => h`<option value="${t.name}">${t.name}</option>`).join("");
     $("#log-type-list").innerHTML = types.length ? types.map(t => h`<p><b>${t.name}</b> · ${t.count} entries</p>`).join("") : "<p>No logs yet. Create your first type above.</p>";
   };
@@ -732,7 +733,13 @@ views.logs = async () => {
   };
   $("#save-typed-log").onclick = async () => {
     try {
-      await api("/typed-log", {method:"POST",body:{type:$("#log-type").value,entry:$("#typed-entry").value}});
+      const minutes = Number($("#duration-minutes").value);
+      if ($("#duration-minutes").value && (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440)) throw new Error("Duration must be 1–1440 minutes");
+      if ($("#duration-minutes").value) {
+        const end = new Date(), start = new Date(end.getTime()-minutes*60000);
+        await api("/time-session", {method:"POST",body:{type:$("#log-type").value,entry:$("#typed-entry").value,start:start.toISOString(),end:end.toISOString()}});
+      } else await api("/typed-log", {method:"POST",body:{type:$("#log-type").value,entry:$("#typed-entry").value}});
+      $("#duration-minutes").value = "";
       $("#typed-entry").value=""; await refresh(); toast("Logged");
     } catch(e) { handle(e); }
   };
