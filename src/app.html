@@ -966,6 +966,12 @@ views.setup = async () => {
     <p class="lede">${first ? "About 5 minutes. Your notes are saved to your own private GitHub repository; nobody else can see them." : "Change where notes are saved, your time zone, or phone notifications."}</p>
 
     ${raw(githubBlock)}
+    <section class="step" id="diagnostics"><h3>System diagnostics</h3>
+      <p>Check your private repository, authentication, reminders and notification setup. Checks do not modify your notes.</p>
+      <button class="btn quiet" id="run-diagnostics" type="button">Run diagnostics</button>
+      <div id="diagnostics-results" role="status" aria-live="polite"></div>
+    </section>
+
 
     <section class="step" id="s3"><h3><span class="n">${n.tz}</span>Your time zone</h3>
       <p class="muted">Reminders and your daily log use it.</p>
@@ -1091,6 +1097,21 @@ function showDone(mcpUrl) {
       <div class="copyrow"><code>${location.origin + "/app"}</code><button class="btn quiet" id="copyapp" type="button">Copy</button></div>
       <p>On your phone, put it on your home screen. iPhone: tap <b>Share</b>, then <b>Add to Home Screen</b>. Android: tap <b>⋮</b>, then <b>Add to Home screen</b>.</p></section>
     <a class="btn a-btn" href="#today" style="width:100%;text-align:center;padding:15px">Open my notes</a></div>`;
+  const diagnosticButton = $("#run-diagnostics");
+  if (diagnosticButton) {
+    const run = async () => {
+      diagnosticButton.disabled = true;
+      $("#diagnostics-results").textContent = "Checking…";
+      try {
+        const report = await api("/diagnostics");
+        $("#diagnostics-results").innerHTML = report.checks.map(item =>
+          h`<p><b>${item.status === "pass" ? "✓" : item.status === "fail" ? "✕" : "!"} ${item.id}</b>: ${item.message}</p>`).join("");
+      } catch (error) { $("#diagnostics-results").textContent = "Diagnostics failed: " + error.message; }
+      diagnosticButton.disabled = false;
+    };
+    diagnosticButton.onclick = run;
+    if (first) run();
+  }
   $("#copymcp").onclick = e => copy(mcpUrl, e.target);
   $("#copyapp").onclick = e => copy(location.origin + "/app", e.target);
   const t = $("#test");
