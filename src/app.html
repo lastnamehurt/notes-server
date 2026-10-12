@@ -227,7 +227,26 @@ h2.group b { color: var(--ink); }
 .focus .task-due{font-size:12px;margin-top:2px}
 .focus .task-priority{max-width:96px;min-height:40px;padding:6px;font-size:12px}
 @media(max-width:420px){.rail .ev{grid-template-columns:50px minmax(0,1fr) auto;gap:11px}.rail .ev::after{left:55px}.focus .focus-task{align-items:center}}
-\n/* Goals */
+\n/* Today is a daily dashboard; quadrant planning belongs in Tasks. */
+.today-dashboard{margin-bottom:14px}
+.today-focus-heading,.today-activity-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 10px}
+.today-focus-heading h2,.today-activity-heading h2{margin:0;font-size:21px}
+.today-focus-heading>a{font-size:13px;color:var(--mark);text-decoration:none}
+.today-focus-card{background:var(--sheet);border:1px solid var(--rule);border-radius:17px;padding:12px 16px;margin-bottom:20px}
+.today-focus-count{font-size:12px;color:var(--ink-2);margin-bottom:5px}
+.today-focus-list{list-style:none;padding:0;margin:0}
+.today-focus-row{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--rule)}
+.today-focus-row:last-child{border-bottom:0}
+.today-focus-dot{font-size:22px;color:var(--ink-2);line-height:1}
+.today-focus-content{flex:1;min-width:0}
+.today-focus-content a{display:block;color:var(--ink);text-decoration:none;font-size:15px;overflow-wrap:anywhere}
+.today-focus-due{display:block;font-size:12px;margin-top:3px}
+.today-focus-priority{font-size:11px;color:var(--mark);white-space:nowrap}
+.today-focus-more{display:inline-block;padding:9px 0;color:var(--mark);font-size:13px}
+.today-activity-heading{margin:18px 0 10px}
+.today-activity-heading .muted{font-size:12px}
+
+/* Goals */
 .goal { padding: 18px; border: 1px solid var(--rule); border-radius: 16px; background: var(--sheet); box-shadow: var(--shadow); margin: 0 0 12px; }
 .goal h3 { margin: 0 0 4px; font: 400 24px/1.2 "DM Serif Display", Georgia, serif; letter-spacing: -.01em; }
 .goal h3 a { color: inherit; text-decoration: none; }
@@ -385,7 +404,7 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
 </div>
 
 <form class="composer" id="composer" hidden autocomplete="off" data-collapsed="true">
-  <button class="composer-toggle" id="composer-toggle" type="button" aria-expanded="true" aria-controls="composer-fields"><span id="composer-label">+ Quick add</span><span id="composer-chevron" aria-hidden="true">⌄</span></button>
+  <button class="composer-toggle" id="composer-toggle" type="button" aria-expanded="true" aria-controls="composer-fields"><span id="composer-label">Quick Add</span><span id="composer-chevron" aria-hidden="true">⌄</span></button>
   <div class="in">
     <div class="quick-modes" role="group" aria-label="Save as"><button type="button" data-quick-mode="note" aria-pressed="true">Note</button><button type="button" data-quick-mode="task" aria-pressed="false">Task</button><button type="button" data-quick-mode="log" aria-pressed="false">Log</button></div><div class="chips" id="chips" role="group" aria-label="Tags" hidden></div>
     <div class="row">
@@ -799,48 +818,19 @@ views.today = async () => {
       ["someday", "Someday / maybe", "Not urgent"],
       ["inbox", "Inbox · clarify", "Unsorted tasks"]
     ];
-    const cards = [
-      ["do", "⚡", "Do now", "Urgent + important"],
-      ["plan", "▣", "Plan", "Important, not urgent"],
-      ["delegate", "◷", "Handle later", "Urgent, lower importance"],
-      ["someday", "▤", "Someday / Maybe", "Not urgent"]
-    ];
-    const quadrantCards = cards.map(([id, icon, label, subtitle]) => {
-      const count = tasks.filter(t => t.priority === id).length;
-      return h`<button type="button" class="focus-quadrant" data-focus-target="${id}" aria-controls="focus-detail-${id}" aria-expanded="false">
-        <span class="focus-quadrant-icon" aria-hidden="true">${icon}</span><strong>${label}</strong>
-        <span class="focus-quadrant-description">${subtitle}</span><span class="focus-quadrant-count">${count} ${count === 1 ? "task" : "tasks"}</span>
-      </button>`;
-    }).join("");
-    const detailHtml = groups.map(([id, label]) => {
-      const matching = tasks.filter(t => t.priority === id).map(t => ({...t, due:taskDate(t.text)})).sort((a,b) => (a.due?.date.getTime() ?? Infinity) - (b.due?.date.getTime() ?? Infinity));
-      return h`<section class="focus-detail" id="focus-detail-${id}" data-focus-panel="${id}" hidden>
-        <h3>${label} <span class="muted">· ${matching.length}</span></h3>
-        ${matching.length ? raw(h`<ul class="list focus-tasks">${raw(matching.slice(0,30).map(t => h`<li class="focus-task"><div class="focus-task-content"><a href="#note/${t.note}">${t.due ? t.due.title : t.text}</a>${t.due ? raw(h`<div class="muted task-due">◷ ${displayTaskDate(t.due.date)}</div>`) : ""}</div><select class="task-priority" data-note="${t.note}" data-line="${t.line}" aria-label="Priority for ${t.text}">${raw(groups.map(([value,title]) => h`<option value="${value}" ${id === value ? "selected" : ""}>${title}</option>`).join(""))}</select></li>`).join(""))}</ul>`) : raw('<p class="muted">Nothing here yet.</p>')}
-      </section>`;
-    }).join("");
+    const nowTasks = tasks.filter(t => t.priority === "do").map(t => ({...t,due:taskDate(t.text)})).sort((a,b)=>(a.due?.date.getTime()??Infinity)-(b.due?.date.getTime()??Infinity));
+    const planCount = tasks.filter(t => t.priority === "plan").length;
     const inboxCount = tasks.filter(t => t.priority === "inbox").length;
-    html = h`<section class="focus focus-visual"><h2>Focus</h2><p class="muted">Capture first. Decide what matters next.</p>
-      <div class="focus-capture"><span class="focus-capture-icon" aria-hidden="true">▣</span><strong>Capture everything</strong><p>Thoughts, tasks, ideas and appointments</p><button type="button" class="btn quiet" id="focus-capture-button">+ Capture thought</button></div>
-      <div class="focus-flow-arrow" aria-hidden="true">↓</div><div class="focus-quadrants">${raw(quadrantCards)}</div>
-      <div class="focus-flow-arrow" aria-hidden="true">↓</div>
-      <div class="focus-daily"><span aria-hidden="true">☀</span><strong>Your daily focus</strong><p>${tasks.filter(t=>t.priority==="do").length} things to act on now · ${tasks.filter(t=>t.priority==="plan").length} to plan</p><button type="button" class="btn quiet" data-focus-target="do" aria-controls="focus-detail-do" aria-expanded="false">View do now →</button></div>
-      <button type="button" class="focus-inbox" data-focus-target="inbox" aria-controls="focus-detail-inbox" aria-expanded="false">Inbox · ${inboxCount} unclassified ${inboxCount === 1 ? "task" : "tasks"} →</button>
-      <div class="focus-details">${raw(detailHtml)}</div></section>` + html;
+    const topTasks = nowTasks.slice(0,4).map(t => h`<li class="today-focus-row"><span class="today-focus-dot" aria-hidden="true">○</span><div class="today-focus-content"><a href="#note/${t.note}">${t.due ? t.due.title : t.text}</a>${t.due ? raw(h`<span class="muted today-focus-due">${displayTaskDate(t.due.date)}</span>`) : ""}</div><span class="today-focus-priority">Do now</span></li>`).join("");
+    html = h`<section class="today-dashboard"><div class="today-focus-heading"><h2>Focus</h2><a href="#reminders">All tasks →</a></div>
+      <div class="today-focus-card"><div class="today-focus-count">${nowTasks.length} to do now · ${planCount} to plan</div>
+      ${nowTasks.length ? raw('<ul class="today-focus-list">'+topTasks+'</ul>') : raw('<p class="muted">Nothing urgent right now.</p>')}
+      ${nowTasks.length > 4 ? raw(h`<a class="today-focus-more" href="#reminders">View ${nowTasks.length-4} more →</a>`) : ""}
+      </div>
+      <div class="today-activity-heading"><h2>Activity</h2><span class="muted">Today</span></div>
+    </section>` + html;
   } catch { html = '<p class="hint">Priorities are temporarily unavailable.</p>' + html; }
   main.innerHTML = html;
-  main.querySelectorAll("[data-focus-target]").forEach(button => button.onclick = () => {
-    const id = button.dataset.focusTarget;
-    const panel = main.querySelector('[data-focus-panel="' + id + '"]');
-    if (!panel) return;
-    const opening = panel.hidden;
-    main.querySelectorAll("[data-focus-panel]").forEach(p => p.hidden = true);
-    main.querySelectorAll("[data-focus-target]").forEach(b => { b.classList.toggle("active", opening && b.dataset.focusTarget === id); b.setAttribute("aria-expanded", String(opening && b.dataset.focusTarget === id)); });
-    panel.hidden = !opening;
-    if (opening) panel.scrollIntoView({behavior:"smooth",block:"nearest"});
-  });
-  const captureButton = main.querySelector("#focus-capture-button");
-  if (captureButton) { captureButton.textContent = "+ Capture thought"; captureButton.onclick = () => captureSheet(); }
   main.querySelectorAll(".log-to-task").forEach(button => button.onclick = async () => {
     button.disabled = true;
     try { const name = await taskFromLog(button.dataset.entry, button.dataset.date); nextToast = "Task added to Focus inbox"; location.hash = "#note/" + name; }
@@ -1537,7 +1527,7 @@ function setComposerCollapsed(collapsed) {
   $("#composer").dataset.collapsed = String(collapsed);
   composerToggle.setAttribute("aria-expanded", String(!collapsed));
   $("#composer-chevron").textContent = collapsed ? "+" : "−";
-  $("#composer-label").textContent = collapsed ? "Quick log" : "Quick log";
+  $("#composer-label").textContent = "Quick Add";
   try { localStorage.setItem("daybook-composer-collapsed", String(collapsed)); } catch {}
 }
 try { setComposerCollapsed(localStorage.getItem("daybook-composer-collapsed") !== "false"); } catch { setComposerCollapsed(true); }
