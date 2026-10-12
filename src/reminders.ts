@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { nextOccurrence, normalizeTopic, pushConfigured, DEFAULT_TIMEZONE, type Reminder, type ReminderEnv } from "./reminder-parse";
 import { signAction } from "./action";
+import { sendOnce } from "./delivery";
 import { applySettings, type Settings } from "./settings";
 import type { Env } from "./github";
 export * from "./reminder-parse";
@@ -188,8 +189,7 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
         if (!alreadyDone) {
           // Without a push provider the reminder still "goes off" (shows as due in the app) and repeats roll forward.
           if (pushConfigured(env) && !alreadyDelivered) {
-            await sendPush(env, r, origin);
-            await this.ctx.storage.put(deliveredKey(r), { at: r.at });
+            await sendOnce(false, () => sendPush(env, r, origin), () => this.ctx.storage.put(deliveredKey(r), { at: r.at }));
             await this.ctx.storage.delete(LAST_ERROR);
           }
           await this.ctx.storage.put(firedKey(r), { note: r.note, text: r.text, at: r.at, repeat: Boolean(r.repeat) } satisfies Fired);
