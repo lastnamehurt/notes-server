@@ -149,7 +149,39 @@ try {
   check(!(await call("list_reminders")).data.some(r => r.text === "Water plants"), "Deleting the note stops its reminder");
   check(![...gh.files.keys()].includes(name) && [...gh.files.keys()].some(p => p.startsWith("journal/log/")), "GitHub holds the log and not the deleted note");
 
-  // ---------- 5. Scale: Cloudflare's free plan allows 50 outside calls per request ----------
+  // ---------- 5. Mobile web session and recovery API acceptance ----------
+  const login = await fetch(BASE + "/app/login", {
+    method: "POST", headers: { "Content-Type": "application/json", Origin: BASE },
+    body: JSON.stringify({ key: PASSWORD })
+  });
+  const cookie = login.headers.get("set-cookie")?.split(";")[0];
+  check(login.status === 204 && Boolean(cookie), "Mobile app password login issues a session cookie");
+  const app = await fetch(BASE + "/app");
+  check(app.status === 200 && (await app.text()).includes("<meta name=\"viewport\""), "Mobile web app has a responsive viewport");
+  const web = (path, options = {}) => fetch(BASE + "/app/api" + path, {
+    ...options, headers: { Cookie: cookie || "", Origin: BASE, "Content-Type": "application/json", ...options.headers }
+  });
+  const unauthenticated = await fetch(BASE + "/app/api/backup");
+  check(unauthenticated.status === 401, "Backup cannot be downloaded without authentication");
+  const health = await web("/health");
+  const healthData = await health.json();
+  check(health.status === 200 && healthData.github === "ok", "Authenticated health reports GitHub connectivity");
+  const backupResponse = await web("/backup");
+  const backup = await backupResponse.json();
+  check(backupResponse.status === 200 && backup.format === "notes-server-backup" && backup.version === 1,
+    "Authenticated backup export is portable and versioned");
+  const beforeRestore = gh.files.size;
+  const restore = await web("/restore", { method: "POST", body: JSON.stringify(backup) });
+  check(restore.status === 400 && gh.files.size === beforeRestore, "Restore refuses collisions without modifying existing notes");
+  const invalid = await web("/restore", { method: "POST", body: JSON.stringify({ format: "invalid", notes: [] }) });
+  check(invalid.status === 400, "Restore rejects invalid backup format");
+  const noOrigin = await fetch(BASE + "/app/api/restore", {
+    method: "POST", headers: { Cookie: cookie || "", "Content-Type": "application/json" },
+    body: JSON.stringify(backup)
+  });
+  check(noOrigin.status === 403, "Cross-origin restore request is refused");
+
+  // ---------- 6. Scale: Cloudflare's free plan allows 50 outside calls per request ----------
   const b64 = t => Buffer.from(t).toString("base64");
   for (let i = 0; i < 600; i++) gh.files.set(`inbox/2026-01-01-bulk-${i}.md`, { content: b64(`# Bulk ${i}\n${i === 451 ? "needle-q9" : "hay"}\n- [ ] Bulk reminder ${i} @2099-02-01 9am`), sha: "b" + i });
   const today = new Date();
