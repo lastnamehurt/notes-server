@@ -5,7 +5,7 @@ import OAuthProvider, { AuthorizationError, CimdFetchError } from "@cloudflare/w
 import { McpServer } from "@modelcontextprotocol/server";
 import { createMcpHandler } from "agents/mcp/server";
 import { z } from "zod";
-import { GithubNotes, CATEGORIES, type Env } from "./github";
+import { GithubNotes, CATEGORIES, localDate, type Env } from "./github";
 import { appendLog, recentLogs } from "./log";
 import { scheduler, fmt, scheduleNote, rescan, effectiveEnv, checkPassword, completeReminder } from "./core";
 import { notesConfigured } from "./settings";
@@ -16,6 +16,8 @@ import { runWeeklyReview } from "./weekly-review";
 export { ReminderScheduler } from "./reminders";
 
 const INSTRUCTIONS = `The owner's personal notes and life tracking, stored as Markdown in GitHub. Times are in the owner's time zone (America/Los_Angeles unless configured).
+
+WEEKLY REVIEWS: Use prepare_weekly_review when the owner asks for an AI review, reflection, or next-week priorities. It returns a private, read-only summary; analyze it in this conversation. Do not store your analysis without explicit approval. The scheduled Sunday review remains deterministic and does not invoke an external model.
 
 REMINDERS push a notification to the owner's phone. Any unchecked task line with an @schedule in a note is a reminder:
   - [ ] Renew car registration @2026-10-14 9am     one-off; time optional (9am default)
@@ -47,6 +49,27 @@ function serverFor(env: Env): McpServer {
     catch (e) { return { isError: true, content: [{ type: "text" as const, text: e instanceof Error ? e.message : "Operation failed" }] }; }
   };
   server.registerTool("check_health", { description: "Run read-only diagnostics for GitHub, privacy, authentication, reminders and notifications", inputSchema: {} }, () => result(() => runDiagnostics(env)));
+  server.registerTool("prepare_weekly_review", {
+    description: "Prepare a private weekly review for AI analysis. Read-only: returns a deterministic summary of the last seven local calendar days, current open tasks, and reflection prompts. When asked to review the week, use this tool, analyze the returned information, and suggest up to three priorities. Never claim the summary is AI-generated or save recommendations without the owner's request. The data is only returned to the connected assistant that invoked this tool.",
+    inputSchema: {},
+  }, () => result(async () => {
+    const zone = env.NOTES_TIMEZONE || DEFAULT_TIMEZONE;
+    const now = new Date();
+    const dates = new Set(Array.from({length:7}, (_, offset) => {
+      const day = new Date(now.getTime() - offset * 86400000);
+      return localDate(zone, day);
+    }));
+    const date = [...dates][0];
+    const snapshot = await notes.all();
+    const { buildReview } = await import("./weekly-review");
+    return {
+      periodEnding: date,
+      timezone: zone,
+      summary: buildReview(date, snapshot, dates),
+      instructions: "Analyze only the evidence above. Separate observed facts from hypotheses, identify patterns cautiously, suggest no more than three actionable priorities, and ask one reflective question. Do not write or modify notes unless explicitly requested.",
+      storedAutomatically: false,
+    };
+  }));
   server.registerTool("list_priorities", { description: "List open tasks grouped by GTD inbox and Eisenhower priority; tasks without an explicit priority stay in inbox", inputSchema: {} }, () => result(async () => tasksFromNotes(await notes.all())));
   server.registerTool("save_note", { description: "Create a Markdown note and commit it to GitHub. Lines like '- [ ] task @2026-10-14 9am' become phone reminders.", inputSchema: { content: z.string(), category: z.enum(CATEGORIES).default("inbox") } },
     ({ content, category }) => result(async () => scheduleNote(env, await notes.save(content, category), content)));

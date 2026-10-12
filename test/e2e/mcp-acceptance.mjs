@@ -128,8 +128,13 @@ try {
   await rpc("notifications/initialized", {}, true);
 
   const tools = (await rpc("tools/list", {})).tools.map(t => t.name).sort();
-  const expected = ["check_health", "complete_reminder", "create_log_type", "delete_note", "get_logs", "get_note", "list_log_types", "list_notes", "list_priorities", "list_reminders", "log", "log_to", "save_note", "search_notes", "sync_notes", "update_note"];
+  const expected = ["check_health", "complete_reminder", "create_log_type", "delete_note", "get_logs", "get_note", "list_log_types", "list_notes", "list_priorities", "list_reminders", "log", "log_to", "prepare_weekly_review", "save_note", "search_notes", "sync_notes", "update_note"];
   check(JSON.stringify(tools) === JSON.stringify(expected), `tools/list: all ${expected.length} tools (${tools.join(", ")})`);
+
+  const review = await call("prepare_weekly_review");
+  check(!review.error && typeof review.data.summary === "string" &&
+    review.data.summary.includes("Weekly review") && review.data.storedAutomatically === false,
+    "prepare_weekly_review returns a private read-only summary");
 
   const diagnostics = await call("check_health");
   check(!diagnostics.error && diagnostics.data.checks?.some(c => c.id === "github"), "check_health returns shared diagnostics");
