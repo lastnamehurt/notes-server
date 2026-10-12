@@ -209,6 +209,20 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
     if (!notesConfigured(env)) return fail("Finish setup first.", 409);
     const notes = new GithubNotes(env);
     switch (route) {
+      case "GET /briefings": return json(await scheduler(env).getBriefings());
+      case "PUT /briefings": {
+        const { settings, revision } = await request.json<{ settings: unknown; revision: number }>();
+        try { return json(await scheduler(env).setBriefings(settings, Number(revision))); }
+        catch (e) { const m = e instanceof Error ? e.message : String(e); return fail(m, /changed elsewhere/.test(m) ? 409 : 400); }
+      }
+      case "POST /briefings/preview":
+      case "POST /briefings/test": {
+        const { kind } = await request.json<{ kind: string }>();
+        if (kind !== "morning" && kind !== "evening") return fail('kind must be "morning" or "evening"');
+        if (route === "POST /briefings/preview") return json(await scheduler(env).previewBriefing(kind));
+        try { return json(await scheduler(env).testBriefing(kind, url.origin)); }
+        catch (e) { const m = e instanceof Error ? e.message : String(e); return fail(m, /Wait a minute/.test(m) ? 429 : 502); }
+      }
       case "GET /priorities": return json(tasksFromNotes(await notes.all()));
       case "POST /priorities": {
         const { name, line, priority, sha } = await request.json<{name:string;line:number;priority:"do"|"plan"|"delegate"|"someday"|"inbox";sha?:string}>();
