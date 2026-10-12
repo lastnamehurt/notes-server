@@ -1,3 +1,4 @@
+import { timedEntry, readSessions, timeSummary } from "./time-tracking";
 import { normalizeLogType, typePath, withLogType, parseLogTypes } from "./log-types";
 import { tasksFromNotes, changeTaskPriority } from "./priorities";
 import { runDiagnostics } from "./diagnostics";
@@ -229,6 +230,20 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
           noteCount: github.status === "fulfilled" ? github.value.length : null }, github.status === "fulfilled" ? 200 : 503);
       }
       case "GET /search": return json(await notes.search(url.searchParams.get("q") ?? ""));
+      case "POST /time-session": {
+        const {type,entry,start,end}=await request.json<{type:string;entry:string;start:string;end:string}>();
+        const line=timedEntry(entry,type,start,end);
+        const stamp=new Date(start);
+        const date=new Intl.DateTimeFormat("en-CA",{timeZone:env.NOTES_TIMEZONE||"America/Los_Angeles",year:"numeric",month:"2-digit",day:"2-digit"}).format(stamp);
+        const time=new Intl.DateTimeFormat("en-GB",{timeZone:env.NOTES_TIMEZONE||"America/Los_Angeles",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).format(stamp);
+        return json(await appendLog(notes,line,{date,time,timeZone:env.NOTES_TIMEZONE}));
+      }
+      case "GET /time-summary": {
+        const now=Date.now();
+        const from=url.searchParams.get("from")||new Date(now-7*86400000).toISOString();
+        const to=url.searchParams.get("to")||new Date(now).toISOString();
+        return json(timeSummary(readSessions(await notes.all(undefined,"journal/log/")),from,to));
+      }
       case "GET /log-types": return json(parseLogTypes(await notes.all()));
       case "POST /log-types": {
         const { name } = await request.json<{name:string}>();
