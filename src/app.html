@@ -205,6 +205,7 @@ h2.group b { color: var(--ink); }
 .log-to-task,.log-to-note{border:1px solid var(--rule);border-radius:9px;background:var(--sheet);color:var(--ink-2);font:inherit;font-size:12px;padding:7px 9px;flex-shrink:0}
 .inbox-item{padding:16px 0;border-bottom:1px solid var(--rule)}.inbox-item>a{color:var(--ink);text-decoration:none}.inbox-item p{font-size:14px;color:var(--ink-2);white-space:pre-wrap;overflow-wrap:anywhere}.inbox-actions{display:flex;gap:8px;flex-wrap:wrap}.inbox-actions button{border:1px solid var(--rule);background:var(--sheet);color:var(--ink);padding:10px 12px;border-radius:10px;font:inherit;font-size:13px;min-height:42px}.inbox-actions button:disabled{opacity:.5}
 .unified-task{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--rule)}.unified-task>a{flex:1;min-width:0;overflow-wrap:anywhere;color:var(--ink)}.unified-task .task-priority{max-width:105px}.task-done{background:var(--sheet);color:var(--ink);border:1px solid var(--rule);border-radius:9px;padding:9px}.task-group h4{margin:14px 0 4px}@media(max-width:420px){.unified-task{flex-wrap:wrap}.unified-task>a{flex-basis:100%}}
+.quick-modes{display:flex;gap:6px;margin-bottom:8px}.quick-modes button{flex:1;border:1px solid var(--rule);border-radius:10px;background:var(--sheet);color:var(--ink);padding:9px;font:inherit}.quick-modes button[aria-pressed="true"]{background:var(--mark);color:white;border-color:var(--mark)}
 /* Goals */
 .goal { padding: 18px; border: 1px solid var(--rule); border-radius: 16px; background: var(--sheet); box-shadow: var(--shadow); margin: 0 0 12px; }
 .goal h3 { margin: 0 0 4px; font: 400 24px/1.2 "DM Serif Display", Georgia, serif; letter-spacing: -.01em; }
@@ -363,15 +364,15 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
 </div>
 
 <form class="composer" id="composer" hidden autocomplete="off" data-collapsed="true">
-  <button class="composer-toggle" id="composer-toggle" type="button" aria-expanded="true" aria-controls="composer-fields"><span id="composer-label">+ Quick log</span><span id="composer-chevron" aria-hidden="true">⌄</span></button>
+  <button class="composer-toggle" id="composer-toggle" type="button" aria-expanded="true" aria-controls="composer-fields"><span id="composer-label">+ Quick add</span><span id="composer-chevron" aria-hidden="true">⌄</span></button>
   <div class="in">
-    <div class="chips" id="chips" role="group" aria-label="Tags"></div>
+    <div class="quick-modes" role="group" aria-label="Save as"><button type="button" data-quick-mode="note" aria-pressed="true">Note</button><button type="button" data-quick-mode="task" aria-pressed="false">Task</button><button type="button" data-quick-mode="log" aria-pressed="false">Log</button></div><div class="chips" id="chips" role="group" aria-label="Tags" hidden></div>
     <div class="row">
-      <button type="button" class="timebtn" id="timebtn" aria-label="Time: now. Tap to change">Now</button>
+      <button type="button" class="timebtn" id="timebtn" hidden aria-label="Time: now. Tap to change">Now</button>
       <input type="time" id="when" hidden aria-label="Time">
       <label for="entry" style="position:absolute;left:-9999px">Log something</label>
-      <input id="entry" name="entry" placeholder="Log a meal, meds, a walk…" enterkeyhint="send">
-      <button class="btn" id="logbtn" type="submit">Log</button>
+      <input id="entry" name="entry" placeholder="Capture a thought…" enterkeyhint="send">
+      <button class="btn" id="logbtn" type="submit">Save note</button>
     </div>
   </div>
 </form>
@@ -1473,6 +1474,19 @@ async function start() {
 }
 
 /* ---------- Composer ---------- */
+let quickMode = "note";
+const quickModes = document.querySelectorAll("[data-quick-mode]");
+function setQuickMode(mode) {
+  quickMode = mode;
+  quickModes.forEach(b => b.setAttribute("aria-pressed", String(b.dataset.quickMode === mode)));
+  $("#chips").hidden = mode !== "log";
+  $("#timebtn").hidden = mode !== "log";
+  $("#when").hidden = true;
+  $("#logbtn").textContent = mode === "note" ? "Save note" : mode === "task" ? "Add task" : "Log";
+  $("#entry").placeholder = mode === "note" ? "Capture a thought…" : mode === "task" ? "What needs doing?" : "What happened?";
+  $("#entry").focus();
+}
+quickModes.forEach(b => b.onclick = () => setQuickMode(b.dataset.quickMode));
 const chips = $("#chips");
 chips.innerHTML = TAGS.map(t => `<button type="button" class="chip" aria-pressed="false" data-tag="${t}">#${t}</button>`).join("");
 chips.onclick = e => {
@@ -1499,18 +1513,25 @@ try { setComposerCollapsed(localStorage.getItem("daybook-composer-collapsed") !=
 composerToggle.onclick = () => setComposerCollapsed($("#composer").dataset.collapsed !== "true");
 $("#composer").onsubmit = async e => {
   e.preventDefault();
-  const input = $("#entry");
-  if (!input.value.trim()) return input.focus();
-  const tags = [...chips.querySelectorAll('[aria-pressed="true"]')].map(b => "#" + b.dataset.tag);
-  const entry = [input.value.trim(), ...tags.filter(t => !input.value.includes(t))].join(" ").trim();
-  const body = { entry };
-  if (!when.hidden && when.value && when.value !== hhmm(Date.now())) body.time = when.value;
+  const input = $("#entry"), value = input.value.trim();
+  if (!value) return input.focus();
   $("#logbtn").disabled = true;
   try {
-    await api("/log", { method: "POST", body });
-    input.value = ""; resetWhen(); chips.querySelectorAll(".chip").forEach(b => b.setAttribute("aria-pressed", "false"));
-    toast(body.time ? "Logged at " + fmt12(body.time) : "Logged"); await views.today();
-  } catch (err) { handle(err); }
+    if (quickMode === "log") {
+      const tags = [...chips.querySelectorAll('[aria-pressed="true"]')].map(b => "#" + b.dataset.tag);
+      const entry = [value, ...tags.filter(t => !value.includes(t))].join(" ").trim();
+      const body = {entry};
+      if (!when.hidden && when.value && when.value !== hhmm(Date.now())) body.time = when.value;
+      await api("/log", {method:"POST",body});
+      toast("Logged");
+    } else {
+      const content = quickMode === "task" ? "# " + value.slice(0,110) + "\n\n- [ ] " + value + "\n" : "# " + value.split("\n")[0].slice(0,110) + "\n\n" + value.split("\n").slice(1).join("\n");
+      await api("/note", {method:"POST",body:{content,category:"inbox"}});
+      toast(quickMode === "task" ? "Task added" : "Note saved to inbox");
+    }
+    input.value = ""; resetWhen(); chips.querySelectorAll(".chip").forEach(b => b.setAttribute("aria-pressed","false"));
+    await views.today();
+  } catch(err) { handle(err); }
   $("#logbtn").disabled = false;
 };
 $("#lockbtn").onclick = async () => {
