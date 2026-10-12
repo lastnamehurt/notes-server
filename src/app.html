@@ -202,7 +202,7 @@ h2.group b { color: var(--ink); }
 .focus-visual .focus-detail h3{margin:0 0 8px}
 @media(max-width:360px){.focus-visual .focus-quadrant{min-height:135px}.focus-visual .focus-quadrant strong{font-size:15px}}
 
-.log-to-note{border:1px solid var(--rule);border-radius:9px;background:var(--sheet);color:var(--ink-2);font:inherit;font-size:12px;padding:7px 9px;flex-shrink:0}
+.log-to-task,.log-to-note{border:1px solid var(--rule);border-radius:9px;background:var(--sheet);color:var(--ink-2);font:inherit;font-size:12px;padding:7px 9px;flex-shrink:0}
 .inbox-item{padding:16px 0;border-bottom:1px solid var(--rule)}.inbox-item>a{color:var(--ink);text-decoration:none}.inbox-item p{font-size:14px;color:var(--ink-2);white-space:pre-wrap;overflow-wrap:anywhere}.inbox-actions{display:flex;gap:8px;flex-wrap:wrap}.inbox-actions button{border:1px solid var(--rule);background:var(--sheet);color:var(--ink);padding:10px 12px;border-radius:10px;font:inherit;font-size:13px;min-height:42px}.inbox-actions button:disabled{opacity:.5}
 /* Goals */
 .goal { padding: 18px; border: 1px solid var(--rule); border-radius: 16px; background: var(--sheet); box-shadow: var(--shadow); margin: 0 0 12px; }
@@ -355,7 +355,7 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
     <a href="#notes">Notes</a>
     <a href="#logs">Logs</a>
     <a href="#goals">Goals</a>
-    <a href="#reminders">Reminders</a>
+    <a href="#reminders">Tasks</a>
     <a href="#settings" id="settingsTab" hidden>Settings</a>
   </nav>
   <main id="main" aria-live="polite"></main>
@@ -555,6 +555,12 @@ function sheetError(msg) {
   el.textContent = msg;
 }
 
+async function taskFromLog(entry, date) {
+  const text = entry.replace(/^✓\s*/, "").trim(); if (!text) return;
+  const content = "# " + text.slice(0,110) + "\n\n- [ ] " + text + "\n\nSource: Journal " + date + "\n";
+  const created = await api("/note", {method:"POST",body:{content,category:"inbox"}});
+  return created.name;
+}
 function captureSheet(prefill = "", source = "") {
   openSheet(h`<form id="capture-form"><h2>Capture thought</h2><label class="field"><span>Thought or idea</span><textarea id="capture-text" rows="5" autofocus>${prefill}</textarea></label><div class="sheet-actions"><button class="btn quiet" type="button" id="capture-cancel">Cancel</button><button class="btn" type="submit" id="capture-save">Save to inbox</button></div></form>`, modal => {
     modal.querySelector("#capture-cancel").onclick = closeSheet;
@@ -578,8 +584,8 @@ function reminderSheet(note, onSaved) {
   let repeat = false;
   const days = new Set([0, 1, 2, 3, 4, 5, 6]);
   openSheet(h`<form method="dialog" novalidate>
-      <h2 id="sheet-title">New reminder</h2>
-      <label class="field"><span>Remind me to</span><input id="r-text" autofocus required placeholder="Take meds, call the shop…" enterkeyhint="next"></label>
+      <h2 id="sheet-title">New task</h2>
+      <label class="field"><span>Task</span><input id="r-text" autofocus required placeholder="Take meds, call the shop…" enterkeyhint="next"></label>
       <div class="seg" role="group" aria-label="How often"><button type="button" data-rep="0" aria-pressed="true">Once</button><button type="button" data-rep="1" aria-pressed="false">Repeats</button></div>
       <div id="r-once" class="two"><label class="field"><span>Day</span><input type="date" id="r-date" value="${date}" min="${today}"></label>
         <label class="field"><span>Time</span><input type="time" id="r-time1" value="${time}"></label></div>
@@ -588,7 +594,7 @@ function reminderSheet(note, onSaved) {
         <p class="repeat-say" id="r-say">Every day</p>
         <label class="field"><span>Time</span><input type="time" id="r-time2" value="${time}"></label>
       </div>
-      <div class="sheet-actions"><button type="button" class="btn quiet" data-close>Cancel</button><button class="btn" id="r-save" type="submit">Add reminder</button></div>
+      <div class="sheet-actions"><button type="button" class="btn quiet" data-close>Cancel</button><button class="btn" id="r-save" type="submit">Add task reminder</button></div>
     </form>`, el => {
     const say = () => {
       const d = [...days].sort();
@@ -718,7 +724,7 @@ views.today = async () => {
     if (it.kind === "log") {
       const tags = (it.text.match(/#[\w-]+/g) || []).join(" ");
       const what = it.text.replace(/\s*#[\w-]+/g, "").trim();
-      return h`<li class="ev${/^✓/.test(what) ? " done-ev" : ""}"><time>${fmt12(it.t)}</time><button class="entry" data-line="${it.line}" aria-label="Edit ${what} at ${fmt12(it.t)}"><span class="what">${what}</span> <span class="tags">${tags}</span></button><button class="log-to-note" type="button" data-entry="${what}" data-date="${today}">To note</button></li>`;
+      return h`<li class="ev${/^✓/.test(what) ? " done-ev" : ""}"><time>${fmt12(it.t)}</time><button class="entry" data-line="${it.line}" aria-label="Edit ${what} at ${fmt12(it.t)}"><span class="what">${what}</span> <span class="tags">${tags}</span></button><button class="log-to-task" type="button" data-entry="${what}" data-date="${today}">To task</button><button class="log-to-note" type="button" data-entry="${what}" data-date="${today}">To note</button></li>`;
     }
     const due = it.t <= nowT;
     return h`<li class="ev ${due ? "due" : "up"}"><time>${fmt12(it.t)}</time><div class="body"><div><span class="what">${it.r.text}</span>
@@ -812,6 +818,11 @@ views.today = async () => {
   });
   const captureButton = main.querySelector("#focus-capture-button");
   if (captureButton) { captureButton.textContent = "+ Capture thought"; captureButton.onclick = () => captureSheet(); }
+  main.querySelectorAll(".log-to-task").forEach(button => button.onclick = async () => {
+    button.disabled = true;
+    try { const name = await taskFromLog(button.dataset.entry, button.dataset.date); nextToast = "Task added to Focus inbox"; location.hash = "#note/" + name; }
+    catch(err) { handle(err); button.disabled = false; }
+  });
   main.querySelectorAll(".log-to-note").forEach(button => button.onclick = () => captureSheet(button.dataset.entry, "Journal " + button.dataset.date));
   main.querySelectorAll(".task-priority").forEach(select => select.onchange = async () => {
     select.disabled = true;
@@ -992,11 +1003,11 @@ views["new-goal"] = async () => {
 };
 
 views.reminders = async () => {
-  main.innerHTML = '<p class="empty">Loading reminders…</p>';
+  main.innerHTML = '<p class="empty">Loading tasks…</p>';
   const { upcoming: rems } = await api("/reminders");
-  let html = `<div class="bar" style="justify-content:flex-end"><button class="btn" id="newrem">New reminder</button></div>`;
+  let html = `<div class="bar" style="justify-content:flex-end"><button class="btn" id="newrem">New task</button></div>`;
   if (!rems.length) {
-    html += `<p class="empty">Nothing scheduled. Add a reminder for meds, errands or anything with a time.</p>`;
+    html += `<p class="empty">No scheduled tasks yet. Add a task with a date or time.</p>`;
   } else {
     const today = dayKey(Date.now()), tomorrow = addDays(today, 1);
     let last = "";
