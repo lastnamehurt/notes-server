@@ -395,6 +395,26 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
   @keyframes rise { from { opacity: 0; transform: translate(-50%, 6px); } }
 }
 .undo-button{background:transparent;color:inherit;border:1px solid currentColor;border-radius:7px;padding:5px 10px;margin-left:8px;font:inherit;font-weight:700;cursor:pointer}.undo-button:disabled{opacity:.5}
+/* Promised Today mobile layout: a single compact dashboard and activity timeline. */
+.promised-today{background:var(--sheet);border:1px solid var(--rule);border-radius:24px;padding:20px;margin-bottom:12px}
+.promised-today .today-date-label{text-transform:uppercase;color:var(--ink-2);font-size:12px;letter-spacing:.07em;font-weight:650}
+.promised-today .today-top-heading{display:flex;justify-content:space-between;align-items:center;margin:8px 0 16px}
+.promised-today .today-top-heading h2{font-size:26px;margin:0}
+.promised-today .today-top-heading a{color:var(--ink);text-decoration:none;border-radius:50%;background:var(--paper);padding:10px}
+.promised-today .today-focus-card{background:var(--paper);border-radius:20px;padding:16px;border:1px solid var(--rule)}
+.promised-today .today-focus-heading{display:flex;justify-content:space-between;align-items:center;margin:0 0 10px}
+.promised-today .today-focus-heading h3{margin:0;font-size:19px}
+.promised-today .today-focus-list{margin:0;padding:0;list-style:none}
+.promised-today .today-focus-row{display:flex;gap:12px;align-items:center;padding:15px 0;border-bottom:1px solid var(--rule)}
+.promised-today .today-focus-row:last-child{border-bottom:0}
+.promised-today .today-focus-dot{font-size:25px;color:var(--ink-2)}
+.promised-today .today-focus-content{flex:1;min-width:0}
+.promised-today .today-focus-content a{font-size:17px;font-weight:650;text-decoration:none;color:var(--ink)}
+.promised-today .today-focus-due{display:block;font-size:13px;margin-top:5px}
+.promised-today .today-focus-priority{font-size:12px;border-radius:99px;padding:5px 9px;background:var(--sheet);white-space:nowrap}
+.promised-today .today-activity-heading{margin:20px 0 0}
+@media(max-width:420px){.promised-today{padding:16px;border-radius:20px}}
+
 </style>
 </head>
 <body>
@@ -872,11 +892,17 @@ views.today = async () => {
     const nowTasks = tasks.filter(t => t.priority === "do").map(t => ({...t,due:taskDate(t.text)})).sort((a,b)=>(a.due?.date.getTime()??Infinity)-(b.due?.date.getTime()??Infinity));
     const planCount = tasks.filter(t => t.priority === "plan").length;
     const inboxCount = tasks.filter(t => t.priority === "inbox").length;
-    const topTasks = nowTasks.slice(0,4).map(t => h`<li class="today-focus-row"><span class="today-focus-dot" aria-hidden="true">○</span><div class="today-focus-content"><a href="#note/${t.note}">${t.due ? t.due.title : t.text}</a>${t.due ? raw(h`<span class="muted today-focus-due">${displayTaskDate(t.due.date)}</span>`) : ""}</div><span class="today-focus-priority">Do now</span></li>`).join("");
-    html = h`<section class="today-dashboard"><div class="today-focus-heading"><h2>Focus</h2><a href="#reminders">All tasks →</a></div>
-      <div class="today-focus-card"><div class="today-focus-count">${nowTasks.length} to do now · ${planCount} to plan</div>
-      ${nowTasks.length ? raw('<ul class="today-focus-list">'+topTasks+'</ul>') : raw('<p class="muted">Nothing urgent right now.</p>')}
-      ${nowTasks.length > 4 ? raw(h`<a class="today-focus-more" href="#reminders">View ${nowTasks.length-4} more →</a>`) : ""}
+    const completedToday = entries.filter(e => /^✓\s/.test(e.text)).map(e => e.text.replace(/^✓\s*/, "").replace(/\s*#[\w-]+/g, "").trim().toLowerCase());
+    const activeTasks = nowTasks.filter(t => !completedToday.includes((t.due ? t.due.title : t.text).trim().toLowerCase()));
+    const topTasks = activeTasks.slice(0,4).map(t => h`<li class="today-focus-row"><span class="today-focus-dot" aria-hidden="true">○</span><div class="today-focus-content"><a href="#note/${t.note}">${t.due ? t.due.title : t.text}</a>${t.due ? raw(h`<span class="muted today-focus-due">${displayTaskDate(t.due.date)}</span>`) : ""}</div><span class="today-focus-priority">Do now</span></li>`).join("");
+    const dateLabel = new Intl.DateTimeFormat(undefined,{weekday:"long",month:"long",day:"numeric"}).format(new Date());
+    html = h`<section class="today-dashboard promised-today">
+      <div class="today-date-label">${dateLabel}</div>
+      <div class="today-top-heading"><h2>Today</h2><a href="#reminders" aria-label="Open tasks">▦</a></div>
+      <div class="today-focus-card">
+        <div class="today-focus-heading"><h3>Focus</h3><span class="muted">${activeTasks.length} priorities</span></div>
+        ${activeTasks.length ? raw('<ul class="today-focus-list">'+topTasks+'</ul>') : raw('<p class="muted">Nothing urgent right now.</p>')}
+        ${activeTasks.length > 4 ? raw(h`<a class="today-focus-more" href="#reminders">View ${activeTasks.length-4} more →</a>`) : ""}
       </div>
       <div class="today-activity-heading"><h2>Activity</h2><span class="muted">Today</span></div>
     </section>` + html;
