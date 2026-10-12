@@ -893,13 +893,20 @@ views.today = async () => {
     const tomorrowStart = new Date(todayStart); tomorrowStart.setDate(tomorrowStart.getDate()+1);
     const annotated = tasks.map(t => ({...t,due:taskDate(t.text)}));
     const completedToday = entries.filter(e => /^✓\s/.test(e.text)).map(e => e.text.replace(/^✓\s*/, "").replace(/\s*#[\w-]+/g, "").trim().toLowerCase());
-    const activeTasks = annotated.filter(t => !completedToday.includes((t.due ? t.due.title : t.text).trim().toLowerCase()))
+    const normalized = text => text.replace(/\s*@\d{4}-\d{2}-\d{2}.*$/, "").replace(/\s+/g," ").trim().toLowerCase();
+    const doneKeys = new Set((rems.doneToday || []).map(r => key(r)));
+    const dueReminders = [...(rems.firedToday || []), ...(rems.upcoming || [])]
+      .filter(r => !doneKeys.has(key(r)) && new Date(r.at).getTime() < tomorrowStart.getTime());
+    const activeTasks = annotated.filter(t => !completedToday.includes(normalized(t.text)))
       .filter(t => t.priority === "do" || (t.due && t.due.date < tomorrowStart))
-      .sort((a,b) => {
-        const aDue = a.due?.date.getTime() ?? Infinity, bDue = b.due?.date.getTime() ?? Infinity;
-        return aDue-bDue || Number(b.priority === "do")-Number(a.priority === "do");
-      });
-    const topTasks = activeTasks.slice(0,4).map(t => h`<li class="today-focus-row"><span class="today-focus-dot" aria-hidden="true">○</span><div class="today-focus-content"><a href="#note/${t.note}">${t.due ? t.due.title : t.text}</a>${t.due ? raw(h`<span class="muted today-focus-due">${displayTaskDate(t.due.date)}</span>`) : ""}</div><span class="today-focus-priority">${t.due && t.due.date < todayStart ? "Overdue" : t.priority === "do" ? "Do now" : "Due today"}</span></li>`).join("");
+      .map(t => ({...t, reminder: dueReminders.find(r => r.note === t.note && normalized(r.text) === normalized(t.text))}));
+    for (const r of dueReminders) {
+      if (activeTasks.some(t => t.reminder && key(t.reminder) === key(r))) continue;
+      if (completedToday.includes(normalized(r.text))) continue;
+      activeTasks.push({note:r.note,text:r.text,priority:"",due:{date:new Date(r.at),title:r.text},reminder:r});
+    }
+    activeTasks.sort((a,b) => (a.due?.date.getTime() ?? Infinity)-(b.due?.date.getTime() ?? Infinity));
+    const topTasks = activeTasks.slice(0,4).map(t => h`<li class="today-focus-row"><span class="today-focus-dot" aria-hidden="true">○</span><div class="today-focus-content"><a href="#note/${t.note}">${t.due ? t.due.title : t.text}</a>${t.due ? raw(h`<span class="muted today-focus-due">${displayTaskDate(t.due.date)}</span>`) : ""}</div><span class="today-focus-priority">${t.due && t.due.date < Date.now() ? "Overdue" : t.priority === "do" ? "Do now" : "Due today"}</span></li>`).join("");
     const dateLabel = new Intl.DateTimeFormat(undefined,{weekday:"long",month:"long",day:"numeric"}).format(new Date());
     html = h`<section class="today-dashboard promised-today">
       <div class="today-date-label">${dateLabel}</div>
