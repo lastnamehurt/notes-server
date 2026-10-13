@@ -43,7 +43,7 @@ The app walks you through the rest:
 
 1. **Choose where your notes live.** Keep the default, **In this app**: nothing else to set up. Or pick **In my GitHub, as files** if you want history, Obsidian or the `note` command line; then tap **Connect GitHub**, **Copy code and open GitHub**, paste the code, tap **Continue** and **Authorize**, and come back.
 2. **Check your time zone.**
-3. **Turn on phone reminders** with the free ntfy app (optional).
+3. **Turn on phone reminders** (optional): tap **Turn on notifications** and allow them. No extra app. On iPhone, add Daybook to your Home Screen first (Step 4) and do this from the Home Screen app; it needs iOS 16.4 or newer.
 
 When it says **You're set up**, it shows your Claude connection address and buttons, and how to add the app to your home screen.
 
@@ -85,7 +85,8 @@ Made your copy with the Deploy to Cloudflare button instead? **Update now** star
 - **Forgot your password?** Set a new one in Cloudflare: open **Workers & Pages**, tap your app (**daybook**), then **Settings → Variables and Secrets**, edit **PASSWORD** (or **MCP_BEARER_TOKEN** if you have one), and save. Then reconnect Claude. If your notes are on GitHub, you can also open the app with **Sign in with GitHub** under the password box.
 - **Typed the wrong password too many times?** Wait 15 minutes; the app locks briefly to stop guessing.
 - **Change reminders or time zone later:** open the app and tap **Settings**.
-- **Not getting notifications?** In the app's **Settings**, tap **Save and finish**, then **Send test notification**. If it never arrives, ntfy may be busy; switch to Pushover (a $5 app) under *Use Pushover instead*.
+- **Not getting notifications?** Open the app's **Settings** on that phone and tap **Send test notification**. If it says notifications aren't on, tap **Turn on notifications**. On iPhone, use the Daybook app on your Home Screen (not a Safari tab), and check **iPhone Settings → Notifications → Daybook**. Each phone or computer turns them on separately.
+- **Used ntfy or Pushover before?** They still work, but they're no longer offered for new setups. Turn on notifications on your phone in **Settings**; reminders then go there instead, and you can untick ntfy or Pushover under the older option.
 
 ## For the technically curious
 

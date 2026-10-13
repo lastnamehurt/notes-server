@@ -11,6 +11,8 @@ import { gzipSync } from "node:zlib";
 import { writeFileSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
+import nodeCrypto from "node:crypto";
+import { startFakePush, decryptPush } from "../support/fake-push.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const PORT = 8790, GH = 8791, PASSWORD = "onboarding-test-password-1";
@@ -82,18 +84,38 @@ const gh = http.createServer(async (req, res) => {
 });
 await new Promise(r => gh.listen(GH, "127.0.0.1", r));
 
+// ---------- stand-in push service, and this "phone's" push keys ----------
+// Headless browsers can't reach Google's real push service, so the page gets a stand-in subscription
+// (pointing at a local push service) whose private key this test holds, and decrypts what the app sends.
+const pushService = await startFakePush();
+const phoneKeys = nodeCrypto.createECDH("prime256v1"); phoneKeys.generateKeys();
+const phoneAuth = nodeCrypto.randomBytes(16);
+const phoneSub = { endpoint: pushService.url + "/phone-1", keys: { p256dh: phoneKeys.getPublicKey().toString("base64url"), auth: phoneAuth.toString("base64url") } };
+const fakePushManager = sub => {
+  const make = key => ({ endpoint: sub.endpoint, options: { applicationServerKey: key },
+    toJSON: () => ({ endpoint: sub.endpoint, expirationTime: null, keys: sub.keys }),
+    unsubscribe: async () => { localStorage.removeItem("fake-push-sub"); return true; } });
+  PushManager.prototype.subscribe = async function (o) {
+    const k = new Uint8Array(o.applicationServerKey); localStorage.setItem("fake-push-sub", JSON.stringify([...k])); return make(k.buffer);
+  };
+  PushManager.prototype.getSubscription = async function () {
+    const k = localStorage.getItem("fake-push-sub"); return k ? make(new Uint8Array(JSON.parse(k)).buffer) : null;
+  };
+};
+const received = () => pushService.received.filter(r => r.path === "/phone-1").map(r => JSON.parse(decryptPush(r.body, phoneKeys, phoneAuth)));
+
 // ---------- Worker with only a password ----------
 const devVars = ROOT + ".dev.vars";
 const saved = existsSync(devVars) ? readFileSync(devVars, "utf8") : null;
 writeFileSync(devVars, [`PASSWORD=${PASSWORD}`, `GITHUB_API_URL=http://127.0.0.1:${GH}`, `GITHUB_LOGIN_URL=http://127.0.0.1:${GH}`,
-  "GITHUB_CLIENT_ID=onboarding-test", `NTFY_SERVER=http://127.0.0.1:${GH}/ntfy`, `DAYBOOK_VERSION_URL=http://127.0.0.1:${GH}/version.ts`].join("\n") + "\n");
+  "GITHUB_CLIENT_ID=onboarding-test", "PUSH_ALLOW_HTTP=true", `DAYBOOK_VERSION_URL=http://127.0.0.1:${GH}/version.ts`].join("\n") + "\n");
 rmSync(ROOT + ".wrangler/state", { recursive: true, force: true });
 const worker = spawn("npx", ["wrangler", "dev", "--port", String(PORT), "--ip", "127.0.0.1"], { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"], detached: true });
 let log = ""; worker.stdout.on("data", d => (log += d)); worker.stderr.on("data", d => (log += d));
 let browser;
 const cleanup = () => {
   for (const sig of ["SIGTERM", "SIGKILL"]) try { process.kill(-worker.pid, sig); } catch {}
-  gh.close();
+  gh.close(); pushService.close();
   if (saved !== null) writeFileSync(devVars, saved); else rmSync(devVars, { force: true });
 };
 process.on("exit", cleanup);
@@ -106,14 +128,15 @@ for (let i = 0; ; i++) {
 try {
   browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
   const phone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, timezoneId: "America/Chicago" };
-  const ctx = await browser.newContext({ ...phone, permissions: ["clipboard-read", "clipboard-write"] });
+  const ctx = await browser.newContext({ ...phone, permissions: ["clipboard-read", "clipboard-write", "notifications"] });
+  await ctx.addInitScript(fakePushManager, phoneSub);
   // Outside sites stand-ins: the test never touches github.com or claude.ai.
   await ctx.route(/^https:\/\/(github\.com|claude\.ai|chatgpt\.com|cursor\.com)\//, r => r.fulfill({ status: 200, contentType: "text/html", body: "<h1>stand-in</h1>" }));
   await ctx.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, r => r.abort());
   ctx.setDefaultTimeout(20000);
   const page = await ctx.newPage();
   const errors = [];
-  page.on("pageerror", e => errors.push(String(e)));
+  page.on("pageerror", e => errors.push(String(e.stack || e).slice(0, 500)));
 
   // 1. Cloudflare's "Visit" opens the root
   await page.goto(BASE + "/");
@@ -131,7 +154,11 @@ try {
   await page.click('input[name="storage"][value="github"]');
   await page.waitForSelector("#gh-start");
   check(/access your repositories/.test(await page.innerText("#s2")), "Setup explains what GitHub will ask");
-  check(await page.locator("#copytopic").isVisible() && await page.locator("#ntfy-subscribe").count() === 0, "iPhone/desktop: ntfy name with Copy (no Android link)");
+  await page.waitForSelector("#push-on");
+  check(!/ntfy|pushover/i.test(await page.innerText("#s4")), "Reminders step: no ntfy or Pushover, just Turn on notifications");
+  await page.click("#push-on");
+  await page.waitForFunction(() => /Notifications are on for this/.test(document.querySelector("#push-box")?.textContent || ""));
+  check(true, "Turn on notifications: on for this device, nothing to install");
   check(await page.locator("#diagnostics").count() === 0, "No diagnostics card during first run");
   await page.click("#gh-start");
   await page.waitForSelector("#gh-code");
@@ -154,11 +181,14 @@ try {
   check(done.includes(BASE + "/mcp"), "Finish screen shows the Claude address");
   check(await page.locator("[data-connect]").count() >= 2, "Finish screen has one-tap connect buttons");
   check(done.includes(BASE + "/app"), "Finish screen shows the app's own address");
-  if (await page.locator("#test").count()) {
-    await page.click("#test");
-    await page.waitForTimeout(1500);
-    check(pushes.some(b => b.includes("Test notification")), "Test notification sent");
-  }
+  check(await page.locator("#test").count() === 1, "Finish screen offers a test notification");
+  await page.click("#test");
+  for (let i = 0; i < 30 && !received().length; i++) await page.waitForTimeout(200);
+  const test = received()[0];
+  check(test?.title === "Reminder" && test?.body === "Test notification from Daybook ✓" && /\/app#today$/.test(test?.url || ""),
+    "Test notification arrives encrypted for this device, and decrypts: " + JSON.stringify(test));
+  const auth = pushService.received[0]?.headers.authorization || "";
+  check(/^vapid t=[\w-]+\.[\w-]+\.[\w-]+, k=[\w-]{87}$/.test(auth), "Sent with the app's own push key (VAPID)");
 
   // 4. First use
   await page.click("text=Open my notes");
@@ -167,7 +197,7 @@ try {
 
   // 5. Settings later: checks work when Settings is opened directly
   const later = await ctx.newPage();
-  later.on("pageerror", e => errors.push(String(e)));
+  later.on("pageerror", e => errors.push(String(e.stack || e).slice(0, 500)));
   await later.goto(BASE + "/app#settings");
   await later.waitForSelector("#run-diagnostics");
   await later.click("#run-diagnostics");
@@ -176,7 +206,7 @@ try {
 
   // 6. Updates: banner on Today with Update now (her copy found among her repositories), and in Settings
   const today = await ctx.newPage();
-  today.on("pageerror", e => errors.push(String(e)));
+  today.on("pageerror", e => errors.push(String(e.stack || e).slice(0, 500)));
   await today.goto(BASE + "/app#today");
   await today.waitForSelector("#update-banner");
   check(/Test update note/.test(await today.innerText("#update-banner")), "Today shows 'An update is available' with the note");
@@ -195,7 +225,7 @@ try {
   const fresh = await browser.newContext(phone);
   await fresh.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, r => r.abort());
   const back = await fresh.newPage();
-  back.on("pageerror", e => errors.push(String(e)));
+  back.on("pageerror", e => errors.push(String(e.stack || e).slice(0, 500)));
   await back.goto(BASE + "/app");
   await back.waitForSelector("#key");
   check(await back.locator("#ghbtn").isVisible(), "Return visit offers the password and Sign in with GitHub");
@@ -204,19 +234,65 @@ try {
   await back.waitForSelector("#tabs:not([hidden])");
   check(true, "Password unlocks after setup");
 
-  // 8. Android: one-tap Subscribe in ntfy
-  const android = await browser.newContext({ ...phone, userAgent: "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36" });
-  await android.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, r => r.abort());
-  const droid = await android.newPage();
-  await droid.goto(BASE + "/app");
-  await droid.fill("#key", PASSWORD); await droid.click("#lockform button[type=submit]");
-  await droid.waitForSelector("#tabs:not([hidden])");
+  // 8. Settings shows this device; another phone (an iPhone in Safari, not from the Home Screen) is told how
+  const settings = await ctx.newPage();
+  settings.on("pageerror", e => errors.push(String(e.stack || e).slice(0, 400)));
+  await settings.goto(BASE + "/app#settings");
+  await settings.waitForFunction(() => /Notifications are on for this/.test(document.querySelector("#push-box")?.textContent || ""));
+  check(true, "Settings: notifications on for this device");
+  const iphone = await browser.newContext({ ...phone, userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1" });
+  await iphone.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, r => r.abort());
+  const ip = await iphone.newPage();
+  ip.on("pageerror", e => errors.push(String(e.stack || e).slice(0, 500)));
+  await ip.goto(BASE + "/app");
+  await ip.fill("#key", PASSWORD); await ip.click("#lockform button[type=submit]");
+  await ip.waitForSelector("#tabs:not([hidden])");
   // Navigating while Today is still loading: Settings must end up on screen, not be replaced by the slower Today render.
-  await droid.goto(BASE + "/app#settings");
-  await droid.waitForTimeout(1500);
-  const ntfyHref = await droid.waitForFunction(() => document.querySelector("#ntfy-subscribe")?.getAttribute("href"), null, { timeout: 15000 })
-    .then(r => r.jsonValue()).catch(() => undefined);
-  check(/^ntfy:\/\/ntfy\.sh\/notes-[a-z0-9]+\?display=Daybook$/.test(ntfyHref || ""), "Android: Subscribe in ntfy opens the app with her topic: " + ntfyHref);
+  await ip.goto(BASE + "/app#settings");
+  await ip.waitForTimeout(1500);
+  const ipText = await ip.waitForFunction(() => document.querySelector("#push-box")?.textContent, null, { timeout: 15000 }).then(r => r.jsonValue()).catch(() => "");
+  check(/Add to Home Screen/.test(ipText) && await ip.locator("#push-on").count() === 0, "iPhone in Safari: told to add Daybook to the Home Screen first");
+  await iphone.close();
+
+  // 9. A real reminder goes off on this device (written in a note, due in about a minute)
+  const due = new Date(Date.now() + 75_000);
+  const local = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(due);
+  const part = t => local.find(p => p.type === t).value;
+  const when = `${part("year")}-${part("month")}-${part("day")} ${part("hour")}:${part("minute")}`;
+  const saveNote = await settings.request.post(BASE + "/app/api/note", { headers: { Origin: BASE },
+    data: { category: "inbox", content: `# Water\n- [ ] Drink water @${when}` } });
+  check(saveNote.ok(), "Saved a note with a reminder at " + when);
+  const before = received().length;
+  for (let i = 0; i < 90 && received().length === before; i++) await settings.waitForTimeout(2000);
+  const reminder = received().at(-1);
+  check(reminder?.title === "Reminder" && reminder?.body === "Drink water" && /\/done\?a=/.test(reminder?.done || ""),
+    "The reminder arrives on this device at its time, with a Done link: " + JSON.stringify(reminder));
+  check(!received()[0]?.done, "(the test notification had no Done button)");
+
+  // 10. Turn off on this device
+  await settings.click("#push-off");
+  await settings.waitForSelector("#push-on");
+  const after = await (await settings.request.get(BASE + "/app/api/push")).json();
+  check(after.devices.length === 0, "Turn off removes this device");
+  await settings.click("#push-on");
+  await settings.waitForFunction(() => /Notifications are on for this/.test(document.querySelector("#push-box")?.textContent || ""));
+  check(true, "and it can be turned back on");
+
+  // 11. Someone already on ntfy (older option): shown under "older option", can stop using it
+  const topic = "notes-legacytopic1234567890";
+  const legacySave = await settings.request.post(BASE + "/app/api/setup", { headers: { Origin: BASE }, data: { repo: "jane/notes", ntfyTopic: topic } });
+  check(legacySave.ok(), "(an older setup with ntfy)");
+  await settings.goto(BASE + "/app#settings"); await settings.reload();
+  await settings.waitForSelector("#legacy-push");
+  check(/ntfy \(older option\)/.test(await settings.innerText("#legacy-push summary")) && await settings.isChecked("#uselegacy"), "ntfy shows as the older option, kept as a backup");
+  check(/instead of ntfy/.test(await settings.innerText("#push-box")), "and says reminders now go to devices instead");
+  await settings.click("#legacy-push summary");
+  await settings.uncheck("#uselegacy");
+  await settings.click("#save");
+  await settings.waitForSelector("#copymcp");
+  const afterLegacy = await (await settings.request.get(BASE + "/app/api/settings")).json();
+  check(afterLegacy.notify === null && !afterLegacy.ntfyTopic, "Unticking stops ntfy");
+  check((await (await settings.request.get(BASE + "/app/api/push")).json()).devices.length === 1, "and keeps this device's notifications");
 
   check(errors.length === 0, "No page errors " + JSON.stringify(errors));
 } catch (e) {

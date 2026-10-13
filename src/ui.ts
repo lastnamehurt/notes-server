@@ -1,6 +1,8 @@
 import html from "./app.html";
+import sw from "./sw.txt";
 
 export const APP_HTML: string = html;
+export const SERVICE_WORKER: string = sw;
 
 export const MANIFEST = JSON.stringify({
   name: "Day book",

@@ -24,7 +24,7 @@ Nothing owner-specific is in this repository, so one copy of the code serves any
 | `NOTES_TIMEZONE` | setup page, secret or variable | IANA zone; default `America/Los_Angeles` |
 | `NOTES_BRANCH` | variable | default `main` |
 | `PUBLIC_URL` | variable | optional; defaults to the host requests arrive on. Set it if the Worker has more than one hostname |
-| `PUSHOVER_USER`, `PUSHOVER_TOKEN` / `NTFY_TOPIC` | secret | phone notifications, see below |
+| `PUSHOVER_USER`, `PUSHOVER_TOKEN` / `NTFY_TOPIC` | secret | deprecated phone notifications (still delivered when no device has notifications on), see below |
 
 `wrangler.jsonc` sets `keep_vars: true`, so variables added in the dashboard survive deploys, and the `OAUTH_KV` namespace has no id: Wrangler reuses the namespace already bound to a deployed Worker, or creates one on a first deploy. OAuth discovery metadata and reminder Done links are built from the Worker's own origin.
 
@@ -44,20 +44,11 @@ Times are in `NOTES_TIMEZONE` (default `America/Los_Angeles`) and may be listed 
 
 Each notification has a **Done** button. It POSTs to `/done` with a link signed by `MCP_BEARER_TOKEN` (HMAC), and the Worker records `✓ <text> #done` in that day's log. Rotating `MCP_BEARER_TOKEN` invalidates buttons on notifications already sent.
 
-How it works: `save_note`/`update_note` parse the note and store upcoming reminders in a single `ReminderScheduler` Durable Object, which sets an alarm for the next one and posts it to [Pushover](https://pushover.net) or [ntfy](https://ntfy.sh) when it fires (failed sends retry every 5 minutes; `list_reminders` reports the last failure). An hourly cron rescans the whole notes repository so edits made outside the Worker (the local CLI, GitHub's web editor) are picked up; `sync_notes` does the same rescan on demand. `list_reminders` shows what's scheduled. The server's MCP instructions tell Claude the syntax and to offer saving action items as reminders.
+How it works: `save_note`/`update_note` parse the note and store upcoming reminders in a single `ReminderScheduler` Durable Object, which sets an alarm for the next one and sends it when it fires (failed sends retry every 5 minutes; `list_reminders` reports the last failure). An hourly cron rescans the whole notes repository so edits made outside the Worker (the local CLI, GitHub's web editor) are picked up; `sync_notes` does the same rescan on demand. `list_reminders` shows what's scheduled. The server's MCP instructions tell Claude the syntax and to offer saving action items as reminders.
 
-Setup:
+**Notifications (web push).** Each phone or computer turns them on in **Settings → Turn on notifications**. The app registers its service worker (`/app/sw.js`, scope `/app`), subscribes with the browser's push service using the app's own VAPID key, and stores the subscription in the `ReminderScheduler` (`webpush` key, separate from settings so saving settings never drops a device). Reminders, briefings and the weekly review are sent from the Worker to each device's push service, encrypted per RFC 8291 (aes128gcm) and signed per RFC 8292 (VAPID); `src/web-push.ts` does this with WebCrypto only. Expired subscriptions (404/410) are forgotten automatically. On iPhone this needs iOS 16.4+ and the Home Screen app. Android, desktop Chrome/Edge/Firefox and Safari on a Mac work in the browser. Where the device shows notification buttons (Android, desktop) there's a **Done** button; tapping a notification opens Today.
 
-**Pushover (recommended):** install Pushover on your phone ($4.99 one-time per platform after a 30-day trial), copy your User Key from pushover.net, create an Application to get an API token, then:
-
-```
-npx wrangler secret put PUSHOVER_USER
-npx wrangler secret put PUSHOVER_TOKEN
-```
-
-Notifications carry a "Mark done" link that opens a confirm page and logs the item. Pushover is used whenever both secrets are set.
-
-**ntfy (fallback):** subscribe the ntfy app to a long, unguessable topic and `npx wrangler secret put NTFY_TOPIC`. Optional: `NTFY_SERVER` (self-hosted) and `NTFY_TOKEN`. Note that anonymous publishing to ntfy.sh from Cloudflare shares a per-IP daily quota and can fail with 429.
+**ntfy and Pushover (deprecated).** No longer offered in setup. Existing setups keep working: they're used only when no device has notifications on, so nobody gets everything twice after switching. Settings shows them under an "older option" with a box to stop using them. Configured as before with `NTFY_TOPIC` (optional `NTFY_SERVER`, `NTFY_TOKEN`) or `PUSHOVER_USER` + `PUSHOVER_TOKEN`.
 
 Then call `sync_notes` once to schedule reminders already in your notes.
 

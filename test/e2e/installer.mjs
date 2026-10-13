@@ -151,7 +151,7 @@ try {
   await me.waitForSelector("#save");
   check(/\(optional\)/.test(await me.innerText("#s4 h3")), "First run: the reminders step says it's optional");
   check(/Skip this and tap Save and finish/.test(await me.innerText("#s4 .skip-note")), "and says how to skip it");
-  await me.uncheck("#usentfy");
+  check(!/ntfy|pushover/i.test(await me.innerText("#s4")), "No ntfy or Pushover for a new install");
   await me.click("#save");
   await me.waitForFunction(() => /notifications are off/i.test(document.querySelector("#main")?.textContent || ""), null, { timeout: 30000 });
   check(true, "Setup finishes with notifications skipped, and says they can be turned on later");
