@@ -196,7 +196,11 @@ try {
   // 4. First use
   await page.click("text=Open my notes");
   await page.waitForTimeout(1200);
-  check(await page.locator("#tabs").isVisible() && await page.locator("#settingsTab").isVisible(), "Tabs and Settings appear after setup");
+  // Settings lives in the "More" menu, so open it before checking the link is shown.
+  const tabsShown = await page.locator("#tabs").isVisible();
+  await page.click("#tabs-more-label");
+  check(tabsShown && await page.locator("#settingsTab").isVisible(), "Tabs and Settings appear after setup");
+  await page.keyboard.press("Escape");
 
   // 5. Settings later: checks work when Settings is opened directly
   const later = await ctx.newPage();
