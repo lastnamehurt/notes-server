@@ -8,6 +8,7 @@ import { GithubNotes, type Env } from "./github";
 import { buildBriefing, mergeBriefings, nextBriefingAt, DEFAULT_BRIEFINGS, BRIEFING_KINDS, type BriefingKind, type BriefingSettings, type Briefing } from "./briefing";
 import { localStamp } from "./reminder-parse";
 import { notesFor } from "./storage";
+import { AwarenessEventStore } from "./awareness-store";
 export * from "./reminder-parse";
 
 /** Signed link that marks this occurrence of the reminder done (see completeReminder). */
@@ -154,6 +155,19 @@ export interface Fired { note: string; text: string; at: number; repeat: boolean
 
 /** Single instance ("global") that stores upcoming reminders and fires them with an alarm. */
 export class ReminderScheduler extends DurableObject<ReminderEnv> {
+  /** Persist validated events; does not trigger any outbound notification. */
+  async appendAwarenessEvent(input: unknown, ownerId: string) {
+    return new AwarenessEventStore(this.ctx.storage).append(input, ownerId);
+  }
+
+  async awarenessEvents(ownerId: string, limit = 100) {
+    return new AwarenessEventStore(this.ctx.storage).list(ownerId, limit);
+  }
+
+  async pruneAwarenessEvents(ownerId: string, now = Date.now()) {
+    return new AwarenessEventStore(this.ctx.storage).prune(ownerId, now);
+  }
+
   private async all(prefix = "r:"): Promise<Map<string, Reminder>> {
     return this.ctx.storage.list<Reminder>({ prefix });
   }
