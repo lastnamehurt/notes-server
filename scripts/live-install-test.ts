@@ -9,7 +9,8 @@ import { readFileSync } from "node:fs";
 import { Cloudflare, checkAccount, install, uninstall, appUrl, type Bundle, type Manifest } from "../src/cloudflare-deploy";
 
 const token = process.env.CLOUDFLARE_API_TOKEN!, accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-const name = "daybook-livetest";
+// A fresh name each run: Cloudflare's edge keeps answering "not found" for a just-deleted name for a while.
+const name = "daybook-lt-" + Date.now().toString(36);
 const password = "live-" + crypto.randomUUID();
 const gh = (kind: "notice" | "error", msg: string) => console.log(`::${kind} title=Installer live test::${msg.replace(/\r?\n/g, " %0A")}`);
 let failures = 0;
@@ -21,10 +22,12 @@ const bundle: Bundle = { manifest, files: new Map(manifest.modules.map(m => [m.n
 const cf = new Cloudflare(token);
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
+/** Waits until `ok` holds 5 times in a row (a new address answers from some places before others). */
 async function waitFor(url: string, ok: (r: Response) => Promise<boolean>, what: string, seconds = 180) {
   const started = Date.now();
+  let streak = 0;
   for (;;) {
-    try { const r = await fetch(url); if (await ok(r)) return true; } catch {}
+    try { const r = await fetch(url); streak = (await ok(r)) ? streak + 1 : 0; if (streak >= 5) return true; } catch { streak = 0; }
     if (Date.now() - started > seconds * 1000) { check(false, `${what} (waited ${seconds}s)`); return false; }
     await sleep(3000);
   }

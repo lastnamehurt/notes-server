@@ -157,13 +157,16 @@ $("#install").onclick = async () => {
 
 // A brand-new address can take a minute or two to start working everywhere.
 async function waitUntilReady(url) {
+  // Wait for a few answers in a row: a new address starts working in some places before others.
   const started = Date.now();
+  let streak = 0;
   for (;;) {
-    try { if ((await post("/api/ready", { url })).ready) break; } catch {}
+    try { streak = (await post("/api/ready", { url })).ready ? streak + 1 : 0; } catch { streak = 0; }
+    if (streak >= 3) break;
     const s = Math.round((Date.now() - started) / 1000);
     $("#status").textContent = s < 20 ? "Starting your app…" : "Starting your app… new addresses can take a minute or two (" + s + "s)";
     if (Date.now() - started > 5 * 60_000) { $("#status").textContent = "Your app is installed. Its address is still starting up; try opening it in a few minutes."; break; }
-    await new Promise(r => setTimeout(r, 4000));
+    await new Promise(r => setTimeout(r, streak ? 1500 : 4000));
   }
   if (Date.now() - started <= 5 * 60_000) $("#status").textContent = "Your app is ready.";
   $("#ready").hidden = false;
