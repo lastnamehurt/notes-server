@@ -136,7 +136,8 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
       return json(await runAppleSync(body, {
         notes: notesFor(configured), scheduler: scheduler(configured), timeZone: configured.NOTES_TIMEZONE,
         url: id => url.origin + "/app#task/" + id,
-        noteChanged: (name, content) => scheduleNote(configured, name, content)
+        noteChanged: (name, content) => scheduleNote(configured, name, content),
+        deferralsCommitted: events => scheduler(configured).recordTaskDeferrals(events)
       }));
     } catch (e) {
       if (e instanceof SyncError) return fail(e.message, e.status);
