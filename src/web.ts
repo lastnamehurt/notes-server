@@ -186,6 +186,22 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
   try {
     // Setup page: works before notes are configured.
     switch (route) {
+      case "GET /awareness/inbox": {
+        const limit = Number(url.searchParams.get("limit") ?? "20");
+        const cursor = url.searchParams.get("cursor") || undefined;
+        return json(await scheduler(env).awarenessInboxList(limit, cursor));
+      }
+      case "GET /awareness/item": {
+        const id = url.searchParams.get("id") ?? "";
+        const item = await scheduler(env).awarenessInboxGet(id);
+        return item ? json(item) : fail("Awareness item not found", 404);
+      }
+      case "POST /awareness/action": {
+        const body = await request.json<{ id?: string; action?: string; until?: string }>();
+        if (!body.id || !["dismiss", "snooze", "mute"].includes(body.action ?? "")) return fail("Invalid Awareness action");
+        const item = await scheduler(env).awarenessInboxAction(body.id, body.action as "dismiss" | "snooze" | "mute", body.until);
+        return item ? json(item) : fail("Awareness item not found", 404);
+      }
       case "GET /update": return json(await checkForUpdate(env));
       // Settings → Your name. Works on every server, including ones configured on the deployment.
       case "POST /profile": {
