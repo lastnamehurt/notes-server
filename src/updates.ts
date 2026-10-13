@@ -3,6 +3,7 @@
 // someone's own server would undercut "only you can see your notes". The owner taps Update now, which starts
 // the Update Daybook workflow in their own copy (or opens it, when the app has no GitHub connection).
 import { VERSION, VERSION_NOTE } from "./version";
+import { Cloudflare, CF_API, fetchBundle, friendly, update } from "./cloudflare-deploy";
 
 export const DEFAULT_UPSTREAM = "lastnamehurt/notes-server";
 
@@ -44,7 +45,12 @@ export function parseVersionFile(text: string): { version?: string; note?: strin
 let cache: { at: number; latest?: string; note?: string } | undefined;
 const TTL_MS = 6 * 3600 * 1000;
 
-type UpdateEnv = { DAYBOOK_UPSTREAM?: string; DAYBOOK_REPO?: string; GITHUB_TOKEN?: string; GITHUB_API_URL?: string; DAYBOOK_VERSION_URL?: string; NOTES_REPO?: string };
+type UpdateEnv = {
+  DAYBOOK_UPSTREAM?: string; DAYBOOK_REPO?: string; GITHUB_TOKEN?: string; GITHUB_API_URL?: string; DAYBOOK_VERSION_URL?: string; NOTES_REPO?: string;
+  CF_API_TOKEN?: string; CF_ACCOUNT_ID?: string; CF_API_URL?: string; DAYBOOK_SCRIPT?: string; DAYBOOK_INSTALLER?: string;
+};
+/** Apps made by the installer update themselves through Cloudflare; no GitHub involved. */
+export const selfUpdating = (env: UpdateEnv) => Boolean(env.CF_API_TOKEN && env.CF_ACCOUNT_ID && env.DAYBOOK_INSTALLER);
 const ghHeaders = (token: string) => ({ "Authorization": "Bearer " + token, "Accept": "application/vnd.github+json", "User-Agent": "daybook" });
 
 /** Forget the found repository (after the owner names it in Settings). */
@@ -87,7 +93,18 @@ async function findOwnRepo(env: UpdateEnv, upstream: string): Promise<string | u
 }
 
 /** Start the Update Daybook workflow in this copy's repository. */
-export async function runUpdate(env: UpdateEnv): Promise<{ runsUrl: string }> {
+export async function runUpdate(env: UpdateEnv): Promise<{ runsUrl?: string; version?: string }> {
+  if (selfUpdating(env)) {
+    try {
+      const bundle = await fetchBundle(env.DAYBOOK_INSTALLER!);
+      return await update(new Cloudflare(env.CF_API_TOKEN!, env.CF_API_URL || CF_API), bundle, { accountId: env.CF_ACCOUNT_ID!, name: env.DAYBOOK_SCRIPT });
+    } catch (e) {
+      const message = friendly(e);
+      throw new Error(/didn't accept that key|permissions/.test(message)
+        ? `Your app's Cloudflare key no longer works, so it can't update itself. Open ${env.DAYBOOK_INSTALLER!.replace(/\/+$/, "")}, make a new key and tap Update it.`
+        : message);
+    }
+  }
   const repo = await findOwnRepo(env, env.DAYBOOK_UPSTREAM?.trim() || DEFAULT_UPSTREAM);
   if (!repo) throw new Error("Tell the app which GitHub repository is your copy of Daybook first.");
   if (!env.GITHUB_TOKEN) throw new Error("This app isn't connected to GitHub, so it can't start the update. Use Open Update Daybook instead.");
@@ -111,15 +128,22 @@ export async function checkForUpdate(env: UpdateEnv): Promise<UpdateStatus> {
   const upstream = env.DAYBOOK_UPSTREAM?.trim() || DEFAULT_UPSTREAM;
   if (!cache || Date.now() - cache.at > TTL_MS) {
     try {
-      const url = env.DAYBOOK_VERSION_URL?.trim() || `https://raw.githubusercontent.com/${upstream}/main/src/version.ts`;
+      // Installer-made apps update from the installer's bundle, so ask it which version it has.
+      const fromInstaller = !env.DAYBOOK_VERSION_URL?.trim() && selfUpdating(env);
+      const url = env.DAYBOOK_VERSION_URL?.trim()
+        || (fromInstaller ? env.DAYBOOK_INSTALLER!.replace(/\/+$/, "") + "/bundle/manifest.json" : `https://raw.githubusercontent.com/${upstream}/main/src/version.ts`);
       const res = await fetch(url, { headers: { "User-Agent": "daybook" } });
-      const parsed = res.ok ? parseVersionFile(await res.text()) : {};
+      const text = res.ok ? await res.text() : "";
+      const parsed = !res.ok ? {} : text.trimStart().startsWith("{")
+        ? (({ version, note }) => ({ version, note }))(JSON.parse(text) as { version?: string; note?: string })
+        : parseVersionFile(text);
       cache = { at: Date.now(), latest: parsed.version, note: parsed.note };
     } catch {
       cache = { at: Date.now() - TTL_MS + 600_000 }; // try again in 10 minutes
     }
   }
   const available = Boolean(cache.latest && newer(cache.latest, VERSION));
+  if (selfUpdating(env)) return { current: VERSION, latest: cache.latest, note: available ? cache.note : VERSION_NOTE, available, canRun: true };
   const repo = available ? await findOwnRepo(env, upstream) : undefined;
   return {
     current: VERSION, latest: cache.latest, note: available ? cache.note : VERSION_NOTE, available,

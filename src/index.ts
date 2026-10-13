@@ -160,7 +160,7 @@ const donePage = (body: string, status = 200) => new Response(
 
 async function done(request: Request, env: Env): Promise<Response> {
   if (request.method !== "GET" && request.method !== "POST") return new Response("Method not allowed", { status: 405 });
-  if (!env.MCP_BEARER_TOKEN || !env.GITHUB_TOKEN) return new Response("Server not configured", { status: 503 });
+  if (!env.MCP_BEARER_TOKEN || !notesConfigured(env)) return new Response("Server not configured", { status: 503 });
   const action = await verifyAction(env.MCP_BEARER_TOKEN, new URL(request.url).searchParams.get("a") ?? "");
   if (!action) return new Response("Invalid link", { status: 403 });
   // GET (a tapped notification link) only shows a confirm button, so link previews never log anything.

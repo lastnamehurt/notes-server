@@ -1,0 +1,9 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  // The Daybook installer. Build the app bundle first: node scripts/build-bundle.mjs
+  "name": "daybook-installer",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "workers_dev": true,
+  "rules": [{ "type": "Text", "globs": ["**/*.txt", "**/*.html"], "fallthrough": false }]
+}
