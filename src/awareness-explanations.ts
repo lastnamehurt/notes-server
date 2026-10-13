@@ -31,7 +31,7 @@ export function explainAwareness(candidate:ExplanationCandidate,evidence:readonl
     byId.set(item.id,item);
   }
   const now=options.now??Date.now(),maxAge=(options.maxAgeDays??30)*86400000;
-  if(!Number.isFinite(maxAge)||maxAge<=0||maxAge>90)return unavailable();
+  if(!Number.isFinite(maxAge)||maxAge<=0||maxAge>90*86400000)return unavailable();
   const matched:ExplanationEvidence[]=[];
   for(const id of candidate.evidenceEventIds){
     const item=byId.get(id);
