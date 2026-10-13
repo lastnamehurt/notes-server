@@ -154,6 +154,32 @@ export interface Fired { note: string; text: string; at: number; repeat: boolean
 
 /** Single instance ("global") that stores upcoming reminders and fires them with an alarm. */
 export class ReminderScheduler extends DurableObject<ReminderEnv> {
+  /**
+   * Internal, owner-local event capture. The global scheduler belongs to one
+   * private Daybook installation. No notifications or rules are run here.
+   * Keep this path free of Zod imports (Worker startup compatibility).
+   */
+  async recordTaskDeferrals(events: { id: string; taskId: string; fromDueAt: string; toDueAt: string }[]): Promise<number> {
+    let inserted = 0;
+    for (const event of events.slice(0, 100)) {
+      if (!/^[a-z0-9-]{1,160}$/.test(event.id) || !/^[a-z0-9]{4,12}$/.test(event.taskId) ||
+        !Number.isFinite(Date.parse(event.fromDueAt)) || !Number.isFinite(Date.parse(event.toDueAt)) ||
+        Date.parse(event.toDueAt) <= Date.parse(event.fromDueAt)) throw new Error("Invalid task deferral");
+      const key = "awareness:event:local:" + event.id;
+      const existing = await this.ctx.storage.get(key);
+      if (existing) continue; // same committed transition, retried
+      const now = new Date().toISOString();
+      await this.ctx.storage.put(key, {
+        id: event.id, ownerId: "local", occurredAt: now, observedAt: now,
+        type: "task.deferred", source: "daybook",
+        subjectRef: { kind: "task", id: event.taskId },
+        metadata: { taskId: event.taskId, fromDueAt: event.fromDueAt, toDueAt: event.toDueAt }
+      });
+      inserted++;
+    }
+    return inserted;
+  }
+
   private async all(prefix = "r:"): Promise<Map<string, Reminder>> {
     return this.ctx.storage.list<Reminder>({ prefix });
   }
