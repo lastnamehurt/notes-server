@@ -1,4 +1,4 @@
-// A plain .zip of text files ("stored", no compression), which every phone and computer can open.
+// A .zip of the notes as Markdown (.md) files, folders kept, packed without compression so every phone and computer can open it.
 // Used by Settings → Download all my notes.
 
 const CRC_TABLE = (() => {

@@ -82,8 +82,8 @@ Updates replace the app's code only. Your notes are in a separate repository and
 
 ## Good to know
 
-- **Who can see my notes?** Only you. Kept in the app, they're stored in your own Cloudflare account; kept on GitHub, they're plain-text files in your own private repository. Either way, your own app reads them to answer you and Claude. They're not end-to-end encrypted, and the person who shared this with you has no access to either account.
-- **Can I get my notes out?** Yes. In **Settings**, tap **Download all my notes** for a zip of plain text files, any time.
+- **Who can see my notes?** Only you. Kept in the app, they're stored in your own Cloudflare account; kept on GitHub, they're Markdown files in your own private repository. Either way, your own app reads them to answer you and Claude. They're not end-to-end encrypted, and the person who shared this with you has no access to either account.
+- **Can I get my notes out?** Yes. In **Settings**, tap **Download all my notes** for a zip of your notes as Markdown (.md) files, in the same folders, any time.
 - **Can I move them to GitHub later?** Yes. In **Settings**, open **Move my notes to GitHub** and connect your GitHub. Every note is copied into a new private repository called **daybook-notes**, and saved there from then on.
 - **What does Connect GitHub give the app?** GitHub shows it as access to your repositories, because GitHub's sign-in can't be limited to one. Daybook only ever reads and writes your notes repository, and the key is kept in your own Cloudflare account, not by anyone else. If you have other private repositories you'd rather keep out of reach, use **Use an access key instead** and give the key access to your notes repository only.
 - **Connect GitHub depends on a small GitHub app called "Notes server".** If that app were ever removed, the app would ask you to connect again; your notes stay safe in your repository. You can see or revoke its access any time in GitHub → Settings → Applications.

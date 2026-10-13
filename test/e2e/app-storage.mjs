@@ -202,7 +202,7 @@ try {
   await download.saveAs(zipPath);
   const inZip = JSON.parse(execFileSync("python3", ["-c", "import zipfile,json,sys; z=zipfile.ZipFile(sys.argv[1]); assert z.testzip() is None; print(json.dumps({i.filename: z.read(i).decode() for i in z.infolist()}))", zipPath]).toString());
   check(/^daybook-notes-\d{4}-\d{2}-\d{2}\.zip$/.test(download.suggestedFilename()), "Download is named daybook-notes-<date>.zip");
-  check(inZip[name]?.includes("updated") && Object.keys(inZip).length >= 203, `Zip holds every note as plain text (${Object.keys(inZip).length} files)`);
+  check(inZip[name]?.includes("updated") && Object.keys(inZip).length >= 203, `Zip holds every note as a Markdown file (${Object.keys(inZip).length} files)`);
 
   // ---------- 5. Move my notes to GitHub ----------
   await page.click("#move-gh summary");
