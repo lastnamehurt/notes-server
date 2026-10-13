@@ -314,6 +314,24 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
         await loadSettings(env, true);
         return json({ devices: devices.map(d => ({ endpoint: d.endpoint, device: d.device, added: d.added })) });
       }
+      // AI assistants connected to Daybook (OAuth grants), and a way to disconnect one.
+      case "GET /assistants": {
+        const oauth = (env as any).OAUTH_PROVIDER;
+        if (!oauth) return json({ assistants: [] });
+        const { items } = await oauth.listUserGrants("notes-owner", { limit: 50 });
+        const assistants = await Promise.all(items.map(async (g: any) => {
+          const client = await oauth.lookupClient(g.clientId).catch(() => null);
+          return { id: g.id, name: client?.clientName || "Unnamed assistant", logo: client?.logoUri || null, since: g.createdAt };
+        }));
+        return json({ assistants });
+      }
+      case "POST /assistants/disconnect": {
+        const { id } = await request.json<{ id?: string }>();
+        const oauth = (env as any).OAUTH_PROVIDER;
+        if (!id || !oauth) return fail("Which assistant?");
+        await oauth.revokeGrant(id, "notes-owner");
+        return json({ ok: true });
+      }
       case "POST /push/unsubscribe": {
         const { endpoint } = await request.json<{ endpoint?: string }>();
         if (!endpoint) return fail("Which device?");
