@@ -11,12 +11,22 @@ concurrency:
   group: update-daybook
 jobs:
   update:
-    # The original repository doesn't update itself.
-    if: github.repository != 'lastnamehurt/notes-server'
     runs-on: ubuntu-latest
     steps:
+      # The original repository is already the newest version: it redeploys itself whenever a change is merged.
+      - name: Nothing to update in the original
+        if: github.repository == 'lastnamehurt/notes-server'
+        run: |
+          {
+            echo "## Update Daybook"
+            echo "This is the original Daybook, so it's always the newest version: it redeploys itself automatically whenever a change is merged. There's nothing to update here."
+            echo
+            echo "This button is for other people's copies of Daybook."
+          } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/checkout@v4
+        if: github.repository != 'lastnamehurt/notes-server'
       - name: Get the newest Daybook
+        if: github.repository != 'lastnamehurt/notes-server'
         run: |
           set -euo pipefail
           rm -rf /tmp/latest && mkdir -p /tmp/latest
