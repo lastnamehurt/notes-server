@@ -458,6 +458,10 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
 .cal-choose li { padding: 10px 12px; border: 1px solid var(--rule); border-radius: 12px; line-height: 1.45; }
 .cal-jump { border: 0; background: none; padding: 0; color: var(--mark); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .cal-pick { padding: 10px 12px; border-radius: 12px; background: var(--paper); }
+.repo-link { color: inherit; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 3px; }
+.repo-link:hover { text-decoration-color: currentColor; }
+.repo-link span[aria-hidden] { color: var(--mark); font-weight: 700; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 /* Daily briefings in Settings */
 .brief-row{display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--rule)}
 .brief-toggle{display:flex;align-items:center;gap:10px;font-weight:600;margin:0}
@@ -1700,6 +1704,11 @@ async function editor(name, category) {
 
 
 /* ---------- Setup (first run, and Settings later) ---------- */
+/** The notes repository's name, bold, linking to it on GitHub in a new tab. Plain bold if it isn't "owner/name". */
+function repoLink(repo) {
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repo || "")) return h`<b>${repo || ""}</b>`;
+  return h`<a class="repo-link" href="https://github.com/${repo}" target="_blank" rel="noopener" title="Open ${repo} on GitHub"><b>${repo}</b><span aria-hidden="true"> ↗</span><span class="sr-only"> (opens GitHub in a new tab)</span></a>`;
+}
 const GH_NEW_REPO = "https://github.com/new?name=notes&visibility=private&description=" + encodeURIComponent("My private notes");
 const GH_NEW_KEY = "https://github.com/settings/personal-access-tokens/new?name=" + encodeURIComponent("Notes server") +
   "&description=" + encodeURIComponent("Lets my notes server read and save my notes") + "&expires_in=none&contents=write";
@@ -1891,7 +1900,7 @@ views.setup = async () => {
       <div id="repos"></div>`;
   // Where notes are, in plain words. Servers set up on their deployment can't change it here, so no key form.
   const githubStatus = h`<section class="step ok" id="s2"><h3><span class="n">1</span>Your notes</h3>
-      <p>✓ Saved as Markdown files in your private GitHub repository${raw(cfg.notesRepo ? h` <b>${cfg.notesRepo}</b>` : "")}.</p>
+      <p>✓ Saved as Markdown files in your private GitHub repository${raw(cfg.notesRepo ? " " + repoLink(cfg.notesRepo) : "")}.</p>
       ${raw(managed ? `<p class="muted">Set in your server's Cloudflare settings, so it isn't changed here.</p>` : "")}
       <p>${raw(downloadLink)}</p></section>`;
   const githubBlock = managed ? githubStatus : connect
@@ -1899,7 +1908,7 @@ views.setup = async () => {
       <p>Your notes are saved in a private repository on your GitHub. Only you can see it.</p>
       <p class="muted">GitHub will ask to let <b>Notes server</b> access your repositories. That's GitHub's standard wording: Daybook only reads and writes your notes repository, and the key stays in your own app.</p>
       <div id="gh-flow">${raw(prev.hasToken && prev.notesRepo
-        ? h`<p class="gh-ok">✓ Connected. Notes are saved in <b>${prev.notesRepo}</b>.</p><button class="btn quiet" id="gh-start" type="button">Connect again</button>`
+        ? h`<p class="gh-ok">✓ Connected. Notes are saved in ${raw(repoLink(prev.notesRepo))}.</p><button class="btn quiet" id="gh-start" type="button">Connect again</button>`
         : `<button class="btn" id="gh-start" type="button">Connect GitHub</button>`)}</div>
       <details class="more"><summary>Use an access key instead</summary>
         <p class="muted">Only if Connect GitHub doesn't work for you.${first ? " First create a private repository called notes:" : ""}</p>
