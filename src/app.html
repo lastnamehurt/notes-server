@@ -355,6 +355,9 @@ dialog.sheet h2 { margin: 0 0 14px; font-size: 21px; }
 .storage-choice input { margin-top: 3px; }
 .update-banner { border: 1.5px solid var(--mark); }
 .ok-line { font-weight: 600; }
+.instructions { margin: 10px 0 14px; padding: 12px 14px; border-left: 3px solid var(--mark); background: var(--paper, rgba(127,127,127,.08)); border-radius: 0 10px 10px 0; font-size: 15px; line-height: 1.5; }
+.paste-where { padding-left: 20px; }
+.paste-where li { margin: 6px 0; }
 .update-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .update-actions .update-repo { flex: 1 1 100%; }
 .update-repo label { font-weight: 600; }
@@ -1700,6 +1703,36 @@ function wireConnectButtons(root, mcpUrl) {
   });
 }
 
+/*
+ * "Make your assistant use Daybook": the connector tells an assistant HOW to use Daybook, but each assistant also
+ * needs a standing instruction to reach for it unprompted. One snippet (with the owner's name) works everywhere;
+ * this shows where each assistant keeps it.
+ */
+function assistantInstructions() {
+  const me = cfg.name ? `I'm ${cfg.name}. ` : "";
+  return `${me}I use Daybook (the "Daybook" connector) as my memory and reminders. When I mention something to remember, a task, a follow-up, or something I ate, drank, took, did or felt, save or log it in Daybook without asking first. Offer reminders for action items. Before answering questions about my plans, goals, tasks or recent days, check Daybook first.`;
+}
+const instructionsBlock = () => h`<section class="step" id="use-daybook"><h3>Make your assistant use Daybook</h3>
+    <p class="muted">Connecting lets your assistant use Daybook. This tells it to reach for Daybook on its own, so you don't have to say "save this to Daybook" every time. Copy it once into your assistant's instructions:</p>
+    <blockquote class="instructions" id="daybook-instructions">${assistantInstructions()}</blockquote>
+    <button class="btn" type="button" data-copy-instructions>Copy instructions</button>
+    <details class="more"><summary>Where to paste it</summary>
+      <ul class="paste-where">
+        <li><b>Claude</b> (app or claude.ai): <b>Settings</b>, then paste into <b>Instructions for Claude</b>. It applies to every chat.</li>
+        <li><b>ChatGPT</b>: <b>Settings → Personalization → Custom instructions</b>.</li>
+        <li><b>Claude Code</b>: add it to <code>~/.claude/CLAUDE.md</code> (all projects).</li>
+        <li><b>Cursor</b>: <b>Settings → Rules</b>, under your user rules.</li>
+        <li><b>Codex and other coding agents</b>: add it to an <code>AGENTS.md</code> file in your project.</li>
+      </ul></details></section>`;
+// Copy works wherever the block appears (finish screen, Settings, Connect).
+main.addEventListener("click", e => {
+  const b = e.target.closest("[data-copy-instructions]");
+  if (!b) return;
+  navigator.clipboard.writeText(assistantInstructions())
+    .then(() => { b.textContent = "Copied"; toast("Copied. Paste it into your assistant's instructions"); setTimeout(() => (b.textContent = "Copy instructions"), 2000); },
+      () => toast("Press and hold the text to copy it"));
+});
+
 /* Connect an AI assistant (Settings only). The address is the only thing shared: never put the password in a snippet. */
 const assistantBlock = (mcpUrl) => {
   const cursor = JSON.stringify({ mcpServers: { notes: { url: mcpUrl } } }, null, 2);
@@ -1721,7 +1754,7 @@ const assistantBlock = (mcpUrl) => {
     <details class="more"><summary>Cursor, by hand</summary>
       <p class="muted">If the Cursor button doesn't open Cursor, add this to <code>~/.cursor/mcp.json</code>:</p>
       <pre class="snippet" style="overflow:auto;white-space:pre">${cursor}</pre>
-      <button class="btn quiet" id="copycursor" type="button">Copy</button></details></section>`;
+      <button class="btn quiet" id="copycursor" type="button">Copy</button></details></section>` + instructionsBlock();
 };
 
 function wireAssistant(mcpUrl) {
@@ -1976,6 +2009,7 @@ function showDone(mcpUrl) {
       ${raw(connectButtons(mcpUrl))}
       <div class="copyrow"><code>${mcpUrl}</code><button class="btn quiet" id="copymcp" type="button">Copy</button></div>
       <p class="muted">Then try it: ask <i>"remind me to drink water at 3pm"</i>.</p></section>
+    ${raw(instructionsBlock())}
     <section class="step"><h3><span class="n">3</span>Keep this app handy</h3>
       <p>This is your notes app's address. Save it somewhere, like a note to yourself:</p>
       <div class="copyrow"><code>${location.origin + "/app"}</code><button class="btn quiet" id="copyapp" type="button">Copy</button></div>
