@@ -12,18 +12,18 @@ const fixture=`<main id="main"></main><script>
 const main=document.getElementById("main");
 const $=selector=>document.querySelector(selector);
 const toast=message=>{document.body.dataset.toast=message};
-let prefs={enabled:false,paused:false,mode:"inbox",sources:{daybook:true,appleReminders:false,calendar:false,github:false},quietHours:{start:"22:00",end:"08:00"},dailyPushBudget:2};
-let items=[];
-let error=false;
+window.prefs={enabled:false,paused:false,mode:"inbox",sources:{daybook:true,appleReminders:false,calendar:false,github:false},quietHours:{start:"22:00",end:"08:00"},dailyPushBudget:2};
+window.items=[];
+window.error=false;
 const api=async (path,opts={})=>{
- if(error && path.startsWith("/awareness/inbox")) throw Error("Offline");
- if(path.startsWith("/awareness/inbox")) return {items:items.filter(x=>x.state==="active"),nextCursor:null};
+ if(window.error && path.startsWith("/awareness/inbox")) throw Error("Offline");
+ if(path.startsWith("/awareness/inbox")) return {items:window.items.filter(x=>x.state==="active"),nextCursor:null};
  if(path==="/awareness/preferences") {
-   if(opts.method==="PUT"){prefs=opts.body;return prefs}
-   return prefs;
+   if(opts.method==="PUT"){window.prefs=opts.body;return window.prefs}
+   return window.prefs;
  }
  if(path==="/awareness/action") {
-   const entry=items.find(x=>x.candidate.id===opts.body.id);
+   const entry=window.items.find(x=>x.candidate.id===opts.body.id);
    if(entry)entry.state=opts.body.action;
    return entry;
  }
