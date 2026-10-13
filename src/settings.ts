@@ -5,6 +5,8 @@
 import type { Env } from "./github";
 
 export interface Settings {
+  /** Where notes live: "app" (this app's own storage) or "github" (githubToken + notesRepo). */
+  storage?: "app" | "github";
   githubToken?: string;
   notesRepo?: string;
   notesBranch?: string;
@@ -24,6 +26,8 @@ export function applySettings<E extends Env>(env: E, s: Settings | undefined): E
   out.NOTES_REPO = pick(env.NOTES_REPO, s.notesRepo) as string;
   out.NOTES_BRANCH = pick(env.NOTES_BRANCH, s.notesBranch);
   out.NOTES_TIMEZONE = pick(env.NOTES_TIMEZONE, s.timezone);
+  // A deployment that names its repository always uses GitHub; otherwise the setup page's choice decides.
+  if (!deployConfigured(env)) out.NOTES_STORAGE = s.storage === "app" ? "app" : s.notesRepo ? "github" : undefined;
   // Push providers are chosen as a set so a deployed ntfy topic and a chosen Pushover key don't mix.
   if (!env.NTFY_TOPIC && !(env.PUSHOVER_TOKEN && env.PUSHOVER_USER)) {
     out.NTFY_TOPIC = s.ntfyTopic || undefined;
@@ -37,4 +41,5 @@ export function applySettings<E extends Env>(env: E, s: Settings | undefined): E
 export const deployConfigured = (env: Env) => Boolean(env.GITHUB_TOKEN?.trim() && env.NOTES_REPO?.trim());
 
 /** True once notes can be read and written. */
-export const notesConfigured = (env: Env) => Boolean(env.GITHUB_TOKEN?.trim() && env.NOTES_REPO?.trim());
+export const notesConfigured = (env: Env) =>
+  env.NOTES_STORAGE === "app" ? Boolean(env.NOTES) : Boolean(env.GITHUB_TOKEN?.trim() && env.NOTES_REPO?.trim());

@@ -1,6 +1,7 @@
 import { GithubNotes, type Env } from "./github";
 import { scheduler } from "./core";
 import { pushConfigured } from "./reminder-parse";
+import { notesFor } from "./storage";
 
 type Status = "pass" | "warning" | "fail";
 export type Diagnostic = { id: string; status: Status; message: string };
@@ -10,11 +11,16 @@ export async function runDiagnostics(env: Env): Promise<DiagnosticReport> {
   const add = (id: string, status: Status, message: string) => checks.push({ id, status, message });
   add("auth", env.MCP_BEARER_TOKEN ? "pass" : "fail",
     env.MCP_BEARER_TOKEN ? "Authentication is configured" : "Authentication is missing");
-  if (!env.NOTES_REPO || !env.GITHUB_TOKEN) {
+  if (env.NOTES_STORAGE === "app") {
+    try {
+      const count = (await notesFor(env).list()).length;
+      add("storage", "pass", `Notes are stored in this app (${count} note${count === 1 ? "" : "s"})`);
+    } catch { add("storage", "fail", "This app's note storage is unavailable"); }
+  } else if (!env.NOTES_REPO || !env.GITHUB_TOKEN) {
     add("github", "fail", "Connect your GitHub notes repository");
   } else {
     try {
-      await new GithubNotes(env).list();
+      await notesFor(env).list();
       add("github", "pass", "GitHub notes are readable");
       const response = await fetch((env.GITHUB_API_URL || "https://api.github.com") + "/repos/" + env.NOTES_REPO.trim(), {
         headers: { Authorization: "Bearer " + env.GITHUB_TOKEN, Accept: "application/vnd.github+json", "User-Agent": "personal-notes-mcp" }

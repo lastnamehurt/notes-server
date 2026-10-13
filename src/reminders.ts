@@ -6,6 +6,7 @@ import { applySettings, type Settings } from "./settings";
 import { GithubNotes, type Env } from "./github";
 import { buildBriefing, mergeBriefings, nextBriefingAt, DEFAULT_BRIEFINGS, BRIEFING_KINDS, type BriefingKind, type BriefingSettings, type Briefing } from "./briefing";
 import { localStamp } from "./reminder-parse";
+import { notesFor } from "./storage";
 export * from "./reminder-parse";
 
 /** Signed link that marks this occurrence of the reminder done (see completeReminder). */
@@ -264,7 +265,7 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
   async previewBriefing(kind: BriefingKind, now = Date.now()): Promise<Briefing> {
     const env = await this.briefingEnv();
     const settings = (await this.ctx.storage.get<BriefingSettings>(BRIEFINGS)) ?? DEFAULT_BRIEFINGS;
-    const notes = await new GithubNotes(env).all();
+    const notes = await notesFor(env).all();
     return buildBriefing({ kind, notes, done: await this.doneSince(now - 2 * 86_400_000), now, timeZone: this.zone(env), preview: settings.preview });
   }
 
@@ -306,7 +307,7 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
       if (await this.ctx.storage.get(briefSent(kind, date))) { await advance(); continue; }
       if (now - due > BRIEF_STALE_MS) { await advance({ at: now, result: "skipped", detail: "Missed its time by over two hours" }); continue; }
       try {
-        notes ??= await new GithubNotes(env).all();
+        notes ??= await notesFor(env).all();
         const b = buildBriefing({ kind, notes, done: await this.doneSince(now - 2 * 86_400_000), now, timeZone: zone, preview: settings.preview });
         if (b.empty) {
           await this.ctx.storage.put(briefSent(kind, date), { at: now });

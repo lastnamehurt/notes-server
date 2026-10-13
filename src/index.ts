@@ -14,7 +14,9 @@ import { DEFAULT_TIMEZONE, localStamp, pushConfigured } from "./reminder-parse";
 import { clock } from "./briefing";
 import { verifyAction } from "./action";
 import { runWeeklyReview } from "./weekly-review";
+import { notesFor } from "./storage";
 export { ReminderScheduler } from "./reminders";
+export { NotesStore } from "./app-notes";
 
 const INSTRUCTIONS = `The owner's personal notes and life tracking, stored as Markdown in GitHub. Times are in the owner's time zone (America/Los_Angeles unless configured).
 
@@ -47,7 +49,7 @@ How to help:
 
 function serverFor(env: Env): McpServer {
   const server = new McpServer({ name: "personal-notes", version: "0.4.0" }, { instructions: INSTRUCTIONS });
-  const notes = new GithubNotes(env);
+  const notes = notesFor(env);
   const result = async (fn: () => Promise<unknown>) => {
     try { return { content: [{ type: "text" as const, text: JSON.stringify(await fn()) }] }; }
     catch (e) { return { isError: true, content: [{ type: "text" as const, text: e instanceof Error ? e.message : "Operation failed" }] }; }

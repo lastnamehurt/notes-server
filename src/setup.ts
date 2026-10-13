@@ -153,3 +153,41 @@ export async function ensureNotesRepo(env: GhEnv, token: string): Promise<{ repo
   }
   throw new Error("Couldn't find a free name for your notes repository. Use an access key instead.");
 }
+
+/**
+ * Settings → Move my notes to GitHub: copy every note from this app's own storage into a new private
+ * repository as one commit (a few GitHub calls, however many notes), check they all arrived, and return it.
+ * The copy in app storage is left in place; the caller switches storage only after this succeeds.
+ */
+export async function moveAppNotesToGithub(
+  env: GhEnv, token: string, notes: Map<string, string>,
+  open: (repo: string, branch: string) => { headSha(): Promise<string | null>; commitFiles(p: string, f: Map<string, string>, m: string): Promise<string>; list(): Promise<string[]> }
+): Promise<{ repo: string; branch: string; moved: number }> {
+  const user = await gh(env, token, "/user");
+  if (!user.ok) throw new Error(`GitHub isn't answering right now (${user.status}). Try again in a minute.`);
+  const { login: owner } = await user.json<{ login: string }>();
+  let repo: string | undefined;
+  for (const name of ["daybook-notes", "daybook-notes-2", "daybook-notes-3", "daybook-notes-4", "daybook-notes-5"]) {
+    const existing = await gh(env, token, `/repos/${owner}/${name}`);
+    if (existing.ok) continue;
+    if (existing.status !== 404) throw new Error(`GitHub isn't answering right now (${existing.status}). Try again in a minute.`);
+    const made = await gh(env, token, "/user/repos", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, private: true, auto_init: true, description: "My Daybook notes" })
+    });
+    if (made.ok) { repo = `${owner}/${name}`; break; }
+    if (made.status !== 422) throw new Error(`Couldn't create your notes repository (${made.status}). Try again in a minute.`);
+  }
+  if (!repo) throw new Error("Couldn't find a free name for your notes repository (daybook-notes). Rename or delete an old one and try again.");
+  const { branch } = await prepareRepo(env, token, repo);
+  const target = open(repo, branch);
+  if (notes.size) {
+    const head = await target.headSha();
+    if (!head) throw new Error("Your new notes repository isn't ready yet. Try again in a minute.");
+    await target.commitFiles(head, notes, `Move ${notes.size} note${notes.size === 1 ? "" : "s"} from the Daybook app`);
+    const arrived = new Set(await target.list());
+    const missing = [...notes.keys()].filter(n => !arrived.has(n));
+    if (missing.length) throw new Error(`${missing.length} note${missing.length === 1 ? "" : "s"} didn't arrive on GitHub, so nothing was switched. Try again.`);
+  }
+  return { repo, branch, moved: notes.size };
+}

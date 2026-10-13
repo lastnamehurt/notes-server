@@ -117,8 +117,11 @@ try {
   await page.click("button[type=submit]");
 
   // 2. First-run setup
-  await page.waitForSelector("#gh-start");
+  await page.waitForSelector('input[name="storage"]');
   check(await page.locator("#tabs").isHidden(), "First run shows only setup");
+  // This walk-through takes the GitHub path; test:app-storage covers the default (notes kept in the app).
+  await page.click('input[name="storage"][value="github"]');
+  await page.waitForSelector("#gh-start");
   check(/access your repositories/.test(await page.innerText("#s2")), "Setup explains what GitHub will ask");
   check(await page.locator("#copytopic").isVisible() && await page.locator("#ntfy-subscribe").count() === 0, "iPhone/desktop: ntfy name with Copy (no Android link)");
   check(await page.locator("#diagnostics").count() === 0, "No diagnostics card during first run");
@@ -198,12 +201,11 @@ try {
   await droid.goto(BASE + "/app");
   await droid.fill("#key", PASSWORD); await droid.click("#lockform button[type=submit]");
   await droid.waitForSelector("#tabs:not([hidden])");
+  // Navigating while Today is still loading: Settings must end up on screen, not be replaced by the slower Today render.
   await droid.goto(BASE + "/app#settings");
-  await droid.waitForSelector("#s4", { state: "attached" });
-  const seen = await droid.evaluate(() => ({ ua: navigator.userAgent, link: Boolean(document.querySelector("#ntfy-subscribe")),
-    copy: Boolean(document.querySelector("#copytopic")), hash: location.hash, s4: (document.querySelector("#s4")?.innerText || "").slice(0, 160) }));
-  if (!seen.link) annotate("Android Settings debug: " + JSON.stringify(seen));
-  const ntfyHref = await droid.evaluate(() => document.querySelector("#ntfy-subscribe")?.getAttribute("href"));
+  await droid.waitForTimeout(1500);
+  const ntfyHref = await droid.waitForFunction(() => document.querySelector("#ntfy-subscribe")?.getAttribute("href"), null, { timeout: 15000 })
+    .then(r => r.jsonValue()).catch(() => undefined);
   check(/^ntfy:\/\/ntfy\.sh\/notes-[a-z0-9]+\?display=Daybook$/.test(ntfyHref || ""), "Android: Subscribe in ntfy opens the app with her topic: " + ntfyHref);
 
   check(errors.length === 0, "No page errors " + JSON.stringify(errors));

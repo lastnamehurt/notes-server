@@ -6,8 +6,8 @@
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "workers_dev": true,
   "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "REPLACE_WITH_DEDICATED_E2E_KV_ID" }],
-  "durable_objects": { "bindings": [{ "name": "REMINDERS", "class_name": "ReminderScheduler" }] },
-  "migrations": [{ "tag": "v1-reminders", "new_sqlite_classes": ["ReminderScheduler"] }],
+  "durable_objects": { "bindings": [{ "name": "REMINDERS", "class_name": "ReminderScheduler" }, { "name": "NOTES", "class_name": "NotesStore" }] },
+  "migrations": [{ "tag": "v1-reminders", "new_sqlite_classes": ["ReminderScheduler"] }, { "tag": "v2-app-notes", "new_sqlite_classes": ["NotesStore"] }],
   "triggers": { "crons": [] },
   "keep_vars": true
 }
