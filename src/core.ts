@@ -43,7 +43,10 @@ let cached: { at: number; settings: Settings | undefined } | undefined;
 const SETTINGS_TTL_MS = 10_000;
 
 export async function loadSettings(env: Env, fresh = false): Promise<Settings | undefined> {
-  if (!fresh && cached && Date.now() - cached.at < SETTINGS_TTL_MS) return cached.settings;
+  // A "not set up yet" copy is never reused: Cloudflare runs several copies of the app, and one that looked
+  // before setup finished must not keep saying "Finish setup first" afterwards.
+  const setUp = (s: Settings | undefined) => Boolean(s?.storage || s?.notesRepo);
+  if (!fresh && cached && setUp(cached.settings) && Date.now() - cached.at < SETTINGS_TTL_MS) return cached.settings;
   const settings = await scheduler(env).getSettings();
   cached = { at: Date.now(), settings };
   return settings;
