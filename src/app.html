@@ -1647,8 +1647,10 @@ views.setup = async () => {
       <label for="tz" style="position:absolute;left:-9999px">Time zone</label>
       <select id="tz">${raw(zones().map(z => h`<option ${z === tz ? "selected" : ""}>${z}</option>`).join(""))}</select></section>
 
-    <section class="step" id="s4"><h3><span class="n">${n.push}</span>Reminders on your phone</h3>
-      <p class="muted">Optional and free. You can do this later in Settings.</p>
+    <section class="step" id="s4"><h3><span class="n">${n.push}</span>Phone reminders (optional)</h3>
+      ${raw(first
+        ? `<p class="skip-note"><b>Not now?</b> Skip this and tap <b>Save and finish</b>. Notes, logs and tasks all work without it, and you can turn reminders on any time in Settings.</p>`
+        : `<p class="muted">Optional and free.</p>`)}
       ${raw(isAndroid
         ? h`<ol>
         <li>Install the free <b>ntfy</b> app from <a href="${NTFY_ANDROID}" target="_blank" rel="noopener">Google Play</a>, open it once and allow notifications.</li>
