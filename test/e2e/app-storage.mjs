@@ -113,7 +113,7 @@ for (let i = 0; ; i++) {
 try {
   // ---------- 1. Phone setup, keeping the default "In this app" ----------
   browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, timezoneId: "Europe/London", acceptDownloads: true });
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, timezoneId: "Europe/London", acceptDownloads: true, permissions: ["clipboard-read", "clipboard-write"] });
   await ctx.route(/^https:\/\/(github\.com|claude\.ai|chatgpt\.com|cursor\.com)\//, r => r.fulfill({ status: 200, contentType: "text/html", body: "<h1>stand-in</h1>" }));
   await ctx.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, r => r.abort());
   ctx.setDefaultTimeout(20000);
@@ -132,6 +132,14 @@ try {
   await page.click("#save");
   await page.waitForSelector("#copymcp");
   check(/You're set up/.test(await page.innerText("main")), "Save and finish works with no GitHub at all");
+  const snippet = await page.innerText("#daybook-instructions");
+  check(snippet.startsWith("I'm Jane. I use Daybook") && /without asking first/.test(snippet), "Finish screen: instructions for her assistant, with her name");
+  await page.click("[data-copy-instructions]");
+  await page.waitForFunction(() => /Copied/.test(document.querySelector("[data-copy-instructions]")?.textContent || ""));
+  check((await page.evaluate(() => navigator.clipboard.readText())).startsWith("I'm Jane. I use Daybook"), "Copy instructions puts them on the clipboard");
+  const where = await page.evaluate(() => document.querySelector("#use-daybook").textContent);
+  check(/Instructions for Claude/.test(where) && /CLAUDE\.md/.test(where) && /AGENTS\.md/.test(where),
+    "and says where each assistant keeps them");
   await page.click("text=Open my notes");
   await page.waitForSelector("#tabs:not([hidden])");
   await page.waitForSelector(".today-top-heading h2");
