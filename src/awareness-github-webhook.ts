@@ -12,7 +12,7 @@ function hex(bytes:ArrayBuffer):string {
 export async function verifyGitHubWebhook(body:Uint8Array,signature:string|null,secret:string):Promise<boolean> {
   if(!secret||body.byteLength===0||body.byteLength>MAX_BODY||!signature||!/^sha256=[a-f0-9]{64}$/.test(signature))return false;
   const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(secret),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
-  const expected="sha256="+hex(await crypto.subtle.sign("HMAC",key,body));
+  const expected="sha256="+hex(await crypto.subtle.sign("HMAC",key,new Uint8Array(body).buffer));
   const a=new TextEncoder().encode(expected),b=new TextEncoder().encode(signature);
   let diff=0;
   for(let i=0;i<a.length;i++)diff|=a[i]^b[i];
