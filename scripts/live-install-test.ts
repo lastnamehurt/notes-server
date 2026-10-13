@@ -44,10 +44,11 @@ try {
   await waitFor(base + "/health", async res => res.ok && (await res.text()).trim() === "ok", "The new app answers on its workers.dev address");
 
   // Sign in with the password the installer set.
-  const login = await fetch(base + "/app/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: password }) });
+  // The app only accepts its own pages' requests, so send its origin like a browser would.
+  const login = await fetch(base + "/app/login", { method: "POST", headers: { "Content-Type": "application/json", Origin: base }, body: JSON.stringify({ key: password }) });
   check(login.status === 204, "Signs in with the password the installer set (" + login.status + ")");
   const cookie = (login.headers.get("set-cookie") || "").split(";")[0];
-  const api = (path: string, init: RequestInit = {}) => fetch(base + "/app/api" + path, { ...init, headers: { "Content-Type": "application/json", Cookie: cookie, ...(init.headers || {}) } });
+  const api = (path: string, init: RequestInit = {}) => fetch(base + "/app/api" + path, { ...init, headers: { "Content-Type": "application/json", Origin: base, Cookie: cookie, ...(init.headers || {}) } });
 
   const config = await (await api("/config")).json() as { configured: boolean; appStorage: boolean };
   check(config.appStorage && !config.configured, "Fresh app offers in-app storage and isn't set up yet");
