@@ -84,7 +84,7 @@ export function parseAwarenessEvent(input: unknown, expectedOwnerId: string): Aw
   if (!id.safeParse(expectedOwnerId).success || event.ownerId !== expectedOwnerId) {
     throw new Error("Awareness event owner mismatch");
   }
-  if (event.type.startsWith("task.") && (event.subjectRef.kind !== "task" || event.subjectRef.id !== event.metadata.taskId)) {
+  if ((event.type === "task.created" || event.type === "task.updated" || event.type === "task.deferred" || event.type === "task.completed") &&\n    (event.subjectRef.kind !== "task" || event.subjectRef.id !== event.metadata.taskId)) {
     throw new Error("Awareness task reference mismatch");
   }
   if (event.type === "reminder.due" && (event.subjectRef.kind !== "task" || event.subjectRef.id !== event.metadata.taskId)) {
