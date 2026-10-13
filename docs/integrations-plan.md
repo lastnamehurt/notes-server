@@ -14,7 +14,10 @@ Status: proposal. Principle: the AI assistant is the main way in. Daybook builds
 
 ## Build in Daybook
 
-1. **Calendar via ICS link.** Works with Google, Outlook and iCloud without sign-in setup. Feeds briefings and the "event soon, task unfinished" rule. Uses the existing `calendar.changed` contract.
+1. **Calendar via ICS, both directions.** No OAuth needed.
+   - **Inbound:** the user pastes a private calendar address (Google, Outlook, iCloud). Daybook fetches it on a schedule and reads events. Feeds briefings and the "event soon, task unfinished" rule, using the existing `calendar.changed` contract. The parser doesn't exist yet; `src/calendar.ts` is the in-app day view, not an ICS reader. The server fetches only the address the user gave, with size and time limits.
+   - **Outbound:** Daybook serves a private ICS address listing tasks and reminders with due times, so they appear in Apple Calendar, Google or Outlook next to meetings.
+   - **Secret URLs:** both addresses act as passwords. Make them long and random, and add a button to regenerate them.
 2. **Finish Apple Reminders.** Separate imported changes from user actions to prevent loops.
 3. **Quick capture.** iPhone Shortcut and share sheet: "Save to Daybook" from any app, plus Siri.
 4. **Email-in address.** Forwarded email becomes an inbox note (Cloudflare Email Routing).
@@ -29,5 +32,6 @@ Gmail, Slack, GitHub, Todoist, Linear, Notion, health apps. The assistant reads 
 
 ## Not planned yet
 
+- Google Calendar and Outlook APIs (OAuth with read and write access). Start with ICS.
 - GitHub PR and CI status (`github.status` contract exists; no adapter).
 - Task-manager sync (Todoist, Linear, Jira, Asana).
