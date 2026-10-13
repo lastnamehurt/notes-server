@@ -146,12 +146,26 @@ try {
   me.on("pageerror", e => errors.push(String(e)));
   await me.goto(A + "/app");
   await me.fill("#key", PASSWORD); await me.click("#lockform button[type=submit]");
-  await me.waitForSelector("#storage-app, #save, #tabs:not([hidden])");
-  // First run: keep notes in the app (no GitHub), so Settings opens like a finished install.
-  if (await me.locator("#save").count()) {
-    await me.click("#save");
-    await me.waitForSelector("#tabs:not([hidden])", { timeout: 30000 }).catch(() => {});
-  }
+  // The success bar for a new install: open the app, finish first-run setup WITHOUT notifications,
+  // then save a note and open it again. Reminders are a separate, optional feature.
+  await me.waitForSelector("#save");
+  check(/\(optional\)/.test(await me.innerText("#s4 h3")), "First run: the reminders step says it's optional");
+  check(/Skip this and tap Save and finish/.test(await me.innerText("#s4 .skip-note")), "and says how to skip it");
+  await me.uncheck("#usentfy");
+  await me.click("#save");
+  await me.waitForFunction(() => /notifications are off/i.test(document.querySelector("#main")?.textContent || ""), null, { timeout: 30000 });
+  check(true, "Setup finishes with notifications skipped, and says they can be turned on later");
+  const marker = "oat-milk-" + Date.now();
+  await me.goto(A + "/app#new/inbox");
+  await me.waitForSelector("#edform #title");
+  await me.fill("#title", "Groceries"); await me.fill("#body", "- " + marker);
+  await me.click("#edform #save");
+  await me.waitForFunction(m => (document.querySelector("#doc")?.textContent || "").includes(m), marker, { timeout: 20000 });
+  check(true, "Saves a note in the app");
+  await me.goto(A + "/app#notes"); await me.reload();
+  await me.click("text=Groceries");
+  await me.waitForFunction(m => (document.querySelector("#doc")?.textContent || "").includes(m), marker, { timeout: 20000 });
+  check(true, "Finds the note again and opens it");
   await me.goto(A + "/app#settings"); await me.reload();
   await me.waitForSelector("#update-status .update-run");
   check(/Version 2099\.1\.1 is available/.test(await me.innerText("#update-status")), "Her app shows the new version with Update now");

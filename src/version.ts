@@ -1,5 +1,5 @@
 // Version of this app's code. Bump VERSION (YYYY.MM.DD, or YYYY.MM.DD.N for a second change that day) and
 // write a one-line VERSION_NOTE in plain words whenever src/ changes: people's own copies compare against
 // the published value to show "An update is available". CI checks it was bumped.
-export const VERSION = "2026.10.12.6";
-export const VERSION_NOTE = "Fixes a short window right after first-time setup where the app could still say Finish setup first.";
+export const VERSION = "2026.10.12.7";
+export const VERSION_NOTE = "First-time setup makes it clear phone reminders are optional and can be turned on later.";
