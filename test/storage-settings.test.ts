@@ -24,3 +24,13 @@ test("setup choices pick the storage", () => {
   assert.ok(!notesConfigured(applySettings(base, {})), "nothing chosen yet means setup isn't finished");
   assert.ok(!notesConfigured(applySettings({ ...base, NOTES: undefined } as Env, { storage: "app" })), "app storage needs the storage binding");
 });
+
+test("names: tidy, one line, short; set on the deployment wins", async () => {
+  const { cleanName, applySettings } = await import("../src/settings.ts");
+  assert.equal(cleanName("  Courtney  "), "Courtney");
+  assert.equal(cleanName("Ann\nMarie\t Lee"), "Ann Marie Lee");
+  assert.equal(cleanName("x".repeat(60)).length, 40);
+  assert.equal(cleanName(undefined), "");
+  assert.equal(applySettings({} as any, { name: "Jane" }).OWNER_NAME, "Jane");
+  assert.equal(applySettings({ OWNER_NAME: "Court" } as any, { name: "Jane" }).OWNER_NAME, "Court");
+});

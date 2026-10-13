@@ -10,7 +10,7 @@ import { checkForUpdate, parseRepo, resetOwnRepo, runUpdate } from "./updates";
 import { GithubNotes, CATEGORIES, type Category, type Env } from "./github";
 import { appendLog, recentLogs, editLog, journalPath, journalWithActivity, LOG_PREFIX } from "./log";
 import { scheduler, scheduleNote, loadSettings, saveSettings, rescan, checkPassword, completeReminder, addReminder, addTask, startOfToday, effectiveEnv } from "./core";
-import { applySettings, notesConfigured, type Settings } from "./settings";
+import { applySettings, cleanName, notesConfigured, type Settings } from "./settings";
 import { listRepos, prepareRepo, startDeviceFlow, pollDeviceFlow, ensureNotesRepo, githubClientId, githubLogin, ownsNotesRepo, moveAppNotesToGithub } from "./setup";
 import { AppNotes } from "./app-notes";
 import { GithubNotes as GithubStore } from "./github";
@@ -176,6 +176,14 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
     // Setup page: works before notes are configured.
     switch (route) {
       case "GET /update": return json(await checkForUpdate(env));
+      // Settings → Your name. Works on every server, including ones configured on the deployment.
+      case "POST /profile": {
+        const { name } = await request.json<{ name?: string }>();
+        const prev = (await loadSettings(env, true)) ?? {};
+        const clean = cleanName(name);
+        await saveSettings(env, { ...prev, name: clean || undefined });
+        return json({ name: clean || null });
+      }
       case "POST /update/run": return json(await runUpdate(env));
       case "POST /update/repo": {
         const { repo } = await request.json<{ repo?: string }>();
@@ -188,7 +196,8 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
       case "GET /config": return json({
         timeZone: env.NOTES_TIMEZONE || "America/Los_Angeles", categories: CATEGORIES, push: pushConfigured(env),
         configured: notesConfigured(env), canSetup: !env.DEPLOY_CONFIGURED, githubConnect: Boolean(githubClientId(env)),
-        storage: env.DEPLOY_CONFIGURED ? "github" : (env.NOTES_STORAGE ?? null), appStorage: Boolean(env.NOTES)
+        storage: env.DEPLOY_CONFIGURED ? "github" : (env.NOTES_STORAGE ?? null), appStorage: Boolean(env.NOTES),
+        name: env.OWNER_NAME?.trim() || null
       });
       case "GET /settings": {
         const s = (await loadSettings(env, true)) ?? {};

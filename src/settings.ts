@@ -15,6 +15,8 @@ export interface Settings {
   ntfyTopic?: string;
   pushoverUser?: string;
   pushoverToken?: string;
+  /** What the owner likes to be called, for greetings (Today, briefings, Claude). */
+  name?: string;
   /** This copy's code repository ("owner/name"), for Settings → Updates. */
   codeRepo?: string;
   /** Devices with notifications on. Kept separately in the scheduler and only attached when settings are read. */
@@ -32,6 +34,7 @@ export function applySettings<E extends Env>(env: E, s: Settings | undefined): E
   out.NOTES_BRANCH = pick(env.NOTES_BRANCH, s.notesBranch);
   out.NOTES_TIMEZONE = pick(env.NOTES_TIMEZONE, s.timezone);
   out.DAYBOOK_REPO = pick(env.DAYBOOK_REPO, s.codeRepo);
+  out.OWNER_NAME = pick(env.OWNER_NAME, s.name);
   if (s.webPush) out.WEB_PUSH = s.webPush;
   // A deployment that names its repository always uses GitHub; otherwise the setup page's choice decides.
   if (!deployConfigured(env)) out.NOTES_STORAGE = s.storage === "app" ? "app" : s.notesRepo ? "github" : undefined;
@@ -50,3 +53,8 @@ export const deployConfigured = (env: Env) => Boolean(env.GITHUB_TOKEN?.trim() &
 /** True once notes can be read and written. */
 export const notesConfigured = (env: Env) =>
   env.NOTES_STORAGE === "app" ? Boolean(env.NOTES) : Boolean(env.GITHUB_TOKEN?.trim() && env.NOTES_REPO?.trim());
+
+/** A name as typed: trimmed, one line, at most 40 characters. Empty means "no name". */
+export function cleanName(raw: unknown): string {
+  return typeof raw === "string" ? raw.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 40) : "";
+}
