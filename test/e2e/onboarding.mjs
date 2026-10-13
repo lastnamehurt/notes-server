@@ -199,7 +199,10 @@ try {
   await droid.fill("#key", PASSWORD); await droid.click("#lockform button[type=submit]");
   await droid.waitForSelector("#tabs:not([hidden])");
   await droid.goto(BASE + "/app#settings");
-  await droid.waitForSelector("#ntfy-subscribe");
+  await droid.waitForSelector("#s4", { state: "attached" });
+  const seen = await droid.evaluate(() => ({ ua: navigator.userAgent, link: Boolean(document.querySelector("#ntfy-subscribe")),
+    copy: Boolean(document.querySelector("#copytopic")), hash: location.hash, s4: (document.querySelector("#s4")?.innerText || "").slice(0, 160) }));
+  if (!seen.link) annotate("Android Settings debug: " + JSON.stringify(seen));
   const ntfyHref = await droid.evaluate(() => document.querySelector("#ntfy-subscribe")?.getAttribute("href"));
   check(/^ntfy:\/\/ntfy\.sh\/notes-[a-z0-9]+\?display=Daybook$/.test(ntfyHref || ""), "Android: Subscribe in ntfy opens the app with her topic: " + ntfyHref);
 
