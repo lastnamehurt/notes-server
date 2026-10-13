@@ -1897,7 +1897,11 @@ function unlockSheet() {
 
 /* ---------- Router ---------- */
 let currentHash = location.hash;
+// Views render straight into #main, so a slow render can land after a newer navigation. Each route has a
+// number; if an out-of-date one finishes after the latest has already drawn, draw the latest again.
+let routeSeq = 0, routeDone = 0, staleDrew = false;
 async function route() {
+  const seq = ++routeSeq;
   document.querySelectorAll(".toast").forEach(t => t.remove());
   closeSheet(); clearDirty();
   currentHash = location.hash;
@@ -1910,11 +1914,14 @@ async function route() {
   if (link) link.setAttribute("aria-current", "page");
   $("#composer").hidden = view !== "today" && hash !== "today";
   try {
-    if (!cfg.configured) { $("#tabs").hidden = true; $("#composer").hidden = true; await views.setup(); window.scrollTo(0, 0); return; }
-    if (view === "note") await editor(arg);
+    if (!cfg.configured) { $("#tabs").hidden = true; $("#composer").hidden = true; await views.setup(); }
+    else if (view === "note") await editor(arg);
     else if (view === "new") await editor(null, arg || "inbox");
     else await (views[view] || views.today)();
   } catch (e) { if (e instanceof Locked) showLock(); else main.innerHTML = h`<p class="err">${e.message}</p>`; }
+  if (seq !== routeSeq) { if (routeDone === routeSeq) route(); else staleDrew = true; return; }
+  routeDone = seq;
+  if (staleDrew) { staleDrew = false; return route(); }
   window.scrollTo(0, 0);
   if (nextToast) { toast(nextToast); nextToast = null; }
 }
@@ -2022,7 +2029,7 @@ let hiddenAt = 0;
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) { hiddenAt = Date.now(); return; }
   drawDate();
-  if (Date.now() - hiddenAt > 60_000 && !isDirty() && !sheet.open && !$("#tabs").hidden) route();
+  if (hiddenAt && Date.now() - hiddenAt > 60_000 && !isDirty() && !sheet.open && !$("#tabs").hidden) route();
 });
 
 drawDate();
