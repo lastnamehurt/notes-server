@@ -191,6 +191,11 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
         const body: unknown = await request.json();
         return json(await scheduler(env).setAwarenessPreferences(body));
       }
+      case "POST /awareness/deliver": {
+        const body = await request.json<{ id?: string }>();
+        if (!body.id || !/^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,159}$/.test(body.id)) return fail("Invalid Awareness candidate");
+        return json(await scheduler(env).awarenessDeliver(body.id));
+      }
       case "GET /awareness/inbox": {
         const limit = Number(url.searchParams.get("limit") ?? "20");
         const cursor = url.searchParams.get("cursor") || undefined;
