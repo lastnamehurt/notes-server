@@ -11,7 +11,7 @@ test("Apple sync captures only after successful commit, not during conflict retr
  assert.ok(commit>=0&&catchConflict>commit&&capture>catchConflict);
  assert.match(run,/if \(o\.deferralsCommitted && changed\.size\)/);
  assert.match(run,/catch \(e\) \{[\s\S]*?Apple sync Awareness capture failed/);
- assert.match(web,/deferralsCommitted: events => scheduler\(configured\)\.recordTaskDeferrals\(events\)/);
+ assert.match(web,/deferralsCommitted: events => scheduler\(configured\)\.recordTaskDeferrals\(events, "appleReminders"\)/);
 });
 test("only postponed ID-bearing tasks count, not sync echo or other edits",()=>{
  const old="- [ ] Submit @2026-10-14 9am ^abcd";

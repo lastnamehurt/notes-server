@@ -6,7 +6,7 @@ import {DEFAULT_AWARENESS_PREFERENCES} from "../src/awareness-preferences";
 const source=readFileSync(new URL("../src/reminders.ts",import.meta.url),"utf8");
 test("scheduler connects committed deferrals to inbox only behind consent",()=>{
  assert.match(source,/if \(inserted > 0\)/);
- assert.match(source,/preferences\.enabled && !preferences\.paused && preferences\.sources\.daybook/);
+ assert.match(source,/preferences\.enabled && !preferences\.paused && deferralSourceAllowed\(preferences, source\)/);
  assert.match(source,/threeDeferrals\(evidence, "local"\)/);
  assert.match(source,/inbox\.add\("local", suggestion\)/);
  assert.equal(DEFAULT_AWARENESS_PREFERENCES.enabled,false);
