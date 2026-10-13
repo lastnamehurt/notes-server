@@ -16,7 +16,9 @@ const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const PORT = 8790, GH = 8791, PASSWORD = "onboarding-test-password-1";
 const BASE = `http://127.0.0.1:${PORT}`;
 let failures = 0;
-const check = (ok, what) => { console.log((ok ? "PASS " : "FAIL ") + what); if (!ok) failures++; };
+// On GitHub Actions, failures are also posted as annotations so they're readable without the log.
+const annotate = msg => { if (process.env.GITHUB_ACTIONS) console.log(`::error title=Onboarding walk-through::${String(msg).replace(/\r?\n/g, " %0A")}`); };
+const check = (ok, what) => { console.log((ok ? "PASS " : "FAIL ") + what); if (!ok) { failures++; annotate(what); } };
 
 // ---------- stand-in GitHub ----------
 const TOKEN = "gho_" + "o".repeat(36);
@@ -205,6 +207,7 @@ try {
 } catch (e) {
   failures++;
   console.log("FAIL " + (e.stack || e));
+  annotate((e.stack || String(e)).slice(0, 900));
   console.log(log.slice(-2000));
 }
 await browser?.close();
