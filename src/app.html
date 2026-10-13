@@ -1749,8 +1749,8 @@ function assistantList(list) {
   if (!list) return h`<p class="muted">Couldn't load connected assistants. Check your connection and try again.</p>`;
   if (!list.length) return h`<p class="muted">None yet. Connect one below.</p>`;
   return h`<ul class="assistant-list">${raw(list.map(a => h`<li class="assistant-row" data-id="${a.id}">
-      ${raw(a.logo ? h`<img src="${a.logo}" alt="" width="28" height="28">` : "")}
-      <span><b>${a.name}</b><span class="muted"> · connected ${new Date(a.since * 1000).toLocaleDateString()}</span></span>
+      ${raw(a.logo && new URL(a.logo, location.origin).origin === location.origin ? h`<img src="${a.logo}" alt="" width="28" height="28">` : "")}
+      <span><b>${a.name}</b><span class="muted">${raw((() => { const t = typeof a.since === "number" ? new Date(a.since < 1e12 ? a.since * 1000 : a.since) : new Date(a.since); return Number.isNaN(t.getTime()) ? "" : h` · connected ${t.toLocaleDateString()}`; })())}</span></span>
       <button class="btn quiet" type="button" data-disconnect="${a.id}">Disconnect</button></li>`).join(""))}</ul>`;
 }
 async function fillAssistantRow() {
@@ -1774,7 +1774,8 @@ views.assistants = async () => {
   const draw = async () => {
     const list = await loadAssistants();
     const box = $("#assistant-list");
-    if (box) box.innerHTML = assistantList(list).toString();
+    if (!box || location.hash !== "#assistants") return;
+    box.innerHTML = assistantList(list);
     main.querySelectorAll("[data-disconnect]").forEach(b => b.onclick = async () => {
       if (!confirm("Disconnect this assistant? It will need to sign in again to use Daybook.")) return;
       try { await api("/assistants/disconnect", { method: "POST", body: { id: b.dataset.disconnect } }); toast("Disconnected"); draw(); }
