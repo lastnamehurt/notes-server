@@ -1581,7 +1581,7 @@ views.setup = async () => {
     <p class="lede">${first ? "A couple of minutes. Only you can see your notes." : "Where your notes live, your time zone, and phone notifications."}</p>
 
     ${raw(chooseStorage ? storageChoice + githubBlock : onAppStorage ? appNotesBlock : githubBlock)}
-    ${raw(!first && !onAppStorage && cfg.configured ? `<section class="step" id="backup"><h3>Your notes</h3><p>Every note as plain text files.</p><p>${downloadLink}</p></section>` : "")}
+    ${raw(!first && !onAppStorage && cfg.configured ? `<section class="step" id="backup"><h3>Your notes</h3><p>Every note as a Markdown (.md) file, in the same folders.</p><p>${downloadLink}</p></section>` : "")}
     ${raw(cfg.configured ? `<section class="step" id="briefings"><h3>Daily briefings</h3>
       <p>A short push each morning and evening: what's overdue, due today, done, and coming tomorrow. Skipped on days with nothing to report.</p>
       <div id="brief-body"><p class="muted">Loading…</p></div></section>` : "")}
