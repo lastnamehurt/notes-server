@@ -92,6 +92,9 @@ const phoneKeys = nodeCrypto.createECDH("prime256v1"); phoneKeys.generateKeys();
 const phoneAuth = nodeCrypto.randomBytes(16);
 const phoneSub = { endpoint: pushService.url + "/phone-1", keys: { p256dh: phoneKeys.getPublicKey().toString("base64url"), auth: phoneAuth.toString("base64url") } };
 const fakePushManager = sub => {
+  // As on a phone where the person tapped Allow. (Playwright's lightweight headless browser always says "denied".)
+  Object.defineProperty(Notification, "permission", { get: () => "granted", configurable: true });
+  Notification.requestPermission = async () => "granted";
   const make = key => ({ endpoint: sub.endpoint, options: { applicationServerKey: key },
     toJSON: () => ({ endpoint: sub.endpoint, expirationTime: null, keys: sub.keys }),
     unsubscribe: async () => { localStorage.removeItem("fake-push-sub"); return true; } });
