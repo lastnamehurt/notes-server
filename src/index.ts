@@ -123,7 +123,7 @@ function serverFor(env: Env): McpServer {
       try {
         const changes = taskDeferrals(before, content, env.NOTES_TIMEZONE || DEFAULT_TIMEZONE);
         if (changes.length) {
-          const bytes = new TextEncoder().encode(name + "\\u0000" + before + "\\u0000" + content);
+          const bytes = new TextEncoder().encode(name + "\u0000" + before + "\u0000" + content);
           const hash = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))]
             .map(b => b.toString(16).padStart(2, "0")).join("");
           await scheduler(env).recordTaskDeferrals(changes.map((change, i) => ({
