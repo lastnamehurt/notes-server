@@ -74,14 +74,14 @@ class FakeApple {
   find(title: string) { return this.list.find(r => r.title === title)!; }
 }
 
-function setup(files: Record<string, string>) {
+function setup(files: Record<string, string>, deferralsCommitted?: (events: {id:string;taskId:string;fromDueAt:string;toDueAt:string}[])=>Promise<unknown>) {
   const repo = new FakeRepo(files), sched = new FakeScheduler(), apple = new FakeApple();
   const changedNotes: string[] = [];
   let n = 0;
   const sync = async (runId = "run-" + String(++n).padStart(4, "0"), now = NOW) => {
     const res = await runAppleSync({ runId, reminders: apple.snapshot() }, {
       notes: repo, scheduler: sched, timeZone: TZ, now, url: id => "https://d.test/app#task/" + id,
-      noteChanged: async name => { changedNotes.push(name); }
+      noteChanged: async name => { changedNotes.push(name); }, deferralsCommitted
     });
     apple.apply(res);
     return res;
@@ -206,4 +206,30 @@ test("bad input is rejected with a clear message", async () => {
   await assert.rejects(runAppleSync({ nope: 1 }, opts), /"reminders" list/);
   await assert.rejects(runAppleSync({ runId: "x", reminders: [] }, opts), /runId/);
   await assert.rejects(runAppleSync({ reminders: Array(2001).fill({}) }, opts), (e: unknown) => e instanceof SyncError && e.status === 413);
+});
+
+test("Apple postponements emit only committed transitions, not replays, echoes or conflicts", async () => {
+  const captured: {id:string;taskId:string;fromDueAt:string;toDueAt:string}[] = [];
+  const {repo,apple,sync} = setup({"inbox/tasks.md":"# Tasks\n\n- [ ] Renew @2026-10-15 9am ^abcd\n"}, async events=>{captured.push(...events);});
+  await sync();
+  assert.equal(captured.length,0,"initial Daybook-to-Apple sync is not a postponement");
+  const rem=apple.find("Renew");
+  rem.due="2026-10-16T09:00:00-07:00";
+  await sync();
+  assert.equal(captured.length,1);
+  const first=captured[0];
+  assert.equal(first.taskId,"abcd");
+  await sync();
+  assert.equal(captured.length,1,"echo of same date is not counted");
+  rem.due="2026-10-17T09:00:00-07:00";
+  repo.failNextCommit=true;
+  await sync();
+  assert.equal(captured.length,2,"conflict retry only captures the committed transition");
+  assert.notEqual(captured[1].id,first.id);
+  rem.due="2026-10-18T09:00:00-07:00";
+  await sync();
+  assert.equal(captured.length,3);
+  assert.equal(new Set(captured.map(e=>e.id)).size,3);
+  assert.equal(captured[0].toDueAt,captured[1].fromDueAt);
+  assert.equal(captured[1].toDueAt,captured[2].fromDueAt);
 });
