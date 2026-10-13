@@ -933,17 +933,17 @@ const updateLink = u => u.canRun
       <button class="btn quiet" type="submit">Save</button></div><p class="err" role="alert"></p></form>
       <p><a href="${UPDATE_GUIDE}" target="_blank" rel="noopener">How to update by hand</a></p>`;
 /** After an update starts: wait for the new version to go live, then reload into it. */
-function waitForNewVersion(from, box) {
+function waitForNewVersion(from, box, firstCheck = 30_000) {
   const started = Date.now();
   const tick = async () => {
     try {
       const u = await api("/update");
       if (u.current && u.current !== from) { toast("Updated to version " + u.current); setTimeout(() => location.reload(), 1200); return; }
     } catch {}
-    if (Date.now() - started < 15 * 60_000) setTimeout(tick, 20_000);
+    if (Date.now() - started < 15 * 60_000) setTimeout(tick, firstCheck < 30_000 ? 5_000 : 20_000);
     else if (box.isConnected) box.innerHTML = h`<p>The update is taking longer than usual.</p><p><a href="${updateInfo?.updateUrl || UPDATE_GUIDE}" target="_blank" rel="noopener">Check its progress on GitHub</a></p>`;
   };
-  setTimeout(tick, 30_000);
+  setTimeout(tick, firstCheck);
 }
 document.addEventListener("click", async e => {
   const b = e.target.closest?.(".update-run"); if (!b) return;
@@ -951,9 +951,11 @@ document.addEventListener("click", async e => {
   b.disabled = true; b.textContent = "Starting…";
   try {
     const r = await api("/update/run", { method: "POST" });
-    box.innerHTML = h`<p><b>Updating.</b> This takes about 3 minutes, and the app reloads by itself when it's done. Your notes aren't touched.</p>
-      <p class="muted"><a href="${r.runsUrl}" target="_blank" rel="noopener">Watch it on GitHub</a></p>`;
-    waitForNewVersion(updateInfo?.current, box);
+    box.innerHTML = r.runsUrl
+      ? h`<p><b>Updating.</b> This takes about 3 minutes, and the app reloads by itself when it's done. Your notes aren't touched.</p>
+      <p class="muted"><a href="${r.runsUrl}" target="_blank" rel="noopener">Watch it on GitHub</a></p>`
+      : h`<p><b>Updating.</b> The app reloads by itself in a moment. Your notes aren't touched.</p>`;
+    waitForNewVersion(updateInfo?.current, box, r.runsUrl ? 30_000 : 4_000);
   } catch (err) {
     b.disabled = false; b.textContent = "Update now";
     const p = document.createElement("p"); p.className = "err"; p.setAttribute("role", "alert"); p.textContent = err.message;

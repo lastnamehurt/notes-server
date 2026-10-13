@@ -18,6 +18,12 @@ export interface Env extends ReminderEnv {
   DAYBOOK_REPO?: string;
   /** Tests only: where to read the newest published version file. */
   DAYBOOK_VERSION_URL?: string;
+  /** Set by the installer: the app's own Cloudflare key, account, Worker name and where new versions come from. */
+  CF_API_TOKEN?: string;
+  CF_ACCOUNT_ID?: string;
+  CF_API_URL?: string;
+  DAYBOOK_SCRIPT?: string;
+  DAYBOOK_INSTALLER?: string;
   /** "true" enables OAuth dynamic client registration (local MCP acceptance test only). */
   ALLOW_CLIENT_REGISTRATION?: string;
   MCP_BEARER_TOKEN: string;

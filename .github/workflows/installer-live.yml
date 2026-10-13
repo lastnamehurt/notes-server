@@ -1,0 +1,25 @@
+# Installs a throwaway Daybook in the original's own Cloudflare account through the real Cloudflare API, the way
+# the installer does for a new person; signs in, keeps a note in app storage, has the app update itself through
+# the deployed installer, then deletes it. Run by hand (Actions → Installer live test → Run workflow).
+name: Installer live test
+on:
+  workflow_dispatch:
+concurrency:
+  group: installer-live
+jobs:
+  live:
+    if: github.repository == 'lastnamehurt/notes-server'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npm run build:bundle
+      - name: Install, use, update and remove a test app
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx tsx scripts/live-install-test.ts

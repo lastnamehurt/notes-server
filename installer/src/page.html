@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#191a23">
+<meta name="description" content="Install Daybook, your private notes app, in your own free Cloudflare account. No GitHub or coding needed.">
+<title>Install Daybook</title>
+<style>
+:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#eeedf7;background:#191a23;line-height:1.55;--accent:#aaa6ff;--muted:#bcbcca;--panel:#242630;--rule:#393b49;--bad:#ff9a9a;--good:#9be3b0}
+*{box-sizing:border-box}body{margin:0;background:#191a23}a{color:var(--accent)}
+header,main{max-width:640px;margin:auto;padding:24px 16px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:750;letter-spacing:.12em}.mark{background:var(--accent);color:#191a23;border-radius:12px;padding:5px 13px;font-family:Georgia,serif;font-size:26px;letter-spacing:0}
+h1{font-size:clamp(32px,7vw,44px);line-height:1.1;letter-spacing:-.04em;margin:12px 0 10px}
+p,li{color:var(--muted);font-size:17px}.lead{font-size:19px}
+.step{background:var(--panel);border:1px solid var(--rule);border-radius:18px;padding:20px;margin:16px 0}
+.step h2{margin:0 0 6px;font-size:20px;display:flex;gap:10px;align-items:baseline}.n{color:var(--accent);font-weight:800}
+.step.done{opacity:.72}.step.done h2:after{content:"✓";color:var(--good);margin-left:auto}
+.step[aria-disabled=true]{opacity:.45}
+.button{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;border-radius:13px;min-height:48px;padding:11px 20px;font:inherit;font-weight:750;background:var(--accent);color:#191a23;border:0;cursor:pointer}
+.button.secondary{background:#292b37;color:#eeedf7;border:1px solid #454657}.button:disabled{opacity:.5;cursor:default}
+label{display:block;font-weight:650;margin:14px 0 6px;color:#eeedf7}
+input{width:100%;font:inherit;font-size:17px;padding:12px 14px;border-radius:12px;border:1px solid #454657;background:#191a23;color:#eeedf7}
+input:focus{outline:2px solid var(--accent);outline-offset:1px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px}
+.err{color:var(--bad);font-size:16px}.ok{color:var(--good)}
+.small{font-size:14px}ol{padding-left:22px;margin:8px 0}
+code{background:#191a23;border:1px solid var(--rule);border-radius:8px;padding:2px 6px;word-break:break-all;font-size:15px;color:#eeedf7}
+.copyrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}
+details summary{cursor:pointer;color:var(--accent);font-size:15px}
+@media(max-width:520px){.row .button{width:100%}}
+</style></head><body>
+<header><div class="brand"><span class="mark">D</span> DAYBOOK</div></header>
+<main>
+<h1>Install Daybook</h1>
+<p class="lead">Your own private notes app, running in your own free Cloudflare account. About 5 minutes, and no coding.</p>
+
+<section class="step" id="s1"><h2><span class="n">1</span>Make a free Cloudflare account</h2>
+  <p>Cloudflare runs your app. It's free for personal use and doesn't ask for a card.</p>
+  <ol><li>Sign up, then open the email Cloudflare sends you and tap the link to verify your address.</li>
+  <li>Come back here. (Already have an account? Skip to step 2.)</li></ol>
+  <div class="row"><a class="button secondary" href="https://dash.cloudflare.com/sign-up" target="_blank" rel="noopener">Sign up at Cloudflare</a></div>
+</section>
+
+<section class="step" id="s2"><h2><span class="n">2</span>Give Daybook a key to your account</h2>
+  <p>This lets the installer set up your app, and later lets your app update itself. The button fills in exactly what's needed.</p>
+  <ol><li>Tap <b>Create my key</b> and sign in to Cloudflare if asked.</li>
+  <li>Scroll to the bottom and tap <b>Continue to summary</b>, then <b>Create Token</b>.</li>
+  <li>Tap <b>Copy</b> next to the key, come back here and paste it below.</li></ol>
+  <div class="row"><a class="button secondary" id="keylink" target="_blank" rel="noopener">Create my key</a></div>
+  <label for="token">Your key</label>
+  <input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="Paste it here">
+  <div class="row"><button class="button" id="check" type="button">Continue</button></div>
+  <p class="err" id="checkerr" role="alert"></p>
+  <details><summary>Is this safe?</summary>
+    <p class="small">The key only works on your Cloudflare account, and only for apps and their storage. This page passes it straight to Cloudflare and doesn't keep it. Your app keeps a copy, in your own account, so it can install updates when you tap <b>Update now</b>. You can delete the key any time in Cloudflare (My Profile → API Tokens); your app keeps working, it just can't update itself.</p>
+    <p class="small">Daybook is open source: <a href="https://github.com/lastnamehurt/notes-server" target="_blank" rel="noopener">read the code</a>.</p></details>
+</section>
+
+<section class="step" id="s3" aria-disabled="true"><h2><span class="n">3</span>Choose your address and password</h2>
+  <p id="acct" class="small"></p>
+  <div id="addrbox" hidden>
+    <label for="sub">Your app's address</label>
+    <input id="sub" autocomplete="off" spellcheck="false" autocapitalize="none" placeholder="yourname">
+    <p class="small">Your app will be at <b id="preview">daybook.yourname.workers.dev</b>. Lowercase letters, numbers and dashes; pick something you like, since it's part of every app address in your Cloudflare account.</p>
+  </div>
+  <p id="addrknown" hidden></p>
+  <label for="pw">Make up a password</label>
+  <input id="pw" type="password" autocomplete="new-password" minlength="12" placeholder="At least 12 characters">
+  <p class="small">You'll use it to open your app and to connect Claude. Save it somewhere safe, like your phone's password manager.</p>
+  <div class="row"><button class="button" id="install" type="button" disabled>Install Daybook</button></div>
+  <p class="err" id="installerr" role="alert"></p>
+</section>
+
+<section class="step" id="s4" hidden><h2><span class="n">4</span>You're done</h2>
+  <p id="status">Starting your app…</p>
+  <div id="ready" hidden>
+    <p>Your Daybook is at:</p>
+    <div class="copyrow"><code id="appurl"></code></div>
+    <p>Add it to your phone's home screen once it opens. Then finish in the app: choose your time zone and turn on reminders.</p>
+    <div class="row"><a class="button" id="open" target="_blank" rel="noopener">Open my app</a></div>
+    <p class="small">To connect Claude later, use this address and the same password:</p>
+    <div class="copyrow"><code id="mcpurl"></code></div>
+  </div>
+</section>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+const keys = [{ key: "workers_scripts", type: "edit" }, { key: "workers_kv_storage", type: "edit" }, { key: "account_settings", type: "read" }];
+$("#keylink").href = "https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=" + encodeURIComponent(JSON.stringify(keys)) + "&accountId=*&zoneId=all&name=Daybook";
+
+async function post(path, body) {
+  const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({ error: "Something went wrong. Try again." }));
+  if (!res.ok) { const e = new Error(data.error || "Something went wrong. Try again."); e.data = data; throw e; }
+  return data;
+}
+let account = null;
+const token = () => $("#token").value.trim();
+
+$("#check").onclick = async () => {
+  const b = $("#check"); $("#checkerr").textContent = "";
+  if (!token()) { $("#checkerr").textContent = "Paste your key first."; return; }
+  b.disabled = true; b.textContent = "Checking…";
+  try {
+    account = await post("/api/check", { token: token() });
+    if (account.existing) { showExisting(account.existing); return; }
+    $("#s1").classList.add("done"); $("#s2").classList.add("done");
+    $("#s3").setAttribute("aria-disabled", "false");
+    $("#acct").textContent = "Cloudflare account: " + account.accountName;
+    $("#addrbox").hidden = Boolean(account.subdomain);
+    $("#addrknown").hidden = !account.subdomain;
+    if (account.subdomain) $("#addrknown").textContent = "Your app will be at https://daybook." + account.subdomain + ".workers.dev";
+    else { $("#sub").value = account.suggestion || ""; preview(); }
+    $("#install").disabled = false;
+    (account.subdomain ? $("#pw") : $("#sub")).focus();
+  } catch (e) { $("#checkerr").textContent = e.message; }
+  finally { b.disabled = false; b.textContent = "Continue"; }
+};
+
+// Daybook is already in this account: offer to bring it up to date (this also gives it the new key,
+// which is how someone whose app's key stopped working gets Update now back).
+function showExisting(url) {
+  const box = $("#checkerr"); box.textContent = "";
+  const p = document.createElement("p"); p.className = "ok";
+  p.append("Daybook is already installed in this account, at ");
+  const a = document.createElement("a"); a.href = url + "/app"; a.target = "_blank"; a.rel = "noopener"; a.textContent = url; p.append(a, ".");
+  const row = document.createElement("div"); row.className = "row";
+  const b = document.createElement("button"); b.className = "button"; b.type = "button"; b.id = "update"; b.textContent = "Update it";
+  const note = document.createElement("p"); note.className = "small";
+  note.textContent = "Brings it to the newest version and lets it update itself again. Your notes, password and settings stay as they are.";
+  row.append(b); box.append(p, row, note);
+  b.onclick = async () => {
+    b.disabled = true; b.textContent = "Updating…";
+    try {
+      const r = await post("/api/update", { token: token() });
+      $("#token").value = "";
+      note.className = "ok"; note.textContent = "Updated to version " + r.version + ". Open your app; it's ready.";
+      b.remove();
+    } catch (e) { note.className = "err"; note.textContent = e.message; b.disabled = false; b.textContent = "Update it"; }
+  };
+}
+
+const preview = () => { $("#preview").textContent = "daybook." + ($("#sub").value || "yourname") + ".workers.dev"; };
+$("#sub").oninput = e => { e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""); preview(); };
+
+$("#install").onclick = async () => {
+  const b = $("#install"); $("#installerr").textContent = "";
+  const password = $("#pw").value;
+  if (password.length < 12) { $("#installerr").textContent = "Choose a password of at least 12 characters."; return; }
+  b.disabled = true; b.textContent = "Installing… (about 30 seconds)";
+  try {
+    const r = await post("/api/install", { token: token(), password, subdomain: account.subdomain ? undefined : $("#sub").value.trim() });
+    $("#token").value = ""; $("#pw").value = "";
+    $("#s3").classList.add("done"); b.textContent = "Installed";
+    $("#s4").hidden = false; $("#s4").scrollIntoView({ behavior: "smooth" });
+    $("#appurl").textContent = r.url + "/app"; $("#open").href = r.url + "/app"; $("#mcpurl").textContent = r.url + "/mcp";
+    waitUntilReady(r.url);
+  } catch (e) { $("#installerr").textContent = e.message; b.disabled = false; b.textContent = "Install Daybook"; }
+};
+
+// A brand-new address can take a minute or two to start working everywhere.
+async function waitUntilReady(url) {
+  const started = Date.now();
+  for (;;) {
+    try { if ((await post("/api/ready", { url })).ready) break; } catch {}
+    const s = Math.round((Date.now() - started) / 1000);
+    $("#status").textContent = s < 20 ? "Starting your app…" : "Starting your app… new addresses can take a minute or two (" + s + "s)";
+    if (Date.now() - started > 5 * 60_000) { $("#status").textContent = "Your app is installed. Its address is still starting up; try opening it in a few minutes."; break; }
+    await new Promise(r => setTimeout(r, 4000));
+  }
+  if (Date.now() - started <= 5 * 60_000) $("#status").textContent = "Your app is ready.";
+  $("#ready").hidden = false;
+}
+</script>
+</body></html>

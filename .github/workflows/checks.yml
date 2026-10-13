@@ -27,6 +27,8 @@ jobs:
         with:
           node-version: "22"
       - run: npm ci
+      - name: Build the app bundle the installer serves
+        run: npm run build:bundle
       - run: npm run typecheck
       - name: Syntax-check inline scripts in app HTML
         run: npm run check:html
@@ -72,3 +74,15 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy
+      # The installer carries this same version of the app, for new installs and for installed apps' Update now.
+      - name: Build the app bundle for the installer
+        run: npm run build:bundle
+      - name: Deploy the installer
+        id: installer
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy -c installer/wrangler.jsonc
+      - name: Installer address
+        run: echo "::notice title=Installer::${{ steps.installer.outputs.deployment-url }}"

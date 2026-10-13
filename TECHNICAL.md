@@ -118,3 +118,14 @@ New installs keep notes in the app's own storage: `NotesStore`, a SQLite-backed 
 - The `note` CLI and Obsidian-style editing need GitHub storage.
 
 `npm run test:app-storage` covers setup with no GitHub, every MCP note tool on app storage, 200+ notes, the zip, and the move.
+
+## Installer
+
+`installer/` is a separate Worker (`daybook-installer`) that sets up Daybook in someone's own Cloudflare account with an API token they create from a pre-filled link (Workers Scripts edit, Workers KV edit, Account Settings read). No GitHub, terminal or Wrangler is involved. The logic lives in `src/cloudflare-deploy.ts` and is shared with the app:
+
+- **Install** (`POST /api/install`): picks or creates the account's workers.dev subdomain, creates the `daybook-oauth` KV namespace, uploads the app (multipart, with the Durable Object bindings and every storage migration from `wrangler.jsonc`), turns on the workers.dev address and sets the hourly cron. The password is stored as the `PASSWORD` secret. The token is stored only in the person's own app, as the `CF_API_TOKEN` secret, along with `CF_ACCOUNT_ID`, `DAYBOOK_SCRIPT` and `DAYBOOK_INSTALLER`.
+- **Update now** in an installer-made app downloads `/bundle/manifest.json` and the modules from the installer, then re-uploads itself with `keep_bindings` (secrets, variables, KV), applying only the storage migrations after its current tag.
+- **Update it** (`POST /api/update`): for an app that's already installed (for example, after its key was deleted). It updates the app and gives it the new key.
+- The installer never stores or logs tokens. CI builds the bundle (`npm run build:bundle`) and deploys the installer right after the app, so both always carry the same version.
+
+Tests: `test/cloudflare-deploy.test.ts` (against a stand-in Cloudflare API), `npm run test:installer` (browser walk-through, plus the app updating itself), and the **Installer live test** workflow, which installs, uses, self-updates and removes a throwaway app in the real account.

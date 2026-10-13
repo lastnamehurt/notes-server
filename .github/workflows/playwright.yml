@@ -44,6 +44,9 @@ jobs:
       - name: Notes kept in the app (setup, Claude tools, download, move to GitHub)
         if: ${{ !inputs.base_url }}
         run: npm run test:app-storage
+      - name: Installer (key, address, password, install, Update it, app updates itself)
+        if: ${{ !inputs.base_url }}
+        run: npm run test:installer
       - name: Upload failure evidence
         if: always()
         uses: actions/upload-artifact@v4
