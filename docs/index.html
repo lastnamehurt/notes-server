@@ -1,12 +1,208 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#191a23"><meta name="description" content="Daybook: your private notes, activity logs, reminders and AI-connected journal. Deploy your own in minutes."><title>Daybook — Your life, in your hands</title>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#191a23">
+<meta name="description" content="Daybook: tell Claude what to remember. Reminders that buzz your phone, logs for meals, meds and moods, a daily briefing and weekly review, all kept in your own private space. Free, open source, about 10 minutes to set up.">
+<title>Daybook: your day, remembered</title>
 <style>
-:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#eeedf7;background:#191a23;line-height:1.55}*{box-sizing:border-box}body{margin:0}a{color:inherit}header,main,footer{max-width:1100px;margin:auto;padding:24px}header{display:flex;justify-content:space-between;align-items:center;gap:16px}.brand{display:flex;align-items:center;gap:10px;font-weight:750;letter-spacing:.12em}.mark{background:#aaa6ff;color:#191a23;border-radius:12px;padding:5px 13px;font-family:Georgia,serif;font-size:28px;letter-spacing:0}.nav{color:#c6c5d4;text-decoration:none}.hero{padding:85px 0 70px;max-width:800px}.eyebrow{color:#aaa6ff;font-weight:700;letter-spacing:.13em;text-transform:uppercase;font-size:13px}h1{font-size:clamp(44px,7vw,80px);line-height:1.08;letter-spacing:-.06em;margin:18px 0 24px}h2{font-size:clamp(26px,4vw,38px);letter-spacing:-.035em}p{color:#bcbcca;font-size:18px}.hero p{max-width:650px;font-size:21px}.actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:30px}.button{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;border-radius:13px;min-height:50px;padding:12px 22px;font-weight:750;background:#aaa6ff;color:#191a23}.button.secondary{background:#292b37;color:#eeedf7;border:1px solid #454657}.fine{font-size:14px;color:#a9a8ba;margin-top:18px}.features{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:18px 0 80px}.feature,.panel{background:#242630;border:1px solid #393b49;border-radius:20px;padding:26px}.feature h3{margin:0;font-size:20px}.feature p{font-size:16px;margin-bottom:0}.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;counter-reset:step}.steps article{padding:20px 0;border-top:1px solid #474857}.steps article:before{counter-increment:step;content:"0" counter(step);color:#aaa6ff;font-weight:800}.steps h3{margin:10px 0}.steps p{font-size:16px}.panel{margin:50px 0 80px}.panel p{max-width:800px}.panel strong{color:#eee}footer{border-top:1px solid #393b49;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;color:#bcbcca;font-size:14px}footer a{color:#c7c5ff}@media(max-width:700px){header,main,footer{padding:20px}.hero{padding:54px 0}.features,.steps{grid-template-columns:1fr}.feature{padding:22px}.panel{padding:22px}.actions .button{width:100%}}
-</style></head><body>
-<header><div class="brand"><span class="mark">D</span> DAYBOOK</div><a class="nav" href="https://github.com/lastnamehurt/notes-server">View source ↗</a></header>
-<main><section class="hero"><div class="eyebrow">Private by design · Open source</div><h1>Make space for<br>what matters.</h1><p>Notes, reminders, activity logs, and your daily priorities—all in one personal space you control. Connect an AI assistant to help you remember and reflect.</p><div class="actions"><a class="button" href="https://daybook-installer.clhurt1.workers.dev">Get started →</a><a class="button secondary" href="https://github.com/lastnamehurt/notes-server#what-you-need">What you need</a></div><p class="fine">Set up your own private copy. One free Cloudflare account; about 10 minutes. No coding required.</p></section>
-<section aria-label="Features" class="features"><article class="feature"><h3>Capture your day</h3><p>Save notes, checklists and daily journal entries whenever something comes to mind.</p></article><article class="feature"><h3>Understand your time</h3><p>Make custom activity logs, record time spent and see weekly summaries.</p></article><article class="feature"><h3>Work with AI</h3><p>Connect supported assistants through MCP to find notes, log activity and manage reminders.</p></article></section>
-<section><div class="eyebrow">Three simple steps</div><h2>Yours from day one.</h2><div class="steps"><article><h3>Make a Cloudflare account</h3><p>One free account runs your private Daybook. No credit card.</p></article><article><h3>Install</h3><p>The installer asks for a key (one button makes it), an address and a password, then sets everything up.</p></article><article><h3>Connect and capture</h3><p>Choose your time zone and reminders in the app, then connect Claude and add Daybook to your home screen.</p></article></div></section>
-<section class="panel"><div class="eyebrow">Privacy, without mystery</div><h2>Your notes aren't stored on our website.</h2><p>Each person runs their own app in their own Cloudflare account, with notes kept <strong>in that app</strong>, or as <strong>Markdown files in their own private GitHub repository</strong> if they choose. Only your accounts control access. This is <strong>not end-to-end encryption</strong>: your Worker and authorized AI integrations can read notes to provide features. The public landing page does not host your notes.</p><a class="button secondary" href="https://github.com/lastnamehurt/notes-server/blob/main/TECHNICAL.md">How it works ↗</a></section></main>
-<footer><span>Daybook · An open-source personal notes system</span><span><a href="https://github.com/lastnamehurt/notes-server">GitHub</a> · <a href="https://github.com/lastnamehurt/notes-server/blob/main/docs/ai-assistants.md">AI setup</a> · <a href="https://github.com/lastnamehurt/notes-server/blob/main/QUICKSTART-MOBILE.md">Mobile guide</a></span></footer>
-</body></html>
+:root{--bg:#191a23;--card:#242630;--card2:#1f2029;--line:#393b49;--ink:#eeedf7;--ink2:#bcbcca;--mark:#aaa6ff;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink);background:var(--bg);line-height:1.55}
+*{box-sizing:border-box}body{margin:0;overflow-x:hidden}a{color:inherit}
+header,main,footer{max-width:1120px;margin:auto;padding:24px}
+header{display:flex;justify-content:space-between;align-items:center;gap:16px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:750;letter-spacing:.12em}
+.mark{background:var(--mark);color:var(--bg);border-radius:12px;padding:5px 13px;font-family:Georgia,serif;font-size:28px;letter-spacing:0}
+.nav{display:flex;gap:20px;align-items:center}.nav a{color:#c6c5d4;text-decoration:none;font-size:15px}.nav a:hover{color:var(--ink)}
+.eyebrow{color:var(--mark);font-weight:700;letter-spacing:.13em;text-transform:uppercase;font-size:13px}
+h1{font-size:clamp(42px,6.4vw,76px);line-height:1.04;letter-spacing:-.055em;margin:16px 0 22px}
+h2{font-size:clamp(28px,4vw,42px);line-height:1.12;letter-spacing:-.035em;margin:10px 0 14px}
+p{color:var(--ink2);font-size:18px}
+.button{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;border-radius:13px;min-height:50px;padding:12px 22px;font-weight:750;background:var(--mark);color:var(--bg)}
+.button.secondary{background:#292b37;color:var(--ink);border:1px solid #454657}
+.actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:28px}
+.fine{font-size:14px;color:#a9a8ba;margin-top:16px}
+section{margin:0 0 96px}
+
+/* Hero: words on the left, a phone showing Today on the right */
+.hero{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:56px;align-items:center;padding:56px 0 0}
+.hero p.lede{max-width:600px;font-size:21px}
+.phone{justify-self:center;width:min(340px,100%);background:#121318;border:1px solid #3a3c4a;border-radius:42px;padding:12px;box-shadow:0 40px 90px rgb(0 0 0 / .45),0 0 0 6px #22232c}
+.screen{background:#f5f4f0;color:#232430;border-radius:32px;padding:22px 18px 18px;font-size:13px;line-height:1.35}
+.screen .top{margin-bottom:12px}
+.screen .dow{color:#6b6c7a;font-weight:600;font-size:12px}.screen .day{font:400 46px/1 Georgia,serif;letter-spacing:-.04em}.screen .mon{font:400 17px Georgia,serif;color:#6b6c7a;margin-left:4px}
+.tabs{display:flex;gap:2px;border:1px solid #e1dfd8;border-radius:11px;padding:3px;margin-bottom:12px;font-weight:600;font-size:11.5px;color:#5d5e6c}
+.tabs span{flex:1;text-align:center;padding:6px 0;border-radius:8px}.tabs .on{background:#5552c9;color:#fff}
+.card{background:#fff;border:1px solid #e6e4dd;border-radius:16px;padding:12px 14px}
+.card h4{margin:0 0 6px;font-size:14px;display:flex;justify-content:space-between}.card h4 small{font-weight:500;color:#6b6c7a}
+.todo{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid #efede7}
+.todo i{flex:none;width:16px;height:16px;border:2px solid #8b8c99;border-radius:50%;margin-top:1px}
+.todo b{display:block;font-size:13px}.todo em{font-style:normal;color:#6b6c7a;font-size:11.5px}.todo .due{margin-left:auto;color:#5552c9;font-size:11px;white-space:nowrap}
+.rail{margin:12px 2px 0;border-left:2px solid #dedbd2;padding-left:12px;display:grid;gap:8px}
+.rail div{position:relative;font-size:12.5px}.rail div:before{content:"";position:absolute;left:-17px;top:5px;width:8px;height:8px;border-radius:50%;background:#232430}
+.rail time{color:#6b6c7a;margin-right:6px;font-variant-numeric:tabular-nums}.rail span{color:#8b8c99}
+.notif{margin:-8px 10px 14px;background:rgb(40 41 52 / .96);color:#eee;border-radius:16px;padding:10px 12px;font-size:12px;display:flex;gap:10px;align-items:center;box-shadow:0 10px 30px rgb(0 0 0 / .35);position:relative;z-index:2}
+.notif .ic{flex:none;width:28px;height:28px;border-radius:8px;background:var(--mark);color:var(--bg);display:grid;place-items:center;font:700 15px Georgia,serif}
+.notif b{display:block;font-size:12px}.notif .btn{margin-left:auto;background:#3b3d4c;border-radius:8px;padding:5px 9px;font-weight:600}
+
+/* Things you can say */
+.say{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
+.say span{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:10px 16px;font-size:16px;color:var(--ink)}
+.say span:before{content:"“";color:var(--mark)}.say span:after{content:"”";color:var(--mark)}
+
+/* Feature grid */
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:26px}
+.f{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:24px}
+.f .k{font-size:22px;line-height:1}.f h3{margin:12px 0 6px;font-size:19px}.f p{font-size:16px;margin:0}
+
+/* A day with Daybook */
+.day-flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-top:26px}
+.day-flow article{border-top:1px solid #474857;padding-top:16px}
+.day-flow time{color:var(--mark);font-weight:800;font-variant-numeric:tabular-nums}
+.day-flow h3{margin:8px 0 6px;font-size:18px}.day-flow p{font-size:16px;margin:0}
+
+/* Setup */
+.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;counter-reset:step;margin-top:20px}
+.steps article{padding:20px 0;border-top:1px solid #474857}
+.steps article:before{counter-increment:step;content:"0" counter(step);color:var(--mark);font-weight:800}
+.steps h3{margin:10px 0}.steps p{font-size:16px}
+
+.panel{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:32px;display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:32px;align-items:start}
+.panel p{margin-top:0}.panel strong{color:var(--ink)}
+.facts{list-style:none;padding:0;margin:0;display:grid;gap:12px}
+.facts li{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:14px 16px;font-size:15.5px;color:var(--ink2)}
+.facts b{display:block;color:var(--ink);font-size:16px}
+
+.cta{text-align:center;padding:40px 0 10px}.cta p{max-width:620px;margin:0 auto}.cta .actions{justify-content:center}
+footer{border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;color:var(--ink2);font-size:14px}
+footer a{color:#c7c5ff}
+
+@media(max-width:900px){.hero{grid-template-columns:1fr;gap:40px;padding-top:36px}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.day-flow{grid-template-columns:repeat(2,minmax(0,1fr))}.panel{grid-template-columns:1fr}}
+@media(max-width:620px){header,main,footer{padding:18px}.nav a.hide-sm{display:none}section{margin-bottom:72px}.grid,.steps,.day-flow{grid-template-columns:1fr}.f{padding:20px}.panel{padding:22px}.actions .button{width:100%}.say span{font-size:15px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="mark">D</span> DAYBOOK</div>
+  <nav class="nav"><a class="hide-sm" href="#what">What it does</a><a class="hide-sm" href="#privacy">Privacy</a><a href="https://github.com/lastnamehurt/notes-server">Source ↗</a></nav>
+</header>
+
+<main>
+  <section class="hero">
+    <div>
+      <div class="eyebrow">Free · Private · Open source</div>
+      <h1>Your day,<br>remembered.</h1>
+      <p class="lede">Tell Claude what to remember, what you ate, or when to take your meds. Daybook keeps it in your own private space, buzzes your phone at the right time, and shows your whole day at a glance.</p>
+      <div class="actions">
+        <a class="button" href="https://daybook-installer.clhurt1.workers.dev">Get your Daybook →</a>
+        <a class="button secondary" href="#what">See what it does</a>
+      </div>
+      <p class="fine">Your own copy on a free Cloudflare account. About 10 minutes, no coding, no credit card.</p>
+    </div>
+
+    <div class="phone" role="img" aria-label="Daybook's Today screen on a phone: a reminder notification, three focus priorities and a timeline of today's activity">
+      <div class="notif"><span class="ic">D</span><div><b>Reminder</b>Drink water</div><span class="btn">Done</span></div>
+      <div class="screen">
+        <div class="top"><div class="dow">Tuesday</div><span class="day">13</span><span class="mon">Oct</span></div>
+        <div class="tabs"><span class="on">Today</span><span>Tasks</span><span>Journal</span><span>Memory</span><span>More</span></div>
+        <div class="card">
+          <h4>Focus <small>3 priorities</small></h4>
+          <div class="todo"><i></i><div><b>Call the dentist</b><em>Today · 10am</em></div><span class="due">Do now</span></div>
+          <div class="todo"><i></i><div><b>Weekly money review</b><em>Sun · 6pm</em></div><span class="due">Overdue</span></div>
+          <div class="todo"><i></i><div><b>30 min walk</b><em>Mon, Wed, Fri · 7am</em></div><span class="due">Today</span></div>
+        </div>
+        <div class="rail">
+          <div><time>7:40</time>✓ 30 min walk <span>#exercise</span></div>
+          <div><time>8:05</time>Oatmeal and coffee <span>#food</span></div>
+          <div><time>9:30</time>Feeling focused <span>#mood</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="say-h">
+    <div class="eyebrow">Just say it</div>
+    <h2 id="say-h">Talk to it like you'd text a friend.</h2>
+    <p>Connect Daybook to Claude or ChatGPT once. After that, everyday sentences become reminders, logs, notes and plans.</p>
+    <div class="say">
+      <span>Remind me to drink water at 3pm</span>
+      <span>Log: oatmeal and coffee</span>
+      <span>Take my vitamins every day at 8am</span>
+      <span>Save a note: gift ideas for mom</span>
+      <span>What's on today?</span>
+      <span>How did my week go?</span>
+      <span>I want to run a 10k by March</span>
+    </div>
+  </section>
+
+  <section id="what" aria-labelledby="what-h">
+    <div class="eyebrow">What it does</div>
+    <h2 id="what-h">One place for the small stuff that runs your life.</h2>
+    <div class="grid">
+      <article class="f"><div class="k">🔔</div><h3>Reminders that buzz your phone</h3><p>One-off or repeating ("weekdays at 8am"). Tap <b>Done</b> right on the notification and it's logged. No extra app to install.</p></article>
+      <article class="f"><div class="k">📝</div><h3>Log anything in seconds</h3><p>Meals, drinks, meds, workouts, sleep, moods, or your own log types. Track time spent and see it add up.</p></article>
+      <article class="f"><div class="k">☀️</div><h3>Today, at a glance</h3><p>Your top priorities, what's overdue and a timeline of your day. Opt in to a morning and evening briefing on your phone.</p></article>
+      <article class="f"><div class="k">📖</div><h3>Journal and weekly review</h3><p>Each day's activity and reflections in one place. Ask your assistant for a weekly review: what moved, what slipped, what to focus on next.</p></article>
+      <article class="f"><div class="k">🎯</div><h3>Goals that move</h3><p>Write down why it matters and how you'll measure it, then add next steps with dates and log progress as you go.</p></article>
+      <article class="f"><div class="k">🧠</div><h3>Memory that's yours</h3><p>Notes, projects, decisions and reference, searchable by you and your assistant. Download everything as Markdown any time.</p></article>
+      <article class="f"><div class="k">📅</div><h3>Works with your calendar</h3><p>Your dated tasks show up in Apple, Google or Outlook calendar, and your calendar's events can show up in Daybook.</p></article>
+      <article class="f"><div class="k">✅</div><h3>Apple Reminders sync</h3><p>Two-way sync through an iPhone Shortcut. Check things off from your Watch, Siri or lock screen, and Daybook stays in step.</p></article>
+      <article class="f"><div class="k">📱</div><h3>An app on your home screen</h3><p>Add it to your iPhone or Android home screen. When there's an update, tap <b>Update now</b> and it updates itself.</p></article>
+    </div>
+  </section>
+
+  <section aria-labelledby="day-h">
+    <div class="eyebrow">A day with Daybook</div>
+    <h2 id="day-h">It fits around your day, not the other way round.</h2>
+    <div class="day-flow">
+      <article><time>7:30 am</time><h3>A morning briefing</h3><p>What's due, what's overdue and what to do first, on your phone before coffee.</p></article>
+      <article><time>8:00 am</time><h3>A nudge, then done</h3><p>"Take vitamins" buzzes. Tap Done and it's in today's log.</p></article>
+      <article><time>1:15 pm</time><h3>Just say it</h3><p>"Log a burrito and an iced tea." Your assistant saves it with the right tags.</p></article>
+      <article><time>9:00 pm</time><h3>Look back</h3><p>An evening wrap-up of what you did, and a weekly review on Sunday.</p></article>
+    </div>
+  </section>
+
+  <section id="privacy" aria-labelledby="privacy-h">
+    <div class="panel">
+      <div>
+        <div class="eyebrow">Privacy, without mystery</div>
+        <h2 id="privacy-h">Your Daybook runs in your account, not ours.</h2>
+        <p>Each person runs their own copy in their own free Cloudflare account. Notes are kept <strong>in that app</strong>, or as <strong>Markdown files in your own private GitHub repository</strong> if you prefer. Nobody else has access, including whoever sent you the link.</p>
+        <p>Plainly: this is <strong>not end-to-end encrypted</strong>. Your own app, and assistants you connect, can read your notes so they can help you.</p>
+        <a class="button secondary" href="https://github.com/lastnamehurt/notes-server/blob/main/TECHNICAL.md">How it works ↗</a>
+      </div>
+      <ul class="facts">
+        <li><b>Free to run</b>Fits in Cloudflare's free plan. No subscription, no card.</li>
+        <li><b>Leave any time</b>Download every note as plain Markdown files.</li>
+        <li><b>Open source</b>Read every line of code on GitHub.</li>
+        <li><b>Updates when you say so</b>Nothing changes until you tap Update now.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section aria-labelledby="setup-h">
+    <div class="eyebrow">Set up in about 10 minutes</div>
+    <h2 id="setup-h">Yours from day one.</h2>
+    <div class="steps">
+      <article><h3>Make a free Cloudflare account</h3><p>It runs your private Daybook. No credit card, no GitHub account needed.</p></article>
+      <article><h3>Install</h3><p>The installer asks for a key (one button makes it), an address and a password, then sets everything up.</p></article>
+      <article><h3>Connect and go</h3><p>Turn on phone reminders, add Daybook to your home screen, and connect Claude or ChatGPT.</p></article>
+    </div>
+  </section>
+
+  <section class="cta">
+    <h2>Stop holding it all in your head.</h2>
+    <p>Free, private, and set up before your coffee gets cold.</p>
+    <div class="actions">
+      <a class="button" href="https://daybook-installer.clhurt1.workers.dev">Get your Daybook →</a>
+      <a class="button secondary" href="https://github.com/lastnamehurt/notes-server#what-you-need">What you need</a>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <span>Daybook · Open-source, private life notes</span>
+  <span><a href="https://github.com/lastnamehurt/notes-server">GitHub</a> · <a href="https://github.com/lastnamehurt/notes-server/blob/main/docs/ai-assistants.md">AI setup</a> · <a href="https://github.com/lastnamehurt/notes-server/blob/main/QUICKSTART-MOBILE.md">Mobile guide</a> · <a href="https://github.com/lastnamehurt/notes-server/blob/main/docs/apple-reminders-shortcuts.md">Apple Reminders</a></span>
+</footer>
+</body>
+</html>
