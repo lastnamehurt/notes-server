@@ -87,10 +87,11 @@ async function sameSecret(a: string, b: string): Promise<boolean> {
   return diff === 0;
 }
 
-/** Subscribed calendar: only https addresses on public hostnames, fetched with a timeout and a size limit. */
+/** Subscribed calendar: only https (or webcal) addresses on public hostnames, fetched with a timeout and a size limit. */
 function validCalendarUrl(raw: string): string | null {
   let u: URL;
-  try { u = new URL(raw.trim()); } catch { return null; }
+  // Apple's share links use webcal:// (https underneath), so accept them as https.
+  try { u = new URL(raw.trim().replace(/^webcals?:\/\//i, "https://")); } catch { return null; }
   const host = u.hostname.toLowerCase();
   const literal = /^[\d.]+$/.test(host) || host.includes(":") || host === "localhost" || host.endsWith(".local") || host.endsWith(".internal");
   if (u.protocol !== "https:" || literal || u.href.length > 500) return null;
@@ -433,7 +434,7 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
         const prev = (await loadSettings(env, true)) ?? {};
         if (!url?.trim()) { calendarCache.clear(); await saveSettings(env, { ...prev, calendarFeed: undefined }); return json({ url: null }); }
         const clean = validCalendarUrl(url);
-        if (!clean) return fail("Paste the calendar's secret address, starting with https://");
+        if (!clean) return fail("That doesn't look like a calendar address. It should start with https:// or webcal://");
         calendarCache.clear();
         await saveSettings(env, { ...prev, calendarFeed: clean });
         return json({ url: clean });

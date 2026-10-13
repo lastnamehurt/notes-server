@@ -454,6 +454,10 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
 .later{margin:28px 0 6px}
 @media(max-width:480px){.rail{--tl-time:52px;--tl-gap:28px}}
 @media(max-width:360px){.rail{--tl-time:46px;--tl-gap:24px}}
+.cal-choose { list-style: none; padding: 0; margin: 8px 0 4px; display: grid; gap: 8px; }
+.cal-choose li { padding: 10px 12px; border: 1px solid var(--rule); border-radius: 12px; line-height: 1.45; }
+.cal-jump { border: 0; background: none; padding: 0; color: var(--mark); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.cal-pick { padding: 10px 12px; border-radius: 12px; background: var(--paper); }
 /* Daily briefings in Settings */
 .brief-row{display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--rule)}
 .brief-toggle{display:flex;align-items:center;gap:10px;font-weight:600;margin:0}
@@ -1808,9 +1812,13 @@ async function wireCalendar() {
     catch (e) { toast(e.message); }
   };
   $("#cal-save").onclick = async () => {
+    // Apple's share links start with webcal:// and are https underneath.
+    $("#cal-feed").value = $("#cal-feed").value.trim().replace(/^webcals?:\/\//i, "https://");
     try { await api("/calendar/feed", { method: "POST", body: { url: $("#cal-feed").value } }); toast($("#cal-feed").value.trim() ? "Calendar saved" : "Calendar removed"); showEvents(); }
     catch (e) { toast(e.message); }
   };
+  // The two "I want…" choices jump to their part (buttons, since #links would change the page).
+  document.querySelectorAll("#calendar .cal-jump").forEach(b => b.onclick = () => document.getElementById(b.dataset.jump)?.scrollIntoView({ behavior: "smooth", block: "start" }));
   showEvents();
 }
 async function fillAssistantRow() {
@@ -1950,16 +1958,38 @@ views.setup = async () => {
       <a class="btn quiet" href="#assistants">Connect or manage assistants →</a></section>`)}
 
     ${raw(first ? "" : `<section class="step" id="calendar"><h3>Calendar</h3>
-      <p class="muted">Show your Daybook tasks in your calendar app, and see one calendar's events here.</p>
-      <h4>Your tasks in your calendar</h4>
-      <p class="muted">In Apple Calendar, Google Calendar or Outlook, add a subscribed or internet calendar and paste this address. New address = the old one stops working.</p>
+      <p class="muted">Two separate options. Pick the one that matches what you want, or use both.</p>
+      <ul class="cal-choose">
+        <li><b>I want my Daybook tasks to show up in my calendar app</b> → <button type="button" class="cal-jump" data-jump="cal-out">Tasks in your calendar</button></li>
+        <li><b>I want to see my calendar's events in Daybook</b> → <button type="button" class="cal-jump" data-jump="cal-in">Your calendar in Daybook</button></li>
+      </ul>
+
+      <h4 id="cal-out">Tasks in your calendar</h4>
+      <p class="muted">Daybook makes a private address. Your calendar app subscribes to it and shows your dated tasks, updating on its own every few hours.</p>
       <button class="btn quiet" id="cal-make" type="button">Make my calendar address</button>
       <div id="cal-url"></div>
-      <h4>Show a calendar here</h4>
-      <p class="muted">Paste the secret address of a calendar (its private ICS link). Daybook only reads it.</p>
-      <label class="field"><span>Calendar address</span><input id="cal-feed" type="url" inputmode="url" placeholder="https://…"></label>
+      <details class="more"><summary>How to add it to your calendar app</summary>
+        <p><b>iPhone:</b> Settings → Apps → Calendar → Calendar Accounts → Add Account → Other → <b>Add Subscribed Calendar</b>, then paste.</p>
+        <p><b>Mac:</b> in Calendar, File → <b>New Calendar Subscription…</b>, then paste.</p>
+        <p><b>Google Calendar</b> (on a computer): next to <b>Other calendars</b>, tap + → <b>From URL</b>, then paste.</p>
+        <p><b>Outlook:</b> Add calendar → <b>Subscribe from web</b>, then paste.</p>
+        <p class="muted">Making a new address turns the old one off. Do that only if you shared it by mistake.</p>
+      </details>
+
+      <h4 id="cal-in">Your calendar in Daybook</h4>
+      <p class="muted">Paste your calendar's address and Daybook shows its next two weeks of events below. Daybook only reads it and never changes your calendar.</p>
+      <label class="field"><span>Calendar address</span><input id="cal-feed" type="url" inputmode="url" placeholder="https://… or webcal://…"></label>
       <div class="row"><button class="btn" id="cal-save" type="button">Save address</button></div>
-      <div id="cal-events"><p class="muted">Loading…</p></div></section>`)}
+      <div id="cal-events"><p class="muted">Loading…</p></div>
+      <details class="more"><summary>Where do I find this address?</summary>
+        <p class="cal-pick"><b>Which one should I use?</b> If you have a Google calendar, use it: its address is secret. Apple only offers a public link, so anyone who has it can see that calendar.</p>
+        <p><b>Google Calendar</b> (best, private), on a computer at calendar.google.com: Settings ⚙ → under <b>Settings for my calendars</b> pick your calendar → <b>Integrate calendar</b> → copy <b>Secret address in iCal format</b>.</p>
+        <p><b>Apple / iCloud, iPhone:</b> Calendar → <b>Calendars</b> → ⓘ next to the calendar → turn on <b>Public Calendar</b> → <b>Share Link…</b> → Copy.</p>
+        <p><b>Apple / iCloud, Mac:</b> in Calendar, right-click the calendar → <b>Share Calendar…</b> → tick <b>Public Calendar</b> → copy the address.</p>
+        <p><b>Outlook:</b> on outlook.com, Settings → Calendar → <b>Shared calendars</b> → under <b>Publish a calendar</b> pick a calendar and <b>Can view all details</b> → Publish → copy the <b>ICS</b> link.</p>
+        <p class="muted">Calendars stored only on your device ("On My iPhone") and most work accounts can't give an address. Apple links start with webcal:// and that's fine; paste them as they are.</p>
+      </details>
+      </section>`)}
 
     ${raw(first ? "" : `<section class="step" id="updates"><h3>Updates</h3><div id="update-status"><p class="muted">Checking for updates…</p></div></section>`)}
     ${raw(first ? "" : `<section class="step" id="diagnostics"><h3>Check everything is working</h3>
