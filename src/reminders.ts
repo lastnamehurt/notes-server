@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { AwarenessInbox, type InboxCandidate } from "./awareness-inbox";
+import { interruptionDecision } from "./awareness-interruption";
 import { DEFAULT_AWARENESS_PREFERENCES, parseAwarenessPreferences, type AwarenessPreferences } from "./awareness-preferences";
 import { nextOccurrence, normalizeTopic, pushConfigured, legacyPushConfigured, webPushConfigured, NO_PUSH, DEFAULT_TIMEZONE, type Reminder, type ReminderEnv } from "./reminder-parse";
 import { generateVapidKeys, sendWebPush, type PushMessage, type Subscription, type WebPushState } from "./web-push";
@@ -164,6 +165,50 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
     const preferences = parseAwarenessPreferences(input);
     await this.ctx.storage.put("awareness:preferences:local", preferences);
     return preferences;
+  }
+
+  /**
+   * Explicit opt-in delivery for an existing inbox candidate. Durable Object serializes
+   * invocations; a reservation is written before contacting the push provider.
+   * A provider timeout is ambiguous, so never retry it automatically (at-most-once).
+   * Existing reminders and briefings are unaffected.
+   */
+  async awarenessDeliver(id: string): Promise<{ status: string; reason: string }> {
+    const inbox = new AwarenessInbox(this.ctx.storage);
+    const entry = await inbox.get("local", id);
+    if (!entry) return { status: "suppressed", reason: "not-found" };
+    const candidate = entry.candidate;
+    const now = new Date();
+    const prefs = await this.awarenessPreferences();
+    const env = applySettings(this.env as unknown as Env, await this.getSettings());
+    const zone = env.NOTES_TIMEZONE || DEFAULT_TIMEZONE;
+    const dedupe = "awareness:delivery:local:" + encodeURIComponent(candidate.dedupeKey);
+    const reserved = await this.ctx.storage.get<{ at: string }>(dedupe);
+    const date = localStamp(now.getTime(), zone).date;
+    const daily = "awareness:delivery-count:local:" + date;
+    const count = (await this.ctx.storage.get<number>(daily)) ?? 0;
+    const last = await this.ctx.storage.get<string>("awareness:delivery:last:local");
+    const decision = interruptionDecision(prefs, {
+      now, timeZone: zone, candidateCreatedAt: candidate.createdAt,
+      candidateExpiresAt: candidate.expiresAt, candidateDedupeKey: candidate.dedupeKey,
+      lastSentAt: last, sentToday: count,
+      dismissed: entry.state === "dismissed", muted: entry.state === "muted",
+      stale: entry.state !== "active", alreadyDelivered: Boolean(reserved)
+    });
+    if (decision.action !== "send") return { status: decision.action, reason: decision.reason };
+    if (!pushConfigured(env)) return { status: "digest", reason: "push-not-configured" };
+    // Reserve before network IO: prevents concurrent duplicate sends, even on provider timeout.
+    await this.ctx.storage.put(dedupe, { at: now.toISOString() });
+    await this.ctx.storage.put(daily, count + 1);
+    await this.ctx.storage.put("awareness:delivery:last:local", now.toISOString());
+    try {
+      const url = (await this.appLink())?.replace(/#today$/, "#awareness");
+      await sendNotice(env, { title: "Daybook Awareness", message: candidate.reason, url, tags: "bell" }, this.pruning);
+      return { status: "sent", reason: "delivered" };
+    } catch {
+      // Keep the reservation. An uncertain provider response must not create duplicate pushes.
+      return { status: "digest", reason: "delivery-unconfirmed" };
+    }
   }
 
   /** Awareness inbox stays within this installation's existing private Durable Object. */
