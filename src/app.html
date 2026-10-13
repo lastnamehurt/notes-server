@@ -221,7 +221,7 @@ h2.group b { color: var(--ink); }
 .log-actions[open] summary{background:var(--sheet)}
 .log-actions-menu{position:absolute;right:0;top:100%;z-index:6;min-width:150px;display:grid;gap:4px;background:var(--sheet);border:1px solid var(--rule);border-radius:12px;padding:6px;box-shadow:var(--shadow)}
 .log-actions-menu button{min-height:42px;width:100%;text-align:left;font-size:14px;color:var(--ink);background:transparent;border:0;border-radius:8px;padding:9px}
-.log-actions-menu button:focus-visible,.log-actions-menu button:hover{background:var(--paper)}
+.log-actions-menu button:focus-visible,.log-actions-menu button:hover{background:var(--sheet)}
 .focus .focus-task{padding:9px 0;gap:8px}
 .focus .focus-task-content>a{font-size:15px;line-height:1.35}
 .focus .task-due{font-size:12px;margin-top:2px}
@@ -410,8 +410,8 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
 .promised-today .today-date-label{text-transform:uppercase;color:var(--ink-2);font-size:12px;letter-spacing:.07em;font-weight:650}
 .promised-today .today-top-heading{display:flex;justify-content:space-between;align-items:center;margin:8px 0 16px}
 .promised-today .today-top-heading h2{font-size:26px;margin:0}
-.promised-today .today-top-heading a{color:var(--ink);text-decoration:none;border-radius:50%;background:var(--paper);padding:10px}
-.promised-today .today-focus-card{background:var(--paper);border-radius:20px;padding:16px;border:1px solid var(--rule)}
+.promised-today .today-top-heading a{color:var(--ink);text-decoration:none;border-radius:50%;background:var(--sheet);padding:10px}
+.promised-today .today-focus-card{background:var(--sheet);border-radius:20px;padding:16px;border:1px solid var(--rule)}
 .promised-today .today-focus-heading{display:flex;justify-content:space-between;align-items:center;margin:0 0 10px}
 .promised-today .today-focus-heading h3{margin:0;font-size:19px}
 .promised-today .today-focus-list{margin:0;padding:0;list-style:none}
@@ -482,6 +482,8 @@ button.today-focus-dot:disabled{color:var(--mark)}
 .unified-task .task-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:6px}
 .unified-task .task-meta .task-priority{flex:none;width:auto;max-width:none;min-width:0;min-height:32px;padding:3px 26px 3px 10px;border-radius:999px;font-size:13px;font-weight:600}
 .unified-task .task-from{font-size:13px;color:var(--ink-2)}
+
+.calendar-tools{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin:18px 0}.calendar-tools label{display:flex;align-items:center;gap:8px}.calendar-tools select{width:auto;max-width:200px}.calendar-nav{display:flex;align-items:center;gap:8px}.calendar-nav h3{flex:1;margin:0;font-size:18px}.task-calendar{width:100%;table-layout:fixed;border-collapse:collapse;margin:18px 0}.task-calendar th{font-size:12px;padding:8px 0;color:var(--ink-2)}.task-calendar abbr{text-decoration:none}.task-calendar td{padding:2px}.calendar-day{width:100%;min-height:65px;background:var(--sheet);border:1px solid var(--rule);border-radius:8px;color:var(--ink);font:inherit;cursor:pointer;padding:8px 2px}.calendar-day small{display:block;font-size:10px;min-height:14px;margin-top:4px}.calendar-day[aria-pressed="true"]{border:2px solid var(--mark);background:var(--sheet)}.calendar-day[aria-current="date"] span{font-weight:800;text-decoration:underline}.calendar-day:focus-visible{outline:3px solid var(--mark);outline-offset:2px}.unified-task.rem{display:flex}.unified-task .task-edit{flex:none;padding:8px}.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
 </style>
 </head>
 <body>
@@ -790,7 +792,7 @@ function scheduleFor(when, { date, time, days }) {
  * The one "Add a task" form, used from Tasks, a note page and the Today log. Plain choices only:
  * when (no date, today, tomorrow, a day, or repeating), an optional time, an optional priority.
  */
-function taskSheet({ note, prefill = "", when: startWhen = "none", onSaved } = {}) {
+function taskSheet({ note, prefill = "", when: startWhen = "none", date: startDate, onSaved } = {}) {
   const today = dayKey(Date.now());
   let when = startWhen, priority = "";
   const days = new Set([0, 1, 2, 3, 4, 5, 6]);
@@ -800,7 +802,7 @@ function taskSheet({ note, prefill = "", when: startWhen = "none", onSaved } = {
       <h2 id="sheet-title">Add a task</h2>
       <label class="field"><span>What needs doing?</span><input id="t-text" value="${prefill}" autofocus required placeholder="Call the dentist, buy milk…" enterkeyhint="done"></label>
       <fieldset class="pick"><legend>When</legend><div class="choice" role="group" aria-label="When">${raw(WHEN.map(([v, l]) => h`<button type="button" data-when="${v}" aria-pressed="${v === when}">${l}</button>`).join(""))}</div></fieldset>
-      <label class="field" id="t-dayfield" hidden><span>Day</span><input type="date" id="t-date" value="${addDays(today, 2)}" min="${today}"></label>
+      <label class="field" id="t-dayfield" hidden><span>Day</span><input type="date" id="t-date" value="${startDate || addDays(today, 2)}" min="${today}"></label>
       <div id="t-days" hidden>
         <div class="days" role="group" aria-label="Days">${raw(DAYS.map((d, i) => `<button type="button" data-day="${i}" aria-pressed="true" aria-label="${DAY_NAMES[i]}">${d}</button>`).join(""))}</div>
         <p class="repeat-say" id="t-say">Every day</p>
@@ -1127,29 +1129,12 @@ views.today = async () => {
   }
   if (!cfg.push) html += `<p class="hint">Reminders show here, but phone notifications are off.${cfg.canSetup ? ' Turn them on in <a href="#settings">Settings</a>.' : ""}</p>`;
   // Presentation only: preserve the raw @date tokens in Markdown for MCP and reminders.
-  const taskDate = text => {
-    // Accept @YYYY-MM-DD HH:mm (24-hour) and @YYYY-MM-DD h:mm am/pm.
-    const match = /(?:^|\s)@(\d{4}-\d{2}-\d{2})(?:\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?)?\b/i.exec(text);
-    if (!match) return null;
-    const hour = match[2] === undefined ? 0 : Number(match[2]);
-    const minute = Number(match[3] || 0);
-    const suffix = (match[4] || "").toLowerCase();
-    if (minute > 59 || hour > (suffix ? 12 : 23) || (suffix && hour < 1)) return null;
-    const h24 = suffix ? hour % 12 + (suffix === "pm" ? 12 : 0) : hour;
-    const [y,m,d] = match[1].split("-").map(Number);
-    const date = new Date(y,m-1,d,h24,minute);
-    if (date.getFullYear() !== y || date.getMonth() !== m-1 || date.getDate() !== d) return null;
-    return {date, token:match[0], title:text.replace(match[0]," ").replace(/\s+/g," ").trim()};
-  };
+  const taskDate = task => task.dueAt === null || task.dueAt === undefined ? null : {date:new Date(task.dueAt),title:task.title};
   const displayTaskDate = date => {
-    const today = new Date(); today.setHours(0,0,0,0);
-    const day = new Date(date); day.setHours(0,0,0,0);
-    const delta = Math.round((day-today)/86400000);
+    const delta = Math.round((Date.parse(dayKey(date.getTime()) + "T12:00:00Z") - Date.parse(dayKey(Date.now()) + "T12:00:00Z"))/86400000);
     const relative = delta < 0 ? "Overdue" : delta === 0 ? "Today" : delta === 1 ? "Tomorrow" : delta <= 7 ? "In " + delta + " days" : "";
-    const calendar = new Intl.DateTimeFormat(undefined,{weekday:"short",month:"short",day:"numeric",year:date.getFullYear() !== today.getFullYear() ? "numeric" : undefined}).format(date);
-    const time = new Intl.DateTimeFormat(undefined,{hour:"numeric",minute:"2-digit"}).format(date);
-    // "Today · 8:00 AM" and "Tomorrow · 9:00 AM" need no calendar date; further out it helps.
-    return (relative ? relative + " · " : "") + (delta === 0 || delta === 1 ? "" : calendar + " · ") + time;
+    const calendar = new Intl.DateTimeFormat(undefined,{timeZone:cfg.timeZone,weekday:"short",month:"short",day:"numeric"}).format(date);
+    return (relative ? relative + " · " : "") + (delta === 0 || delta === 1 ? "" : calendar + " · ") + fmt12(hhmm(date.getTime()));
   };
   // GTD inbox and Eisenhower focus; priorities are explicit, never guessed from note content.
   try {
@@ -1161,16 +1146,15 @@ views.today = async () => {
       ["someday", "Someday / maybe", "Not urgent"],
       ["inbox", "No priority", "Unsorted tasks"]
     ];
-    const todayStart = new Date(); todayStart.setHours(0,0,0,0);
-    const tomorrowStart = new Date(todayStart); tomorrowStart.setDate(tomorrowStart.getDate()+1);
-    const annotated = tasks.map(t => ({...t,due:taskDate(t.text)}));
+    const todayKey = dayKey(Date.now());
+    const annotated = tasks.map(t => ({...t,due:taskDate(t)}));
     const completedToday = entries.filter(e => /^✓\s/.test(e.text)).map(e => e.text.replace(/^✓\s*/, "").replace(/\s*#[\w-]+/g, "").trim().toLowerCase());
     const normalized = text => text.replace(/\s*@\d{4}-\d{2}-\d{2}.*$/, "").replace(/\s+/g," ").trim().toLowerCase();
     const doneKeys = new Set((rems.doneToday || []).map(r => key(r)));
     const dueReminders = [...(rems.firedToday || []), ...(rems.upcoming || [])]
-      .filter(r => !doneKeys.has(key(r)) && new Date(r.at).getTime() < tomorrowStart.getTime());
+      .filter(r => !doneKeys.has(key(r)) && dayKey(r.at) <= todayKey);
     const activeTasks = annotated.filter(t => !completedToday.includes(normalized(t.text)))
-      .filter(t => t.priority === "do" || (t.due && t.due.date < tomorrowStart))
+      .filter(t => t.priority === "do" || (t.due && dayKey(t.due.date.getTime()) <= todayKey))
       .map(t => ({...t, reminder: dueReminders.find(r => r.note === t.note && normalized(r.text) === normalized(t.text))}));
     for (const r of dueReminders) {
       if (activeTasks.some(t => t.reminder && key(t.reminder) === key(r))) continue;
@@ -1179,7 +1163,7 @@ views.today = async () => {
     }
     activeTasks.sort((a,b) => (a.due?.date.getTime() ?? Infinity)-(b.due?.date.getTime() ?? Infinity));
     const topTasks = activeTasks.slice(0,4).map(t => h`<li class="today-focus-row"><button type="button" class="today-focus-dot" data-note="${t.note}" data-line="${t.line ?? ""}" data-text="${t.reminder ? t.reminder.text : ""}" data-at="${t.reminder ? t.reminder.at : ""}" aria-label="Mark ${t.due ? t.due.title : t.text} done">○</button><div class="today-focus-content"><a href="#note/${t.note}">${t.due ? t.due.title : t.text}</a>${t.due ? raw(h`<span class="muted today-focus-due">${displayTaskDate(t.due.date)}</span>`) : ""}</div><span class="today-focus-priority">${t.due && t.due.date < Date.now() ? "Overdue" : t.priority === "do" ? "Do now" : "Due today"}</span></li>`).join("");
-    const dateLabel = new Intl.DateTimeFormat(undefined,{weekday:"long",month:"long",day:"numeric"}).format(new Date());
+    const dateLabel = new Intl.DateTimeFormat(undefined,{timeZone:cfg.timeZone,weekday:"long",month:"long",day:"numeric"}).format(new Date());
     html = h`<section class="today-dashboard promised-today">
       <div class="today-date-label">${dateLabel}</div>
       <div class="today-top-heading"><h2>Today</h2><a href="#reminders" aria-label="Open tasks">▦</a></div>
@@ -1465,24 +1449,114 @@ views["new-goal"] = async () => {
   };
 };
 
+const TASK_GROUPS = [["do","Do now"],["plan","Plan"],["delegate","Handle later"],["someday","Someday / maybe"],["inbox","No priority"]];
+let taskView = "agenda", taskMonth = "", taskDay = "", taskFilter = "all", taskLoad = 0;
+const calendarDayLabel = date => new Intl.DateTimeFormat(undefined,{timeZone:"UTC",weekday:"long",month:"short",day:"numeric",year:"numeric"}).format(new Date(date + "T12:00:00Z"));
+function taskEditSheet(task) {
+  const first = task.occurrences[0];
+  const date = first ? dayKey(first.at) : "", time = first ? hhmm(first.at) : "";
+  openSheet(h`<form novalidate><h2 id="sheet-title">Edit task</h2><p>${task.title}</p>
+    ${task.repeating ? raw('<label class="field"><span><input type="checkbox" id="keep-repeat" checked> Keep repeating schedule</span></label><p class="muted">Clear this to replace the repeat with a single date, or no date.</p>') : ""}
+    <label class="field"><span>Day (optional)</span><input type="date" id="edit-day" value="${date}"></label><button type="button" class="btn quiet" id="remove-task-date">Remove date</button>
+    <label class="field"><span>Time (optional)</span><input type="time" id="edit-time" value="${time}"></label>
+    <p class="muted">A date without a time reminds you at 9am. Clear the day to leave this task unscheduled.</p>
+    <label class="field"><span>Priority</span><select id="edit-priority">${raw(TASK_GROUPS.map(([id,label])=>h`<option value="${id}" ${id === task.priority ? "selected" : ""}>${label}</option>`).join(""))}</select></label>
+    <div class="sheet-actions"><button type="button" class="btn quiet" data-close>Cancel</button><button type="submit" class="btn">Save task</button></div></form>`, el => {
+    el.querySelector("[data-close]").onclick = closeSheet;
+    const keep = el.querySelector("#keep-repeat");
+    const toggle = () => { el.querySelector("#edit-day").disabled = Boolean(keep?.checked); el.querySelector("#edit-time").disabled = Boolean(keep?.checked); el.querySelector("#remove-task-date").disabled = Boolean(keep?.checked); };
+    el.querySelector("#remove-task-date").onclick = () => { el.querySelector("#edit-day").value = ""; el.querySelector("#edit-time").value = ""; };
+    if (keep) keep.onchange = toggle;
+    toggle();
+    el.querySelector("form").onsubmit = async e => {
+      e.preventDefault();
+      if (el.querySelector("#edit-day").validity.badInput || el.querySelector("#edit-time").validity.badInput) return sheetError("Choose a valid date and time, or use Remove date.");
+      const button = el.querySelector('[type="submit"]'); button.disabled = true;
+      const day = el.querySelector("#edit-day").value, time = el.querySelector("#edit-time").value;
+      try {
+        const result = await api("/calendar/task",{method:"POST",body:{name:task.note,line:task.line,revision:task.revision,priority:el.querySelector("#edit-priority").value,...(keep?.checked ? {} : {schedule:day ? day + (time ? " " + time : "") : ""})}});
+        closeSheet(); await views.reminders(); toast(result.warning || "Task updated");
+      } catch(err) { sheetError(err.message); button.disabled = false; }
+    };
+  });
+}
 views.reminders = async () => {
-  main.innerHTML = '<p class="empty">Loading tasks…</p>';
-  const [priorityTasks, reminders] = await Promise.all([api("/priorities"), api("/reminders")]);
-  const scheduled = reminders.upcoming || [];
-  const groups = [["do","Do now"],["plan","Plan"],["delegate","Handle later"],["someday","Someday / maybe"],["inbox","No priority"]];
-  // A task with a reminder is listed once, under Scheduled; match on its words without the date.
-  const unscheduled = priorityTasks.filter(t => !scheduled.some(r => r.note === t.note && r.text.trim() === taskParts(t.text).title));
-  let html = h`<div class="bar"><h2>Tasks</h2><button class="btn" id="newtask">+ Add task</button></div><p class="muted">Everything you need to do. Tasks with a date are under Scheduled.</p>`;
-  html += h`<section class="step"><h3>Open tasks · ${unscheduled.length}</h3>${raw(groups.map(([id,label]) => {
-    const matching = unscheduled.filter(t => t.priority === id);
-    return matching.length ? h`<div class="task-group"><h4>${label} · ${matching.length}</h4>${raw(matching.map(t => { const p = taskParts(t.text); return h`<div class="unified-task"><button type="button" class="task-done task-check" data-note="${t.note}" data-line="${t.line}" aria-label="Mark ${p.title} done">○</button><div class="task-main"><a class="task-title" href="#note/${t.note}">${p.title}</a><div class="task-meta">${p.when ? raw(h`<span class="when">${p.when}</span>`) : ""}<select class="task-priority" data-note="${t.note}" data-line="${t.line}" aria-label="Priority for ${p.title}">${raw(groups.map(([value,title]) => h`<option value="${value}" ${value === id ? "selected" : ""}>${title}</option>`).join(""))}</select><span class="task-from">${titleFrom(t.note)}</span></div></div></div>`; }).join(""))}</div>` : "";
-  }).join(""))}</section>`;
-  html += h`<section class="step"><h3>Scheduled tasks · ${scheduled.length}</h3>${raw(scheduled.length ? scheduled.map(r => h`<div class="rem"><time>${longDay(r.at)} · ${fmt12(hhmm(r.at))}</time><div><a class="what" href="#note/${r.note}">${r.text}</a><span class="sub">${titleFrom(r.note)}${r.repeat ? ", repeats" : ""}</span></div><button class="mk" data-note="${r.note}" data-text="${r.text}" data-at="${r.at}">Done</button></div>`).join("") : '<p class="muted">No scheduled tasks.</p>')}</section>`;
+  const load = ++taskLoad;
+  const today = dayKey(Date.now());
+  if (!taskMonth) taskMonth = today.slice(0,7);
+  if (!taskDay) taskDay = today;
+  const from = taskMonth + "-01", next = new Date(from + "T12:00:00Z"); next.setUTCMonth(next.getUTCMonth()+1);
+  const to = next.toISOString().slice(0,10);
+  const data = await api("/calendar?from=" + from + "&to=" + to);
+  if (load !== taskLoad || location.hash !== "#reminders") return;
+  const tasks = data.tasks.filter(t => taskFilter === "all" || t.priority === taskFilter);
+  const now = Date.now(), rows = [], overdue = [], unscheduled = [];
+  tasks.forEach(task => {
+    if (!task.occurrences.length && !task.schedule) unscheduled.push({task});
+    task.occurrences.forEach(r => {
+      const row = {task,at:r.at,date:dayKey(r.at)};
+      if (!task.repeating && r.at < now) overdue.push(row);
+      if (row.date >= from && row.date < to && (!task.repeating || row.date >= today)) rows.push(row);
+    });
+  });
+  rows.sort((a,b)=>a.at-b.at || TASK_GROUPS.findIndex(g=>g[0]===a.task.priority)-TASK_GROUPS.findIndex(g=>g[0]===b.task.priority));
+  overdue.sort((a,b)=>a.at-b.at);
+  const entries = [];
+  const rowHtml = row => {
+    const index = entries.push(row)-1, t = row.task;
+    return h`<div class="unified-task ${row.at ? "rem" : ""}"><button type="button" class="task-done task-check" data-entry="${index}" aria-label="${t.repeating ? "Complete occurrence of" : "Mark done:"} ${t.title}">○</button><div class="task-main"><a class="task-title" href="#note/${t.note}">${t.title}</a><div class="task-meta">${row.at ? raw(h`<span class="when">${calendarDayLabel(row.date)} · ${fmt12(hhmm(row.at))}${t.repeating ? " · Repeats" : ""}</span>`) : ""}<span class="pri-badge">${TASK_GROUPS.find(g=>g[0]===t.priority)[1]}</span><span class="task-from">${titleFrom(t.note)}</span></div></div><button type="button" class="btn quiet task-edit" data-entry="${index}" aria-label="Edit ${t.title}">Edit</button></div>`;
+  };
+  const section = (label, list, empty) => h`<section class="step"><h3>${label} · ${list.length}</h3>${raw(list.length ? list.map(rowHtml).join("") : h`<p class="muted">${empty}</p>`)}</section>`;
+  const monthTitle = new Intl.DateTimeFormat(undefined,{timeZone:"UTC",month:"long",year:"numeric"}).format(new Date(from+"T12:00:00Z"));
+  let html = h`<div class="bar"><h2>Tasks</h2><button class="btn" id="newtask">+ Add task</button></div><div class="calendar-tools"><div class="choice" role="group" aria-label="Task view"><button data-task-view="agenda" aria-pressed="${taskView === "agenda"}">Agenda</button><button data-task-view="month" aria-pressed="${taskView === "month"}">Month</button></div><label>Priority <select id="task-filter"><option value="all">All priorities</option>${raw(TASK_GROUPS.map(([id,label])=>h`<option value="${id}" ${taskFilter === id ? "selected" : ""}>${label}</option>`).join(""))}</select></label><button class="btn quiet" id="task-refresh">Refresh</button></div><div class="calendar-nav"><button class="btn quiet" id="task-prev" aria-label="Previous month">←</button><h3 aria-live="polite">${monthTitle}</h3><button class="btn quiet" id="task-next" aria-label="Next month">→</button><button class="btn quiet" id="task-today">Today</button></div><p class="muted">Dates and times in ${data.timeZone}.</p>`;
+  if (taskView === "month") {
+    const start = new Date(from+"T12:00:00Z").getUTCDay();
+    const last = new Date(to+"T12:00:00Z"); last.setUTCDate(last.getUTCDate()-1);
+    const cells = Array(start).fill('<td></td>');
+    for (let n=1;n<=last.getUTCDate();n++) {
+      const date = taskMonth + "-" + String(n).padStart(2,"0"), count = rows.filter(r=>r.date===date).length;
+      cells.push(h`<td><button class="calendar-day" data-day="${date}" aria-pressed="${taskDay===date}" ${date===today ? raw('aria-current="date"') : ""} aria-label="${calendarDayLabel(date)}, ${count} ${count === 1 ? "task" : "tasks"}"><span>${n}</span><small>${count ? count + (count===1 ? " task" : " tasks") : ""}</small></button></td>`);
+    }
+    while (cells.length % 7) cells.push('<td></td>');
+    html += '<table class="task-calendar"><caption class="sr">'+esc(monthTitle)+'</caption><thead><tr>'+["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"].map(d=>h`<th scope="col"><abbr title="${d}">${d.slice(0,2)}</abbr></th>`).join("")+'</tr></thead><tbody>';
+    for (let i=0;i<cells.length;i+=7) html += '<tr>'+cells.slice(i,i+7).join("")+'</tr>';
+    html += '</tbody></table>';
+    html += h`<div class="bar"><h3>${calendarDayLabel(taskDay)}</h3><button class="btn quiet" id="add-day">+ Add for this day</button></div>`;
+    html += section("Selected day",rows.filter(r=>r.date===taskDay),"No tasks for this day.");
+  } else {
+    const agenda = rows.filter(r=>r.task.repeating || r.at >= now);
+    html += '<section class="step"><h3>Scheduled tasks · '+agenda.length+'</h3>';
+    if (!agenda.length) html += '<p class="muted">No upcoming tasks in this month.</p>';
+    for (const date of [...new Set(agenda.map(r=>r.date))]) html += h`<div class="task-group"><h4>${calendarDayLabel(date)}</h4>${raw(agenda.filter(r=>r.date===date).map(rowHtml).join(""))}</div>`;
+    html += '</section>';
+  }
+  html += section("Overdue",overdue,"No overdue tasks.");
+  const ordered = TASK_GROUPS.flatMap(([id])=>unscheduled.filter(r=>r.task.priority===id));
+  html += section("Unscheduled",ordered,"No unscheduled tasks.");
   main.innerHTML = html;
-  $("#newtask").onclick = () => taskSheet({ onSaved: () => views.reminders() });
-  main.querySelectorAll(".task-priority").forEach(select => select.onchange = async () => { select.disabled = true; try { const note = await api("/note?name=" + encodeURIComponent(select.dataset.note)); await api("/priorities",{method:"POST",body:{name:select.dataset.note,line:Number(select.dataset.line),priority:select.value,sha:note.sha}}); await views.reminders(); } catch(err) { handle(err); select.disabled = false; } });
-  main.querySelectorAll(".task-done").forEach(button => button.onclick = async () => { button.disabled = true; button.textContent = "✓"; try { const name = button.dataset.note; const note = await api("/note?name=" + encodeURIComponent(name)); await setTask(name,note.content,Number(button.dataset.line),true,note.sha); await views.reminders(); } catch(err) { handle(err); button.disabled = false; } });
-  main.querySelectorAll(".mk").forEach(b => b.onclick = async () => { b.disabled = true; try { await complete(b.dataset.note,b.dataset.text,+b.dataset.at); await views.reminders(); } catch(err) { handle(err); b.disabled = false; } });
+  const refresh = async () => {
+    const active = document.activeElement, id = active?.id, day = active?.dataset?.day, view = active?.dataset?.taskView;
+    try {
+      await views.reminders();
+      const target = id ? document.getElementById(id) : day ? main.querySelector('[data-day="' + day + '"]') : view ? main.querySelector('[data-task-view="' + view + '"]') : null;
+      target?.focus();
+    } catch(err) { handle(err); }
+  };
+  $("#newtask").onclick = () => taskSheet({onSaved:refresh});
+  $("#task-refresh").onclick = refresh;
+  main.querySelectorAll("[data-task-view]").forEach(b=>b.onclick=()=>{taskView=b.dataset.taskView;refresh();});
+  $("#task-filter").onchange = e=>{taskFilter=e.target.value;refresh();};
+  const move = delta => { const d = new Date(from+"T12:00:00Z"); d.setUTCMonth(d.getUTCMonth()+delta); taskMonth=d.toISOString().slice(0,7);taskDay=taskMonth+"-01";refresh(); };
+  $("#task-prev").onclick=()=>move(-1); $("#task-next").onclick=()=>move(1);
+  $("#task-today").onclick=()=>{taskMonth=today.slice(0,7);taskDay=today;refresh();};
+  main.querySelectorAll(".calendar-day").forEach(b=>b.onclick=()=>{taskDay=b.dataset.day;refresh();});
+  if ($("#add-day")) $("#add-day").onclick=()=>taskSheet({when:"pick",date:taskDay,onSaved:refresh});
+  main.querySelectorAll(".task-edit").forEach(b=>b.onclick=()=>taskEditSheet(entries[+b.dataset.entry].task));
+  main.querySelectorAll(".task-done").forEach(b=>b.onclick=async()=>{
+    b.disabled=true; const {task,at} = entries[+b.dataset.entry];
+    try { const result=await api("/calendar/task",{method:"POST",body:{name:task.note,line:task.line,revision:task.revision,done:true,at}}); await views.reminders();toast(result.warning || (task.repeating ? "Occurrence completed" : "Task completed")); }
+    catch(err){handle(err);b.disabled=false;}
+  });
 };
 /* ---------- Note: read, tap to edit ---------- */
 async function editor(name, category) {
