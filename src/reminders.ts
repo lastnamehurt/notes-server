@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { AwarenessInbox, type InboxCandidate } from "./awareness-inbox";
+import { threeDeferrals, type DeferralEvidence } from "./awareness-rules";
 import { AwarenessHistory } from "./awareness-history";
 import { interruptionDecision } from "./awareness-interruption";
 import { DEFAULT_AWARENESS_PREFERENCES, parseAwarenessPreferences, type AwarenessPreferences } from "./awareness-preferences";
@@ -268,6 +269,19 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
         metadata: { taskId: event.taskId, fromDueAt: event.fromDueAt, toDueAt: event.toDueAt }
       });
       inserted++;
+    }
+    // Native inbox-only Awareness rule. This never sends push or reads note text.
+    // Consent is checked after capture, so disabling Awareness cannot create suggestions.
+    if (inserted > 0) {
+      const preferences = await this.awarenessPreferences();
+      if (preferences.enabled && !preferences.paused && preferences.sources.daybook) {
+        const stored = await this.ctx.storage.list<DeferralEvidence>({ prefix: "awareness:event:local:" });
+        const evidence = [...stored.values()].filter(e => e.ownerId === "local" && e.source === "daybook");
+        const inbox = new AwarenessInbox(this.ctx.storage);
+        for (const suggestion of threeDeferrals(evidence, "local")) {
+          await inbox.add("local", suggestion);
+        }
+      }
     }
     return inserted;
   }
