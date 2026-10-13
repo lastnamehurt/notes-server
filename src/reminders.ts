@@ -154,19 +154,6 @@ export interface Fired { note: string; text: string; at: number; repeat: boolean
 
 /** Single instance ("global") that stores upcoming reminders and fires them with an alarm. */
 export class ReminderScheduler extends DurableObject<ReminderEnv> {
-  /** Persist validated events; does not trigger any outbound notification. */
-  async appendAwarenessEvent(input: unknown, ownerId: string) {
-    return new (await import("./awareness-store")).AwarenessEventStore(this.ctx.storage).append(input, ownerId);
-  }
-
-  async awarenessEvents(ownerId: string, limit = 100) {
-    return new (await import("./awareness-store")).AwarenessEventStore(this.ctx.storage).list(ownerId, limit);
-  }
-
-  async pruneAwarenessEvents(ownerId: string, now = Date.now()) {
-    return new (await import("./awareness-store")).AwarenessEventStore(this.ctx.storage).prune(ownerId, now);
-  }
-
   private async all(prefix = "r:"): Promise<Map<string, Reminder>> {
     return this.ctx.storage.list<Reminder>({ prefix });
   }
