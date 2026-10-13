@@ -61,7 +61,7 @@ export class AwarenessInbox {
     const offset = options.cursor ? entries.findIndex(e => e.candidate.id === options.cursor) + 1 : 0;
     if (options.cursor && offset === 0) throw new Error("Invalid inbox cursor");
     const page = entries.slice(offset, offset + limit);
-    return { items: page, nextCursor: entries[offset + limit]?.candidate.id ?? null };
+    return { items: page, nextCursor: offset + limit < entries.length ? page[page.length - 1].candidate.id : null };
   }
 
   async action(owner: string, id: string, action: "dismiss" | "snooze" | "mute", until?: string, now = new Date().toISOString()) {
