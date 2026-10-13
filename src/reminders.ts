@@ -193,13 +193,14 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
     const daily = "awareness:delivery-count:local:" + date;
     const count = (await this.ctx.storage.get<number>(daily)) ?? 0;
     const last = await this.ctx.storage.get<string>("awareness:delivery:last:local");
-    const decision = interruptionDecision(prefs, {
+    let decision: ReturnType<typeof interruptionDecision>;
+    try { decision = interruptionDecision(prefs, {
       now, timeZone: zone, candidateCreatedAt: candidate.createdAt,
       candidateExpiresAt: candidate.expiresAt, candidateDedupeKey: candidate.dedupeKey,
       lastSentAt: last, sentToday: count,
       dismissed: entry.state === "dismissed", muted: entry.state === "muted",
       stale: entry.state !== "active", alreadyDelivered: Boolean(reserved)
-    });
+    }); } catch { return { status: "suppressed", reason: "invalid-policy" }; }
     if (decision.action !== "send") return { status: decision.action, reason: decision.reason };
     if (!pushConfigured(env)) return { status: "digest", reason: "push-not-configured" };
     // Reserve before network IO: prevents concurrent duplicate sends, even on provider timeout.
