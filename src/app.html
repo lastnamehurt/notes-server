@@ -1734,44 +1734,57 @@ main.addEventListener("click", e => {
 });
 
 /* Connect an AI assistant (Settings only). The address is the only thing shared: never put the password in a snippet. */
-const assistantBlock = (mcpUrl) => {
-  const cursor = JSON.stringify({ mcpServers: { notes: { url: mcpUrl } } }, null, 2);
-  return h`<section class="step" id="s6"><h3>Connect an AI assistant</h3>
+const connectSection = (mcpUrl) => h`<section class="step" id="connect-new"><h3>Connect an assistant</h3>
     <p class="muted">Tap your assistant. You'll enter your password on Daybook's sign-in page, never in the assistant.</p>
     ${raw(connectButtons(mcpUrl))}
     <p class="muted">Your Daybook address, if you need to paste it yourself:</p>
-    <div class="copyrow"><code>${mcpUrl}</code><button class="btn quiet" id="copymcp2" type="button">Copy</button></div>
-    <details class="more"><summary>Claude, step by step</summary>
-      <ol><li>Open <b>Customize → Connectors</b>, tap <b>+ Add</b> and choose <b>Add custom connector</b>.</li>
-        <li>Name it <b>Daybook</b> and paste the address above.</li>
-        <li>Enter your password on the sign-in page and tap <b>Allow</b>.</li></ol></details>
-    <details class="more"><summary>ChatGPT, step by step</summary>
-      <ol><li>Go to <b>Plugins</b>, select <b>+</b>, then <b>Add custom MCP server</b>.</li>
-        <li>Paste the address above and choose <b>OAuth</b>.</li>
-        <li>Choose <b>Create as a plugin</b>, then enter your password when asked.</li></ol></details>
-    <details class="more"><summary>Gemini</summary>
-      <p class="muted">Gemini's custom apps are for personal Google accounts in the US (18+), and may ask for credentials this server doesn't issue yet.</p></details>
-    <details class="more"><summary>Cursor, by hand</summary>
-      <p class="muted">If the Cursor button doesn't open Cursor, add this to <code>~/.cursor/mcp.json</code>:</p>
-      <pre class="snippet" style="overflow:auto;white-space:pre">${cursor}</pre>
-      <button class="btn quiet" id="copycursor" type="button">Copy</button></details></section>` + instructionsBlock();
-};
+    <div class="copyrow"><code>${mcpUrl}</code><button class="btn quiet" id="copymcp2" type="button">Copy</button></div></section>
+    ${raw(instructionsBlock())}`;
 
-function wireAssistant(mcpUrl) {
-  const cursorJson = JSON.stringify({ mcpServers: { notes: { url: mcpUrl } } }, null, 2);
-  $("#copymcp2").onclick = e => copy(mcpUrl, e.target);
-  wireConnectButtons(main, mcpUrl);
-  $("#copycursor").onclick = e => copy(cursorJson, e.target);
+/** Connected assistants (OAuth grants) for the summary row and the assistants page. */
+async function loadAssistants() {
+  try { return (await api("/assistants")).assistants || []; } catch { return null; }
+}
+function assistantList(list) {
+  if (!list) return h`<p class="muted">Couldn't load connected assistants. Check your connection and try again.</p>`;
+  if (!list.length) return h`<p class="muted">None yet. Connect one below.</p>`;
+  return h`<ul class="assistant-list">${raw(list.map(a => h`<li class="assistant-row" data-id="${a.id}">
+      ${raw(a.logo && new URL(a.logo, location.origin).origin === location.origin ? h`<img src="${a.logo}" alt="" width="28" height="28">` : "")}
+      <span><b>${a.name}</b><span class="muted">${raw((() => { const t = typeof a.since === "number" ? new Date(a.since < 1e12 ? a.since * 1000 : a.since) : new Date(a.since); return Number.isNaN(t.getTime()) ? "" : h` · connected ${t.toLocaleDateString()}`; })())}</span></span>
+      <button class="btn quiet" type="button" data-disconnect="${a.id}">Disconnect</button></li>`).join(""))}</ul>`;
+}
+async function fillAssistantRow() {
+  const el = $("#assistants-summary");
+  if (!el) return;
+  const list = await loadAssistants();
+  if (!el.isConnected) return;
+  el.textContent = list === null ? "Couldn't check right now." : list.length ? `${list.length} connected: ${list.map(a => a.name).join(", ")}` : "None connected yet.";
 }
 
-views.connect = async () => {
+views.assistants = async () => {
   $("#composer").hidden = true;
   const mcpUrl = location.origin + "/mcp";
-  main.innerHTML = h`<div class="setup"><h2>Connect an assistant</h2>
-    <p class="lede">Connect Claude, ChatGPT, Gemini or Cursor to your notes. Come back here any time to connect another one.</p>
-    ${raw(assistantBlock(mcpUrl))}</div>`;
-  wireAssistant(mcpUrl);
+  main.innerHTML = h`<div class="setup"><h2>AI assistants</h2>
+    <p class="lede">Assistants you've connected to Daybook. Connect another any time, or disconnect one you no longer use.</p>
+    <section class="step" id="connected"><h3>Connected</h3><div id="assistant-list"><p class="muted">Loading…</p></div></section>
+    ${raw(connectSection(mcpUrl))}
+    <p><a href="#settings">← Back to Settings</a></p></div>`;
+  wireConnectButtons(main, mcpUrl);
+  $("#copymcp2").onclick = e => copy(mcpUrl, e.target);
+  const draw = async () => {
+    const list = await loadAssistants();
+    const box = $("#assistant-list");
+    if (!box || location.hash !== "#assistants") return;
+    box.innerHTML = assistantList(list);
+    main.querySelectorAll("[data-disconnect]").forEach(b => b.onclick = async () => {
+      if (!confirm("Disconnect this assistant? It will need to sign in again to use Daybook.")) return;
+      try { await api("/assistants/disconnect", { method: "POST", body: { id: b.dataset.disconnect } }); toast("Disconnected"); draw(); }
+      catch (e) { toast(e.message); }
+    });
+  };
+  draw();
 };
+views.connect = views.assistants;
 
 views.setup = async () => {
   $("#composer").hidden = true;
@@ -1872,7 +1885,9 @@ views.setup = async () => {
         ${raw(prev.notify === "ntfy" ? h`<div class="copyrow"><code id="topic">${topic}</code><button class="btn quiet" id="copytopic" type="button">Copy</button></div>` : "")}
         <label class="choices" style="border:0"><input type="checkbox" id="uselegacy" checked> Keep ${prev.notify === "pushover" ? "Pushover" : "ntfy"} as a backup</label></details>` : "")}</section>
 
-    ${raw(first ? "" : assistantBlock(location.origin + "/mcp"))}
+    ${raw(first ? "" : h`<section class="step" id="assistants-row"><h3>AI assistants</h3>
+      <p class="muted" id="assistants-summary">Checking which assistants are connected…</p>
+      <a class="btn quiet" href="#assistants">Connect or manage assistants →</a></section>`)}
 
     ${raw(first ? "" : `<section class="step" id="updates"><h3>Updates</h3><div id="update-status"><p class="muted">Checking for updates…</p></div></section>`)}
     ${raw(first ? "" : `<section class="step" id="diagnostics"><h3>Check everything is working</h3>
@@ -1964,7 +1979,7 @@ views.setup = async () => {
     $("#tok").addEventListener("paste", () => setTimeout(check, 50));
     if (prev.hasToken) check();
   }
-  if (!first) wireAssistant(location.origin + "/mcp");
+  if (!first) fillAssistantRow();
   if (!first) loadUpdate().then(u => {
     const box = $("#update-status"); if (!box) return;
     box.innerHTML = u.available
@@ -2014,6 +2029,7 @@ function showDone(mcpUrl) {
     <section class="step"><h3><span class="n">2</span>Connect your AI assistant</h3>
       <p>Tap the one you use. Claude and ChatGPT open with your address copied, ready to paste; Cursor adds it for you.</p>
       ${raw(connectButtons(mcpUrl))}
+      <p><a href="#assistants">See all connected assistants →</a></p>
       <div class="copyrow"><code>${mcpUrl}</code><button class="btn quiet" id="copymcp" type="button">Copy</button></div>
       <p class="muted">Then try it: ask <i>"remind me to drink water at 3pm"</i>.</p></section>
     ${raw(instructionsBlock())}
