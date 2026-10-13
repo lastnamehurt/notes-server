@@ -95,7 +95,8 @@ try {
   await waitFor(base + "/health", async res => res.ok, "The app answers after updating itself", 60);
   check(await found(), "The note is still there after the update");
   const after = await (await api("/update")).json() as { current?: string };
-  check(after.current === manifest.version || after.current === status.current, "Running version " + after.current);
+  const published = (await (await fetch(installer + "/bundle/manifest.json")).json() as { version: string }).version;
+  check(after.current === published, `Now running the installer's version ${published} (running ${after.current})`);
 } catch (e) {
   check(false, "Live install failed: " + (e instanceof Error ? e.message : String(e)));
 } finally {
