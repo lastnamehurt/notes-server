@@ -2,6 +2,7 @@ import { timedEntry, readSessions, timeSummary } from "./time-tracking";
 import { normalizeLogType, typePath, withLogType, parseLogTypes } from "./log-types";
 import { tasksFromNotes, changeTaskPriority } from "./priorities";
 import { runDiagnostics } from "./diagnostics";
+import { checkForUpdate } from "./updates";
 // Web app at /app: a phone-first UI over the same notes, logs and reminders the MCP tools use.
 // Unlocked with MCP_BEARER_TOKEN; the session is an HMAC-signed, HttpOnly, SameSite=Strict cookie.
 
@@ -165,6 +166,7 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
   try {
     // Setup page: works before notes are configured.
     switch (route) {
+      case "GET /update": return json(await checkForUpdate(env));
       case "GET /config": return json({
         timeZone: env.NOTES_TIMEZONE || "America/Los_Angeles", categories: CATEGORIES, push: pushConfigured(env),
         configured: notesConfigured(env), canSetup: !env.DEPLOY_CONFIGURED, githubConnect: Boolean(githubClientId(env))

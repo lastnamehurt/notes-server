@@ -8,6 +8,11 @@ export interface Env extends ReminderEnv {
   /** Overrides for tests, and for using a different "Connect GitHub" OAuth app. */
   GITHUB_LOGIN_URL?: string;
   GITHUB_CLIENT_ID?: string;
+  /** Where to look for newer versions of this app (default lastnamehurt/notes-server), and this copy's own repository. */
+  DAYBOOK_UPSTREAM?: string;
+  DAYBOOK_REPO?: string;
+  /** Tests only: where to read the newest published version file. */
+  DAYBOOK_VERSION_URL?: string;
   /** "true" enables OAuth dynamic client registration (local MCP acceptance test only). */
   ALLOW_CLIENT_REGISTRATION?: string;
   MCP_BEARER_TOKEN: string;

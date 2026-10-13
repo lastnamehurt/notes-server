@@ -10,7 +10,7 @@ You'll need:
 ## 1. Open the app and sign in
 
 1. Open your app's address in Safari (iPhone) or Chrome (Android).
-2. Before your notes are set up, enter the password you chose during setup. After that, the screen asks you to **Sign in with GitHub**: open the GitHub page it shows, enter the code, and approve. Use the GitHub account that owns your notes.
+2. Enter the password you chose during setup (the same one Claude asks for). Once your notes are set up you can also use **Sign in with GitHub** under the password box: open the GitHub page it shows, enter the code, and approve, with the GitHub account that owns your notes.
 
 After 10 wrong passwords in 15 minutes the app locks for a while. Wait 15 minutes and try again.
 
@@ -42,7 +42,7 @@ On a bigger screen you'll also see **Logs** and **Goals**.
 
 ## 5. Get phone notifications (optional)
 
-1. Install the free [ntfy](https://ntfy.sh) app and subscribe to the topic shown on the **Settings** tab. ntfy's [phone guide](https://docs.ntfy.sh/subscribe/phone/) shows how.
+1. Install the free [ntfy](https://ntfy.sh) app and open it once. On Android, tap **Subscribe in ntfy** on the **Settings** tab. On iPhone, copy the name shown there, then in ntfy tap **+**, paste it and tap **Subscribe**.
 2. In **Settings**, tap **Save and finish**, then **Send test notification**.
 3. If it doesn't arrive, ntfy may be busy. Try again later, or switch to [Pushover](https://pushover.net) (a paid app) under *Use Pushover instead*.
 

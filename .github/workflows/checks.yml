@@ -6,7 +6,10 @@ on:
 permissions:
   contents: read
 jobs:
+  # Copies made with Deploy to Cloudflare don't need these checks (and have no deploy secrets),
+  # so every job runs only in the original repository.
   cli:
+    if: github.repository == 'lastnamehurt/notes-server'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,6 +19,7 @@ jobs:
       - run: bash scripts/test-cli.sh
 
   worker:
+    if: github.repository == 'lastnamehurt/notes-server'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,10 +35,26 @@ jobs:
       - name: MCP acceptance test (sign in, tools, notes, scale)
         run: npm run test:mcp
 
+  # People's copies compare against src/version.ts to show "An update is available", so app changes must bump it.
+  version:
+    if: github.repository == 'lastnamehurt/notes-server' && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: App changes bump src/version.ts
+        run: |
+          changed=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+          if echo "$changed" | grep -q '^src/' && ! echo "$changed" | grep -qx 'src/version.ts'; then
+            echo "::error file=src/version.ts::This PR changes src/ but not src/version.ts. Bump VERSION and write a one-line VERSION_NOTE so people's copies see the update."
+            exit 1
+          fi
+
   # Deploys to Cloudflare only after every check above has passed on main.
   deploy:
     needs: [worker, cli]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.repository == 'lastnamehurt/notes-server' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     concurrency:
       group: deploy-production

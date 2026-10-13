@@ -54,7 +54,7 @@ test('lock screen shows one sign-in method: the password until notes are set up'
   // Unauthenticated smoke runs have no notes repository, so the password is the only method offered.
   test.skip(Boolean(password), 'Notes are configured on the authenticated test Worker');
   await page.goto('/app');
-  await expect(page.getByText('Enter the password you chose when you set up the app.')).toBeVisible();
+  await expect(page.getByText('Enter your Daybook password', { exact: false })).toBeVisible();
   await expect(page.getByLabel('Password')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sign in with GitHub' })).toHaveCount(0);
 });
