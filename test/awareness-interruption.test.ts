@@ -15,11 +15,20 @@ test("digest mode, daily cap and cooldown do not send",()=>{
   assert.equal(decide({}, {lastSentAt:"2026-10-13T18:00:00Z"}).reason,"cooldown");
 });
 test("quiet hours cross midnight in local time and observe DST transitions",()=>{
-  assert.equal(decide({}, {now:new Date("2026-10-13T06:00:00Z")}).reason,"quiet-hours");
-  assert.equal(decide({}, {now:new Date("2026-10-13T14:00:00Z")}).reason,"quiet-hours");
+  const at = (iso: string) => {
+    const instant = new Date(iso);
+    return decide({}, {
+      now: instant,
+      candidateCreatedAt: new Date(instant.getTime()-60*60*1000).toISOString(),
+      candidateExpiresAt: new Date(instant.getTime()+7*24*60*60*1000).toISOString()
+    });
+  };
+  assert.equal(at("2026-10-13T06:00:00Z").reason,"quiet-hours");
+  assert.equal(at("2026-10-13T14:00:00Z").reason,"quiet-hours");
   assert.equal(localDayAndMinute(new Date("2026-11-01T08:30:00Z"),"America/Los_Angeles").minute,90);
   assert.equal(localDayAndMinute(new Date("2026-11-01T09:30:00Z"),"America/Los_Angeles").minute,90);
-  assert.equal(decide({}, {now:new Date("2026-11-01T09:30:00Z")}).reason,"quiet-hours");
+  assert.equal(at("2026-11-01T08:30:00Z").reason,"quiet-hours");
+  assert.equal(at("2026-11-01T09:30:00Z").reason,"quiet-hours");
 });
 test("expired, future-dated and invalid candidate data suppress",()=>{
   assert.equal(decide({}, {candidateExpiresAt:"2026-10-13T18:00:00Z"}).action,"suppress");
