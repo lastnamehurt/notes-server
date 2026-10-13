@@ -184,6 +184,9 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
     const zone = env.NOTES_TIMEZONE || DEFAULT_TIMEZONE;
     const dedupe = "awareness:delivery:local:" + encodeURIComponent(candidate.dedupeKey);
     const reserved = await this.ctx.storage.get<{ at: string }>(dedupe);
+    // The same candidate may be retried after a response is lost, but never re-sent.
+    if (reserved) return { status: "suppressed", reason: "already-delivered" };
+
     const date = localStamp(now.getTime(), zone).date;
     const daily = "awareness:delivery-count:local:" + date;
     const count = (await this.ctx.storage.get<number>(daily)) ?? 0;
