@@ -19,6 +19,10 @@ export interface Settings {
   name?: string;
   /** This copy's code repository ("owner/name"), for Settings → Updates. */
   codeRepo?: string;
+  /** Secret address for Daybook's tasks as a calendar feed (regenerate to revoke). */
+  calendarToken?: string;
+  /** Address of a calendar the owner subscribed to (read, not changed). */
+  calendarFeed?: string;
   /** Devices with notifications on. Kept separately in the scheduler and only attached when settings are read. */
   webPush?: WebPushState;
 }
