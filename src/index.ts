@@ -15,6 +15,7 @@ import { clock } from "./briefing";
 import { verifyAction } from "./action";
 import { runWeeklyReview } from "./weekly-review";
 import { notesFor } from "./storage";
+import { taskDeferrals } from "./awareness-deferrals";
 export { ReminderScheduler } from "./reminders";
 export { NotesStore } from "./app-notes";
 
@@ -114,7 +115,26 @@ function serverFor(env: Env): McpServer {
   server.registerTool("get_note", { description: "Read a Markdown note", inputSchema: { name: z.string() } },
     ({ name }) => result(async () => (await notes.get(name)).content));
   server.registerTool("update_note", { description: "Replace note contents and commit", inputSchema: { name: z.string(), content: z.string(), expected_sha: z.string().optional() } },
-    ({ name, content, expected_sha }) => result(async () => scheduleNote(env, await notes.update(name, content, expected_sha), content)));
+    ({ name, content, expected_sha }) => result(async () => {
+      // Fetch before mutation, then capture only after the note commit succeeds.
+      const before = (await notes.get(name)).content;
+      const saved = await notes.update(name, content, expected_sha);
+      const scheduled = await scheduleNote(env, saved, content);
+      try {
+        const changes = taskDeferrals(before, content, env.NOTES_TIMEZONE || DEFAULT_TIMEZONE);
+        if (changes.length) {
+          const bytes = new TextEncoder().encode(name + "\u0000" + before + "\u0000" + content);
+          const hash = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))]
+            .map(b => b.toString(16).padStart(2, "0")).join("");
+          await scheduler(env).recordTaskDeferrals(changes.map((change, i) => ({
+            ...change, id: "defer-" + hash.slice(0, 40) + "-" + i
+          })));
+        }
+      } catch (e) {
+        console.warn("Awareness deferral capture failed after MCP note save", e instanceof Error ? e.message : "unknown");
+      }
+      return scheduled;
+    }));
   server.registerTool("delete_note", { description: "Delete a note and commit", inputSchema: { name: z.string() } },
     ({ name }) => result(async () => { await notes.delete(name); await scheduler(env).removeNote(name); return name; }));
   server.registerTool("log", { description: "Add a timestamped entry to today's log (food, drink, meds, exercise, mood...). Tag with #food #drink #med etc. Optional date YYYY-MM-DD and time HH:MM for past items.", inputSchema: { entry: z.string(), date: z.string().optional(), time: z.string().optional() } },
