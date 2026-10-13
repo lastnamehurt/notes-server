@@ -2,7 +2,7 @@ import { timedEntry, readSessions, timeSummary } from "./time-tracking";
 import { normalizeLogType, typePath, withLogType, parseLogTypes } from "./log-types";
 import { tasksFromNotes, changeTaskPriority } from "./priorities";
 import { runDiagnostics } from "./diagnostics";
-import { checkForUpdate } from "./updates";
+import { checkForUpdate, parseRepo, resetOwnRepo, runUpdate } from "./updates";
 // Web app at /app: a phone-first UI over the same notes, logs and reminders the MCP tools use.
 // Unlocked with MCP_BEARER_TOKEN; the session is an HMAC-signed, HttpOnly, SameSite=Strict cookie.
 
@@ -171,6 +171,15 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
     // Setup page: works before notes are configured.
     switch (route) {
       case "GET /update": return json(await checkForUpdate(env));
+      case "POST /update/run": return json(await runUpdate(env));
+      case "POST /update/repo": {
+        const { repo } = await request.json<{ repo?: string }>();
+        const name = parseRepo(repo || "");
+        if (!name) return fail("Enter it like yourname/notes-server, or paste its GitHub address.");
+        await saveSettings(env, { ...((await loadSettings(env, true)) ?? {}), codeRepo: name });
+        resetOwnRepo();
+        return json({ repo: name });
+      }
       case "GET /config": return json({
         timeZone: env.NOTES_TIMEZONE || "America/Los_Angeles", categories: CATEGORIES, push: pushConfigured(env),
         configured: notesConfigured(env), canSetup: !env.DEPLOY_CONFIGURED, githubConnect: Boolean(githubClientId(env)),

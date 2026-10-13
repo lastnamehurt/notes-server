@@ -1,6 +1,7 @@
 // "Is there a newer Daybook?" Each copy of the app compares its own VERSION with the one published in the
-// original repository. Notify only: nothing is installed automatically, because code from elsewhere running
-// unreviewed on someone's own server would undercut "only you can see your notes".
+// original repository. Nothing is installed automatically, because code from elsewhere running unreviewed on
+// someone's own server would undercut "only you can see your notes". The owner taps Update now, which starts
+// the Update Daybook workflow in their own copy (or opens it, when the app has no GitHub connection).
 import { VERSION, VERSION_NOTE } from "./version";
 
 export const DEFAULT_UPSTREAM = "lastnamehurt/notes-server";
@@ -12,6 +13,16 @@ export interface UpdateStatus {
   available: boolean;
   /** GitHub page for this copy's "Update Daybook" button, when known. */
   updateUrl?: string;
+  /** This copy's code repository ("owner/name"), when known. */
+  repo?: string;
+  /** True when the app can start the update itself (it knows the repo and has a GitHub connection). */
+  canRun?: boolean;
+}
+
+/** "owner/name" from "owner/name", "github.com/owner/name" or a full GitHub address; undefined otherwise. */
+export function parseRepo(input: string): string | undefined {
+  const m = /^(?:https?:\/\/)?(?:www\.)?(?:github\.com\/)?([\w.-]+)\/([\w.-]+?)(?:\.git)?(?:[/?#].*)?$/.exec(input.trim());
+  return m ? `${m[1]}/${m[2]}` : undefined;
 }
 
 /** Compare "2026.10.12" / "2026.10.12.2" numerically. */
@@ -33,7 +44,11 @@ export function parseVersionFile(text: string): { version?: string; note?: strin
 let cache: { at: number; latest?: string; note?: string } | undefined;
 const TTL_MS = 6 * 3600 * 1000;
 
-type UpdateEnv = { DAYBOOK_UPSTREAM?: string; DAYBOOK_REPO?: string; GITHUB_TOKEN?: string; GITHUB_API_URL?: string; DAYBOOK_VERSION_URL?: string };
+type UpdateEnv = { DAYBOOK_UPSTREAM?: string; DAYBOOK_REPO?: string; GITHUB_TOKEN?: string; GITHUB_API_URL?: string; DAYBOOK_VERSION_URL?: string; NOTES_REPO?: string };
+const ghHeaders = (token: string) => ({ "Authorization": "Bearer " + token, "Accept": "application/vnd.github+json", "User-Agent": "daybook" });
+
+/** Forget the found repository (after the owner names it in Settings). */
+export function resetOwnRepo() { ownRepo = undefined; }
 
 let ownRepo: { at: number; repo?: string } | undefined;
 /**
@@ -41,22 +56,55 @@ let ownRepo: { at: number; repo?: string } | undefined;
  * found with the GitHub connection: Deploy to Cloudflare names the copy after the original ("notes-server") by default.
  */
 async function findOwnRepo(env: UpdateEnv, upstream: string): Promise<string | undefined> {
-  if (env.DAYBOOK_REPO?.trim()) return env.DAYBOOK_REPO.trim();
+  if (env.DAYBOOK_REPO?.trim()) return parseRepo(env.DAYBOOK_REPO);
   if (!env.GITHUB_TOKEN) return undefined;
   if (ownRepo && Date.now() - ownRepo.at < 24 * 3600 * 1000) return ownRepo.repo;
   const api = env.GITHUB_API_URL || "https://api.github.com";
-  const headers = { "Authorization": "Bearer " + env.GITHUB_TOKEN, "Accept": "application/vnd.github+json", "User-Agent": "daybook" };
+  const headers = ghHeaders(env.GITHUB_TOKEN);
+  const isCopy = async (repo: string) => (await fetch(`${api}/repos/${repo}/contents/.github/workflows/update-daybook.yml`, { headers })).ok;
   let repo: string | undefined;
   try {
+    // Most copies keep the original's name; otherwise look through the account's repositories for one with
+    // the Update Daybook workflow (a few likely names first, so this stays within a handful of requests).
     const user = await fetch(api + "/user", { headers });
     if (user.ok) {
       const { login } = await user.json<{ login: string }>();
       const guess = `${login}/${upstream.split("/")[1]}`;
-      if (guess.toLowerCase() !== upstream.toLowerCase() && (await fetch(`${api}/repos/${guess}/contents/src/version.ts`, { headers })).ok) repo = guess;
+      if (guess.toLowerCase() !== upstream.toLowerCase() && await isCopy(guess)) repo = guess;
     }
-  } catch { /* fall back to the guide's steps */ }
+    if (!repo) {
+      const list = await fetch(api + "/user/repos?per_page=100&sort=updated&affiliation=owner", { headers });
+      if (list.ok) {
+        const skip = new Set([upstream.toLowerCase(), (env.NOTES_REPO || "").toLowerCase()]);
+        const names = (await list.json<{ full_name: string }[]>()).map(r => r.full_name).filter(n => !skip.has(n.toLowerCase()));
+        const likely = names.filter(n => /daybook|notes-?server|notes-?mcp/i.test(n)).slice(0, 5);
+        for (const n of likely) if (await isCopy(n)) { repo = n; break; }
+      }
+    }
+  } catch { /* fall back to asking in Settings */ }
   ownRepo = { at: Date.now(), repo };
   return repo;
+}
+
+/** Start the Update Daybook workflow in this copy's repository. */
+export async function runUpdate(env: UpdateEnv): Promise<{ runsUrl: string }> {
+  const repo = await findOwnRepo(env, env.DAYBOOK_UPSTREAM?.trim() || DEFAULT_UPSTREAM);
+  if (!repo) throw new Error("Tell the app which GitHub repository is your copy of Daybook first.");
+  if (!env.GITHUB_TOKEN) throw new Error("This app isn't connected to GitHub, so it can't start the update. Use Open Update Daybook instead.");
+  const api = env.GITHUB_API_URL || "https://api.github.com";
+  const headers = ghHeaders(env.GITHUB_TOKEN);
+  const runsUrl = `https://github.com/${repo}/actions/workflows/update-daybook.yml`;
+  const info = await fetch(`${api}/repos/${repo}`, { headers });
+  if (!info.ok) throw new Error(`Couldn't open ${repo} with your GitHub connection. Check the name in Settings → Updates.`);
+  const { default_branch } = await info.json<{ default_branch: string }>();
+  const res = await fetch(`${api}/repos/${repo}/actions/workflows/update-daybook.yml/dispatches`, {
+    method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ ref: default_branch || "main" })
+  });
+  if (res.status === 204 || res.ok) return { runsUrl };
+  if (res.status === 404) throw new Error(`${repo} doesn't have the Update Daybook workflow yet. Follow How to update once to get it.`);
+  if (res.status === 403 || res.status === 422)
+    throw new Error("GitHub needs you to turn on workflows for your copy once. Tap Open Update Daybook, enable workflows, then try again.");
+  throw new Error(`GitHub didn't start the update (${res.status}). Try again, or use Open Update Daybook.`);
 }
 
 export async function checkForUpdate(env: UpdateEnv): Promise<UpdateStatus> {
@@ -75,6 +123,7 @@ export async function checkForUpdate(env: UpdateEnv): Promise<UpdateStatus> {
   const repo = available ? await findOwnRepo(env, upstream) : undefined;
   return {
     current: VERSION, latest: cache.latest, note: available ? cache.note : VERSION_NOTE, available,
-    ...(repo && /^[\w.-]+\/[\w.-]+$/.test(repo) ? { updateUrl: `https://github.com/${repo}/actions/workflows/update-daybook.yml` } : {})
+    ...(repo && /^[\w.-]+\/[\w.-]+$/.test(repo)
+      ? { repo, updateUrl: `https://github.com/${repo}/actions/workflows/update-daybook.yml`, canRun: Boolean(env.GITHUB_TOKEN) } : {})
   };
 }

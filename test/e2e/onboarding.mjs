@@ -38,6 +38,7 @@ function tarGz(files) {
   blocks.push(new Uint8Array(1024));
   return gzipSync(Buffer.concat(blocks.map(b => Buffer.from(b))));
 }
+const dispatches = [];
 const gh = http.createServer(async (req, res) => {
   let body = ""; for await (const c of req) body += c;
   const p = new URL(req.url, "http://x").pathname;
@@ -45,12 +46,19 @@ const gh = http.createServer(async (req, res) => {
   if (p.startsWith("/ntfy/")) { pushes.push(body); return send(200); }
   // A newer published version, and her own copy of the code (found via her GitHub connection).
   if (p === "/version.ts") { res.writeHead(200, { "content-type": "text/plain" }); return res.end('export const VERSION = "2099.1.1";\nexport const VERSION_NOTE = "Test update note.";\n'); }
-  if (p === "/repos/jane/notes-server/contents/src/version.ts") return req.headers.authorization === "Bearer " + TOKEN ? send(200, { type: "file" }) : send(401);
+  // Her copy isn't called notes-server here, so the app has to find it among her repositories.
+  if (p === "/repos/jane/my-daybook/contents/.github/workflows/update-daybook.yml") return req.headers.authorization === "Bearer " + TOKEN ? send(200, { type: "file" }) : send(401);
+  if (p === "/repos/jane/my-daybook" && req.method === "GET") return req.headers.authorization === "Bearer " + TOKEN ? send(200, { default_branch: "main" }) : send(401);
+  if (p === "/repos/jane/my-daybook/actions/workflows/update-daybook.yml/dispatches" && req.method === "POST") {
+    if (req.headers.authorization !== "Bearer " + TOKEN) return send(401);
+    dispatches.push(JSON.parse(body)); res.writeHead(204); return res.end();
+  }
   if (p === "/login/device/code") return send(200, { device_code: "dev-" + ++seq, user_code: "WDJB-MJHT", verification_uri: "https://github.com/login/device", expires_in: 900, interval: 5 });
   if (p === "/login/oauth/access_token") return send(200, approved ? { access_token: TOKEN, token_type: "bearer", scope: "repo" } : { error: "authorization_pending" });
   if (req.headers.authorization !== "Bearer " + TOKEN) return send(401, { message: "Bad credentials" });
   if (p === "/user") return send(200, { login: "jane" });
-  if (p === "/user/repos" && req.method === "GET") return send(200, Object.entries(repos).map(([full_name, r]) => ({ full_name, private: r.private })));
+  if (p === "/user/repos" && req.method === "GET") return send(200, [...Object.entries(repos).map(([full_name, r]) => ({ full_name, private: r.private })),
+    ...(/affiliation=owner/.test(req.url) ? [{ full_name: "jane/my-daybook", private: false }] : [])]);
   if (p === "/user/repos" && req.method === "POST") {
     const b = JSON.parse(body), full = "jane/" + b.name;
     if (repos[full]) return send(422);
@@ -166,20 +174,22 @@ try {
   await later.waitForFunction(() => { const o = document.querySelector("#diagnostics-results"); return o && !/Checking/.test(o.textContent) && o.textContent.trim(); });
   check((await later.innerText("#diagnostics-results")).trim().length > 0, "Run checks shows results when Settings is opened directly");
 
-  // 6. Updates: banner on Today with a direct link to her copy's Update Daybook, and in Settings
+  // 6. Updates: banner on Today with Update now (her copy found among her repositories), and in Settings
   const today = await ctx.newPage();
   today.on("pageerror", e => errors.push(String(e)));
   await today.goto(BASE + "/app#today");
   await today.waitForSelector("#update-banner");
   check(/Test update note/.test(await today.innerText("#update-banner")), "Today shows 'An update is available' with the note");
-  const href = await today.getAttribute("#update-banner a.btn", "href");
-  check(href === "https://github.com/jane/notes-server/actions/workflows/update-daybook.yml", "Update button opens her own copy's Update Daybook: " + href);
+  check(await today.locator("#update-banner .update-run").isVisible(), "Banner offers Update now (no trip to GitHub)");
   await today.click("#update-later");
   await today.reload(); await today.waitForTimeout(1500);
   check(await today.locator("#update-banner").count() === 0, "Later hides the banner for this version");
-  check(/Version 2099\.1\.1 is available/.test(await later.innerText("#update-status").catch(() => "")) ||
-        /Version 2099\.1\.1 is available/.test(await (async () => { await later.reload(); await later.waitForSelector("#update-status p:not(.muted)"); return later.innerText("#update-status"); })()),
-        "Settings shows the available version");
+  await later.reload(); await later.waitForSelector("#update-status .update-run");
+  check(/Version 2099\.1\.1 is available/.test(await later.innerText("#update-status")), "Settings shows the available version");
+  await later.click("#update-status .update-run");
+  await later.waitForFunction(() => /Updating\./.test(document.querySelector("#update-status")?.textContent || ""));
+  check(dispatches.length === 1 && dispatches[0].ref === "main", "Update now starts Update Daybook in her copy (jane/my-daybook): " + JSON.stringify(dispatches));
+  check(await later.getAttribute("#update-status a", "href") === "https://github.com/jane/my-daybook/actions/workflows/update-daybook.yml", "and links to watch it on GitHub");
 
   // 7. Coming back on another phone: password box first, GitHub as the alternative
   const fresh = await browser.newContext(phone);

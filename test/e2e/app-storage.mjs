@@ -30,6 +30,7 @@ const ghServer = http.createServer(async (req, res) => {
   let body = ""; for await (const c of req) body += c;
   const p = new URL(req.url, "http://x").pathname;
   const send = (s, o) => { res.writeHead(s, { "content-type": "application/json" }); res.end(JSON.stringify(o ?? {})); };
+  if (p === "/version.ts") { res.writeHead(200, { "content-type": "text/plain" }); return res.end('export const VERSION = "2099.1.1";\nexport const VERSION_NOTE = "Test update.";\n'); }
   if (p === "/login/device/code") return send(200, { device_code: "dev-" + ++seq, user_code: "MOVE-1234", verification_uri: "https://github.com/login/device", expires_in: 900, interval: 5 });
   if (p === "/login/oauth/access_token") return send(200, approved ? { access_token: TOKEN, token_type: "bearer", scope: "repo" } : { error: "authorization_pending" });
   if (req.headers.authorization !== "Bearer " + TOKEN) return send(401, { message: "Bad credentials" });
@@ -92,7 +93,7 @@ await new Promise(r => ghServer.listen(GH, "127.0.0.1", r));
 const devVars = ROOT + ".dev.vars";
 const saved = existsSync(devVars) ? readFileSync(devVars, "utf8") : null;
 writeFileSync(devVars, [`PASSWORD=${PASSWORD}`, `GITHUB_API_URL=http://127.0.0.1:${GH}`, `GITHUB_LOGIN_URL=http://127.0.0.1:${GH}`,
-  "GITHUB_CLIENT_ID=app-storage-test", "ALLOW_CLIENT_REGISTRATION=true", `DAYBOOK_VERSION_URL=http://127.0.0.1:${GH}/none`].join("\n") + "\n");
+  "GITHUB_CLIENT_ID=app-storage-test", "ALLOW_CLIENT_REGISTRATION=true", `DAYBOOK_VERSION_URL=http://127.0.0.1:${GH}/version.ts`].join("\n") + "\n");
 rmSync(ROOT + ".wrangler/state", { recursive: true, force: true });
 const worker = spawn("npx", ["wrangler", "dev", "--port", String(PORT), "--ip", "127.0.0.1"], { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"], detached: true });
 let log = ""; worker.stdout.on("data", d => (log += d)); worker.stderr.on("data", d => (log += d));
@@ -203,6 +204,15 @@ try {
   const inZip = JSON.parse(execFileSync("python3", ["-c", "import zipfile,json,sys; z=zipfile.ZipFile(sys.argv[1]); assert z.testzip() is None; print(json.dumps({i.filename: z.read(i).decode() for i in z.infolist()}))", zipPath]).toString());
   check(/^daybook-notes-\d{4}-\d{2}-\d{2}\.zip$/.test(download.suggestedFilename()), "Download is named daybook-notes-<date>.zip");
   check(inZip[name]?.includes("updated") && Object.keys(inZip).length >= 203, `Zip holds every note as a Markdown file (${Object.keys(inZip).length} files)`);
+
+  // ---------- 4b. Updates without GitHub: the app asks once which repository is her copy ----------
+  await page.waitForSelector("#update-status .update-repo");
+  check(true, "Settings asks which GitHub repository is her copy (no GitHub connection to find it)");
+  await page.fill("#update-status .update-repo input", "https://github.com/jane/my-daybook");
+  await page.click("#update-status .update-repo button[type=submit]");
+  await page.waitForSelector("#update-status a.a-btn");
+  check(await page.getAttribute("#update-status a.a-btn", "href") === "https://github.com/jane/my-daybook/actions/workflows/update-daybook.yml",
+    "After naming it, Open Update Daybook goes straight to her copy");
 
   // ---------- 5. Move my notes to GitHub ----------
   await page.click("#move-gh summary");
