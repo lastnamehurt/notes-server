@@ -74,11 +74,12 @@ For a quick tour of the app on your phone, see [QUICKSTART-MOBILE.md](QUICKSTART
 
 When a new version is out, your app shows **An update is available** on Today and in **Settings**. Nothing changes until you choose to update:
 
-1. Tap **Open Update Daybook** in the app. (Or in GitHub, open the copy of Daybook that Cloudflare made for you, usually called **notes-server**, and go to **Actions → Update Daybook**.)
-2. Tap **Run workflow**, then the green **Run workflow** button.
-3. Wait for the green check (about a minute). Cloudflare then redeploys your app in a minute or two.
+1. Tap **Update now**. The app starts the update in your own copy of Daybook on GitHub, and reloads by itself when the new version is live (about three minutes).
+2. If the app asks **Which GitHub repository is your copy of Daybook?**, enter the one Cloudflare made when you installed it (usually **notes-server**). It only asks once.
 
-Updates replace the app's code only. Your notes are in a separate repository and aren't touched, and your Cloudflare settings are kept. If GitHub asks you to enable workflows the first time, tap the button to enable them.
+If your notes are kept in the app (not on GitHub), the app can't start the update for you, so the button is **Open Update Daybook** instead: tap **Run workflow**, then the green **Run workflow** button, and your app updates in a few minutes. If GitHub asks you to enable workflows the first time, tap the button to enable them, then try again.
+
+Updates replace the app's code only. Your notes and your Cloudflare settings aren't touched.
 
 ## Good to know
 

@@ -14,6 +14,8 @@ export interface Settings {
   ntfyTopic?: string;
   pushoverUser?: string;
   pushoverToken?: string;
+  /** This copy's code repository ("owner/name"), for Settings → Updates. */
+  codeRepo?: string;
 }
 
 const pick = (deployed: string | undefined, chosen: string | undefined) => (deployed?.trim() ? deployed : chosen || undefined);
@@ -26,6 +28,7 @@ export function applySettings<E extends Env>(env: E, s: Settings | undefined): E
   out.NOTES_REPO = pick(env.NOTES_REPO, s.notesRepo) as string;
   out.NOTES_BRANCH = pick(env.NOTES_BRANCH, s.notesBranch);
   out.NOTES_TIMEZONE = pick(env.NOTES_TIMEZONE, s.timezone);
+  out.DAYBOOK_REPO = pick(env.DAYBOOK_REPO, s.codeRepo);
   // A deployment that names its repository always uses GitHub; otherwise the setup page's choice decides.
   if (!deployConfigured(env)) out.NOTES_STORAGE = s.storage === "app" ? "app" : s.notesRepo ? "github" : undefined;
   // Push providers are chosen as a set so a deployed ntfy topic and a chosen Pushover key don't mix.

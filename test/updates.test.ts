@@ -18,3 +18,14 @@ test("reads the published version file", () => {
   assert.deepEqual(parseVersionFile('export const VERSION = "2026.11.2";\nexport const VERSION_NOTE = "Says \\"hi\\".";'), { version: "2026.11.2", note: 'Says "hi".' });
   assert.deepEqual(parseVersionFile("garbage"), { version: undefined, note: undefined });
 });
+
+test("reads a repository name however it's pasted", async () => {
+  const { parseRepo } = await import("../src/updates.ts");
+  assert.equal(parseRepo("jane/notes-server"), "jane/notes-server");
+  assert.equal(parseRepo("https://github.com/jane/notes-server"), "jane/notes-server");
+  assert.equal(parseRepo("github.com/jane/notes-server.git"), "jane/notes-server");
+  assert.equal(parseRepo("https://github.com/jane/my-daybook/actions/workflows/update-daybook.yml"), "jane/my-daybook");
+  assert.equal(parseRepo(" jane/my.daybook "), "jane/my.daybook");
+  assert.equal(parseRepo("notes-server"), undefined);
+  assert.equal(parseRepo("https://example.com/a b"), undefined);
+});

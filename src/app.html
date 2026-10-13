@@ -355,6 +355,9 @@ dialog.sheet h2 { margin: 0 0 14px; font-size: 21px; }
 .storage-choice input { margin-top: 3px; }
 .update-banner { border: 1.5px solid var(--mark); }
 .update-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.update-actions .update-repo { flex: 1 1 100%; }
+.update-repo label { font-weight: 600; }
+.update-repo .copyrow input { flex: 1; min-width: 0; }
 .lock-alt { padding-top: 18px; margin-top: 18px; border-top: 1px solid var(--rule); }
 .lock p { color: var(--ink-2); max-width: 32ch; }
 .lock input { width: 100%; border: 1.5px solid var(--control); background: var(--sheet); border-radius: 12px; padding: 13px 14px; margin: 8px 0 12px; }
@@ -918,9 +921,59 @@ async function loadUpdate() {
   try { updateInfo = await api("/update"); } catch { updateInfo = { available: false }; }
   return updateInfo;
 }
-const updateLink = u => u.updateUrl
+// Update now starts the Update Daybook workflow in the owner's copy. Without a GitHub connection it opens
+// that page instead, and if the app can't tell which repository is the copy, it asks once.
+const updateLink = u => u.canRun
+  ? h`<button class="btn update-run" type="button">Update now</button>`
+  : u.updateUrl
   ? h`<a class="btn a-btn" href="${u.updateUrl}" target="_blank" rel="noopener">Open Update Daybook</a>`
-  : h`<a class="btn a-btn" href="${UPDATE_GUIDE}" target="_blank" rel="noopener">How to update</a>`;
+  : h`<form class="update-repo"><label>Which GitHub repository is your copy of Daybook?</label>
+      <p class="muted">The one Cloudflare made when you installed the app, usually <b>notes-server</b>. You only need to tell us once.</p>
+      <div class="copyrow"><input type="text" name="repo" placeholder="yourname/notes-server" autocomplete="off" required>
+      <button class="btn quiet" type="submit">Save</button></div><p class="err" role="alert"></p></form>
+      <p><a href="${UPDATE_GUIDE}" target="_blank" rel="noopener">How to update by hand</a></p>`;
+/** After an update starts: wait for the new version to go live, then reload into it. */
+function waitForNewVersion(from, box) {
+  const started = Date.now();
+  const tick = async () => {
+    try {
+      const u = await api("/update");
+      if (u.current && u.current !== from) { toast("Updated to version " + u.current); setTimeout(() => location.reload(), 1200); return; }
+    } catch {}
+    if (Date.now() - started < 15 * 60_000) setTimeout(tick, 20_000);
+    else if (box.isConnected) box.innerHTML = h`<p>The update is taking longer than usual.</p><p><a href="${updateInfo?.updateUrl || UPDATE_GUIDE}" target="_blank" rel="noopener">Check its progress on GitHub</a></p>`;
+  };
+  setTimeout(tick, 30_000);
+}
+document.addEventListener("click", async e => {
+  const b = e.target.closest?.(".update-run"); if (!b) return;
+  const box = b.closest(".update-actions, #update-status") || b.parentElement;
+  b.disabled = true; b.textContent = "Starting…";
+  try {
+    const r = await api("/update/run", { method: "POST" });
+    box.innerHTML = h`<p><b>Updating.</b> This takes about 3 minutes, and the app reloads by itself when it's done. Your notes aren't touched.</p>
+      <p class="muted"><a href="${r.runsUrl}" target="_blank" rel="noopener">Watch it on GitHub</a></p>`;
+    waitForNewVersion(updateInfo?.current, box);
+  } catch (err) {
+    b.disabled = false; b.textContent = "Update now";
+    const p = document.createElement("p"); p.className = "err"; p.setAttribute("role", "alert"); p.textContent = err.message;
+    box.querySelector(".err")?.remove(); box.append(p);
+    if (updateInfo?.updateUrl && !box.querySelector("a.a-btn")) box.insertAdjacentHTML("beforeend", h`<p><a class="btn quiet a-btn" href="${updateInfo.updateUrl}" target="_blank" rel="noopener">Open Update Daybook</a></p>`);
+  }
+});
+document.addEventListener("submit", async e => {
+  const f = e.target.closest?.(".update-repo"); if (!f) return;
+  e.preventDefault();
+  const err = f.querySelector(".err"); err.textContent = "";
+  try {
+    await api("/update/repo", { method: "POST", body: { repo: f.repo.value } });
+    updateInfo = null;
+    const u = await loadUpdate();
+    const box = f.closest(".update-actions, #update-status") || f.parentElement;
+    box.innerHTML = updateLink(u);
+    toast("Saved");
+  } catch (x) { err.textContent = x.message; }
+});
 function dismissedUpdate(v) { try { return localStorage.getItem("daybook-update-dismissed") === v; } catch { return false; } }
 function dismissUpdate(v) { try { localStorage.setItem("daybook-update-dismissed", v); } catch {} }
 /** Banner at the top of Today when a newer version exists and hasn't been dismissed. */
@@ -931,7 +984,7 @@ async function showUpdateBanner() {
   const el = document.createElement("section");
   el.className = "step update-banner"; el.id = "update-banner";
   el.innerHTML = h`<h3>An update is available</h3><p>${u.note || "A newer version of Daybook is ready."}</p>
-    <p class="muted">Updating takes one tap in your GitHub and about two minutes. Your notes aren't touched.</p>
+    <p class="muted">Updating takes one tap and about three minutes. Your notes aren't touched.</p>
     <div class="update-actions">${raw(updateLink(u))}<button class="btn quiet" type="button" id="update-later">Later</button></div>`;
   main.prepend(el);
   $("#update-later").onclick = () => { dismissUpdate(u.latest); el.remove(); };
@@ -1706,7 +1759,7 @@ views.setup = async () => {
   if (!first) loadUpdate().then(u => {
     const box = $("#update-status"); if (!box) return;
     box.innerHTML = u.available
-      ? h`<p><b>Version ${u.latest} is available</b> (you have ${u.current}). ${u.note || ""}</p><p class="muted">Updating takes one tap in your GitHub and about two minutes. Your notes aren't touched.</p>${raw(updateLink(u))}`
+      ? h`<p><b>Version ${u.latest} is available</b> (you have ${u.current}). ${u.note || ""}</p><p class="muted">Updating takes one tap and about three minutes. Your notes aren't touched.</p><div class="update-actions">${raw(updateLink(u))}</div>`
       : h`<p>You're up to date${u.current ? " (version " + u.current + ")" : ""}.</p>`;
   });
   loadBriefings();
