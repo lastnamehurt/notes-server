@@ -2,6 +2,7 @@
 // write every Markdown change as a single commit, then save the new base. See apple-sync.ts.
 
 import { splitTaskId, newTaskId, withTaskId } from "./task-id";
+import { taskDeferrals, type TaskDeferral } from "./awareness-deferrals";
 import { localStamp, DEFAULT_TIMEZONE } from "./reminder-parse";
 import { LOG_PREFIX, logPath, insertLogLine } from "./log";
 import { localDate } from "./github";
@@ -44,6 +45,8 @@ export interface SyncOptions {
   notes: SyncNotes; scheduler: SyncScheduler; timeZone?: string;
   /** Builds the link written into each reminder, e.g. https://…/app#task/<id>. */ url: (id: string) => string;
   /** Called for each note the run changed, so its phone reminders are rescheduled. */ noteChanged?: (name: string, content: string) => Promise<unknown>;
+  /** Best-effort post-commit capture of genuine Apple-originated postponements. */
+  deferralsCommitted?: (changes: { id: string; taskId: string; fromDueAt: string; toDueAt: string }[]) => Promise<unknown>;
   now?: number;
 }
 
@@ -181,6 +184,31 @@ async function syncOnce(runId: string, apple: ReturnType<typeof normalizeReminde
         // Someone else changed the notes since we read them: read again and re-plan.
         if (e instanceof Error && e.message.startsWith("GitHub conflict") && attempt < 3) continue;
         throw e;
+      }
+    }
+    // Diff the successfully committed note contents, not Apple actions. This
+    // excludes Daybook-to-Apple echoes, ID assignment and failed/retried commits.
+    // Stable IDs dedupe a replay even if syncFinish fails after capture.
+    if (o.deferralsCommitted && changed.size) {
+      try {
+        const transitions: { name: string; change: TaskDeferral }[] = [];
+        for (const [name, content] of changed) {
+          if (name.startsWith(LOG_PREFIX)) continue;
+          for (const change of taskDeferrals(files.get(name) ?? "", content, timeZone))
+            transitions.push({ name, change });
+        }
+        if (transitions.length) {
+          const events = await Promise.all(transitions.map(async ({ name, change }) => {
+            const bytes = new TextEncoder().encode(name + "\u0000" + change.taskId + "\u0000" + change.fromDueAt + "\u0000" + change.toDueAt);
+            const hash = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))]
+              .map(b => b.toString(16).padStart(2, "0")).join("");
+            return { ...change, id: "defer-" + hash.slice(0, 40) };
+          }));
+          await o.deferralsCommitted(events);
+        }
+      } catch (e) {
+        // Awareness must never turn a committed sync into a retryable failure.
+        console.warn("Apple sync Awareness capture failed", e instanceof Error ? e.message : "unknown");
       }
     }
     for (const c of plan.completions) if (c.at !== null) await o.scheduler.markDone(c.note, c.title, c.at);
