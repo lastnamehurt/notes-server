@@ -124,7 +124,7 @@ export function parseReminders(note: string, content: string, timeZone = DEFAULT
     const date = /^(\d{4})-(\d{2})-(\d{2})$/.exec(spec);
     if (date) {
       const [y, mo, d] = [+date[1], +date[2], +date[3]];
-      if (mo < 1 || mo > 12 || d < 1 || d > 31) continue;
+      if (mo < 1 || mo > 12 || d < 1 || d > 31 || new Date(Date.UTC(y, mo - 1, d)).getUTCDate() !== d) continue;
       for (const min of minutes as number[])
         out.push({ note, text, at: zonedTime(y, mo, d, Math.floor(min / 60), min % 60, timeZone) });
       continue;

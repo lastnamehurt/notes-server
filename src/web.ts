@@ -1,3 +1,4 @@
+import { calendarTasks, dayStart, noteRevision, editCalendarTask } from "./calendar";
 import { timedEntry, readSessions, timeSummary } from "./time-tracking";
 import { normalizeLogType, typePath, withLogType, parseLogTypes } from "./log-types";
 import { tasksFromNotes, changeTaskPriority } from "./priorities";
@@ -18,7 +19,7 @@ import { sendPush } from "./reminders";
 import { makeBackup, parseBackup, restoreMissing } from "./backup";
 import { signSession, verifySession } from "./action";
 import { APP_HTML, MANIFEST } from "./ui";
-import { pushConfigured, parseReminders } from "./reminder-parse";
+import { pushConfigured, parseReminders, nextOccurrence } from "./reminder-parse";
 import { runAppleSync, SyncError } from "./apple-sync-run";
 import { notesFor } from "./storage";
 
@@ -293,7 +294,41 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
         try { return json(await scheduler(env).testBriefing(kind, url.origin)); }
         catch (e) { const m = e instanceof Error ? e.message : String(e); return fail(m, /Wait a minute/.test(m) ? 429 : 502); }
       }
-      case "GET /priorities": return json(tasksFromNotes(await notes.all()));
+      case "GET /calendar": {
+        const zone = env.NOTES_TIMEZONE || "America/Los_Angeles";
+        const from = url.searchParams.get("from") || "", to = url.searchParams.get("to") || "";
+        const tasks = await calendarTasks(await notes.all(), from, to, zone);
+        const done = await scheduler(env).doneSince(dayStart(from, zone));
+        for (const task of tasks) if (task.repeating) task.occurrences = task.occurrences.filter(r => !done.some(d => d.note === r.note && d.text === r.text && d.at === r.at));
+        return json({ tasks, timeZone: zone });
+      }
+      case "POST /calendar/task": {
+        const { name, line, revision, schedule, priority, done, at } = await request.json<{name:string;line:number;revision:string;schedule?:string;priority?:"do"|"plan"|"delegate"|"someday"|"inbox";done?:boolean;at?:number}>();
+        if (!Number.isSafeInteger(line) || line < 0) return fail("Choose a valid task");
+        const current = await notes.get(name);
+        if (!revision || await noteRevision(current.content) !== revision) return fail("Note changed; refresh Tasks and try again", 409);
+        const raw = current.content.split("\n")[line];
+        const parsed = parseReminders(name, raw || "", env.NOTES_TIMEZONE);
+        if (done && parsed[0]?.repeat) {
+          if (!Number.isFinite(at)) return fail("Choose a repeating occurrence to complete");
+          const reminder = parsed.find(r => r.repeat && nextOccurrence(r.repeat,env.NOTES_TIMEZONE || "America/Los_Angeles",at! - 1) === at);
+          if (!reminder) return fail("That occurrence is no longer scheduled; refresh Tasks");
+          return json(await completeReminder(env,name,reminder.text,at));
+        }
+        const updated = editCalendarTask(current.content,line,{schedule,priority,done},env.NOTES_TIMEZONE || "America/Los_Angeles");
+        await notes.update(name,updated,current.sha);
+        const result = await scheduleNote(env,name,updated);
+        if (done && parsed.length) {
+          await appendLog(notes,"✓ " + parsed[0].text + " #done",{timeZone:env.NOTES_TIMEZONE});
+          for (const reminder of parsed) await scheduler(env).markDone(name,reminder.text,reminder.at);
+        }
+        return json(result);
+      }
+      case "GET /priorities": return json(tasksFromNotes(await notes.all()).map(task => {
+        const parsed = parseReminders(task.note, "- [ ] " + task.text, env.NOTES_TIMEZONE);
+        const oneOff = parsed.find(r => !r.repeat);
+        return {...task, dueAt:oneOff?.at ?? null, title:parsed[0]?.text ?? task.text};
+      }));
       case "POST /priorities": {
         const { name, line, priority, sha } = await request.json<{name:string;line:number;priority:"do"|"plan"|"delegate"|"someday"|"inbox";sha?:string}>();
         const current = await notes.get(name);
