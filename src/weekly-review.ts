@@ -1,3 +1,4 @@
+import { scheduler } from "./core";
 import { GithubNotes, localDate, type Env } from "./github";
 import { tasksFromNotes } from "./priorities";
 import { pushConfigured, DEFAULT_TIMEZONE } from "./reminder-parse";
@@ -81,7 +82,7 @@ export async function runWeeklyReview(env: Env, now = Date.now()): Promise<boole
         title: "Daybook weekly review", tags: "calendar",
         message: "Your Daybook weekly review is ready. Open Daybook to reflect and set next week's focus.",
         url: env.PUBLIC_URL ? env.PUBLIC_URL.replace(/\/$/, "") + "/app#today" : undefined
-      });
+      }, { prune: async gone => { await scheduler(env).removeSubscriptions(gone); } });
     } catch(error) {
       console.error("Weekly review notification failed", error);
     }

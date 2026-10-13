@@ -1,0 +1,50 @@
+// Daybook service worker (JavaScript, served at /app/sw.js). Shows notifications sent by this app's own
+// server, opens the app when one is tapped, and offers Done where the device shows buttons
+// (Android, desktop). Nothing is cached here: the app always loads fresh.
+
+self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("activate", event => event.waitUntil(self.clients.claim()));
+
+self.addEventListener("push", event => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch { data = { body: event.data ? event.data.text() : "" }; }
+  const options = { body: data.body || "", tag: data.tag || undefined, data, renotify: Boolean(data.tag) };
+  if (data.done) options.actions = [{ action: "done", title: "Done" }];
+  event.waitUntil(self.registration.showNotification(data.title || "Daybook", options));
+});
+
+async function openApp(url) {
+  const target = new URL(url || "/app#today", self.location.origin).href;
+  const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  for (const w of windows) {
+    if (new URL(w.url).pathname.startsWith("/app")) {
+      if ("navigate" in w && w.url !== target) { try { await w.navigate(target); } catch {} }
+      return w.focus();
+    }
+  }
+  return self.clients.openWindow(target);
+}
+
+self.addEventListener("notificationclick", event => {
+  const data = event.notification.data || {};
+  event.notification.close();
+  if (event.action === "done" && data.done) {
+    // Same signed link as before: logs it as done and stops this occurrence, without opening anything.
+    event.waitUntil(fetch(data.done, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "" })
+      .then(r => { if (!r.ok) throw new Error(String(r.status)); })
+      .catch(() => openApp(data.done)));
+    return;
+  }
+  event.waitUntil(openApp(data.url));
+});
+
+// The browser replaced this device's subscription: tell the app, so reminders keep arriving.
+self.addEventListener("pushsubscriptionchange", event => {
+  event.waitUntil((async () => {
+    const key = event.oldSubscription && event.oldSubscription.options && event.oldSubscription.options.applicationServerKey;
+    const sub = event.newSubscription || (key ? await self.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key }) : null);
+    if (!sub) return;
+    await fetch("/app/api/push/subscribe", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subscription: sub.toJSON(), replaces: event.oldSubscription ? event.oldSubscription.endpoint : undefined }) });
+  })());
+});

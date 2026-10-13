@@ -3,8 +3,14 @@ import { stripTaskId } from "./task-id";
 export interface Repeat { days: number[]; minute: number; }
 export interface Reminder { note: string; text: string; at: number; repeat?: Repeat; }
 
+import type { WebPushState } from "./web-push";
+
 export interface ReminderEnv {
   NOTES_TIMEZONE?: string;
+  /** Devices that turned on notifications in the app (web push), from the app's own storage. */
+  WEB_PUSH?: WebPushState;
+  /** Tests only: allow a local http stand-in push service. */
+  PUSH_ALLOW_HTTP?: string;
   NTFY_TOPIC?: string;
   NTFY_SERVER?: string;
   NTFY_TOKEN?: string;
@@ -18,8 +24,13 @@ export interface ReminderEnv {
 
 export const DEFAULT_TIMEZONE = "America/Los_Angeles";
 
-/** True when some push provider (Pushover or ntfy) is configured. */
-export const pushConfigured = (env: ReminderEnv) => Boolean((env.PUSHOVER_TOKEN && env.PUSHOVER_USER) || env.NTFY_TOPIC);
+/** ntfy or Pushover (older options, still delivered for setups that use them). */
+export const legacyPushConfigured = (env: ReminderEnv) => Boolean((env.PUSHOVER_TOKEN && env.PUSHOVER_USER) || env.NTFY_TOPIC);
+/** At least one device turned on notifications in the app. */
+export const webPushConfigured = (env: ReminderEnv) => Boolean(env.WEB_PUSH?.vapid && env.WEB_PUSH.subscriptions.length);
+/** True when notifications go somewhere: a device with notifications on, or ntfy/Pushover. */
+export const pushConfigured = (env: ReminderEnv) => webPushConfigured(env) || legacyPushConfigured(env);
+export const NO_PUSH = "Notifications aren't on yet: open the app's Settings and tap Turn on notifications on your phone";
 
 /** Accept "topic", " topic\n", "ntfy.sh/topic" or "https://ntfy.sh/topic/" and return just the topic. */
 export function normalizeTopic(raw: string): string {

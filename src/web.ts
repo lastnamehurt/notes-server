@@ -16,9 +16,10 @@ import { AppNotes } from "./app-notes";
 import { GithubNotes as GithubStore } from "./github";
 import { makeZip } from "./zip";
 import { sendPush } from "./reminders";
+import { deviceName, validEndpoint, type Subscription } from "./web-push";
 import { makeBackup, parseBackup, restoreMissing } from "./backup";
 import { signSession, verifySession } from "./action";
-import { APP_HTML, MANIFEST } from "./ui";
+import { APP_HTML, MANIFEST, SERVICE_WORKER } from "./ui";
 import { pushConfigured, parseReminders, nextOccurrence } from "./reminder-parse";
 import { runAppleSync, SyncError } from "./apple-sync-run";
 import { notesFor } from "./storage";
@@ -44,7 +45,7 @@ const sessionCookie = (value: string, maxAge: number) =>
 const HTML_HEADERS = {
   "Content-Type": "text/html; charset=utf-8",
   "Cache-Control": "no-store",
-  "Content-Security-Policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data:; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+  "Content-Security-Policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
   "Referrer-Policy": "no-referrer",
   "X-Content-Type-Options": "nosniff"
 };
@@ -69,6 +70,9 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
   if (path === "/app" && request.method === "GET") return new Response(APP_HTML, { headers: HTML_HEADERS });
   if (path === "/app/manifest.webmanifest")
     return new Response(MANIFEST, { headers: { "Content-Type": "application/manifest+json" } });
+  // Shows notifications from this app (see sw.txt). Scoped to /app so it never sees Claude's sign-in pages.
+  if (path === "/app/sw.js" && request.method === "GET")
+    return new Response(SERVICE_WORKER, { headers: { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache", "Service-Worker-Allowed": "/app" } });
 
   // Apple Reminders two-way sync, called by an iPhone Shortcut. Shortcuts sends no Origin header, so this
   // sits before the same-origin check and authenticates with its own secret instead of the app password.
@@ -245,7 +249,13 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
         try { new Intl.DateTimeFormat("en-US", { timeZone: timezone }); } catch { return fail("Unknown time zone " + timezone); }
         const topic = body.ntfyTopic?.trim();
         if (topic && !/^[A-Za-z0-9_-]{20,64}$/.test(topic)) return fail("Notification topic must be 20 to 64 letters, digits, - or _ (long, so nobody can guess it).");
-        const push = { ntfyTopic: topic || undefined, pushoverUser: body.pushoverUser?.trim() || undefined, pushoverToken: body.pushoverToken?.trim() || undefined };
+        // ntfy/Pushover are older options: only changed when the page sent them (it shows them only to setups that use them).
+        const legacyGiven = ["ntfyTopic", "pushoverUser", "pushoverToken"].some(k => k in body);
+        const push = legacyGiven
+          ? { ntfyTopic: topic || undefined,
+              pushoverUser: body.pushoverUser === undefined ? prev.pushoverUser : body.pushoverUser.trim() || undefined,
+              pushoverToken: body.pushoverToken === undefined ? prev.pushoverToken : body.pushoverToken.trim() || undefined }
+          : { ntfyTopic: prev.ntfyTopic, pushoverUser: prev.pushoverUser, pushoverToken: prev.pushoverToken };
         // Notes kept in this app: nothing to connect. (Moving to GitHub later is in Settings.)
         const storage = body.storage ?? prev.storage ?? (prev.notesRepo ? "github" : "app");
         if (storage === "app") {
@@ -259,15 +269,43 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
         if (!token) return fail("Paste your GitHub access key first.");
         const repo = (body.repo ?? "").trim();
         const { branch } = await prepareRepo(env, token, repo);
-        const settings: Settings = { storage: "github", githubToken: token, notesRepo: repo, notesBranch: branch, timezone, ...push };
+        const settings: Settings = { storage: "github", githubToken: token, notesRepo: repo, notesBranch: branch, timezone, codeRepo: prev.codeRepo, ...push };
         await saveSettings(env, settings);
         // Schedule reminders already written in the notes (e.g. a repository moved from another server).
         const reminders = await rescan(applySettings({ ...env, GITHUB_TOKEN: "", NOTES_REPO: "", NOTES_TIMEZONE: undefined, NOTES_BRANCH: undefined, NOTES_STORAGE: undefined }, settings)).catch(() => 0);
         return json({ ok: true, repo, branch, reminders });
       }
       case "POST /test-push": {
-        await sendPush(env, { note: "Setup", text: "Test notification from your notes ✓", at: Date.now() }, url.origin);
+        // Fresh settings: a device that just turned notifications on may be newer than this copy's cache.
+        const fresh = applySettings(env, await loadSettings(env, true));
+        await sendPush(fresh, { note: "Setup", text: "Test notification from Daybook ✓", at: Date.now() }, url.origin,
+          { prune: async gone => { await scheduler(env).removeSubscriptions(gone); }, test: true });
         return json({ ok: true });
+      }
+      // Notifications on this device (web push): the app's public key and the devices that have them on.
+      case "GET /push": {
+        const { publicKey, devices } = await scheduler(env).webPush();
+        return json({ publicKey, devices: devices.map(d => ({ endpoint: d.endpoint, device: d.device, added: d.added })),
+          legacy: { ntfy: Boolean(env.NTFY_TOPIC), pushover: Boolean(env.PUSHOVER_TOKEN && env.PUSHOVER_USER) } });
+      }
+      case "POST /push/subscribe": {
+        const { subscription: sub, replaces } = await request.json<{ subscription?: { endpoint?: string; keys?: { p256dh?: string; auth?: string } }; replaces?: string }>();
+        if (!sub?.endpoint || !validEndpoint(sub.endpoint, env.PUSH_ALLOW_HTTP === "true") || !sub.keys?.p256dh || !sub.keys?.auth)
+          return fail("This browser sent an incomplete notification subscription. Try again.");
+        const s = scheduler(env);
+        await s.webPush(); // make sure the key exists
+        if (replaces && replaces !== sub.endpoint) await s.removeSubscriptions([replaces]);
+        const devices = await s.addSubscription({ endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth },
+          device: deviceName(request.headers.get("User-Agent") ?? ""), added: Date.now() } satisfies Subscription);
+        await loadSettings(env, true);
+        return json({ devices: devices.map(d => ({ endpoint: d.endpoint, device: d.device, added: d.added })) });
+      }
+      case "POST /push/unsubscribe": {
+        const { endpoint } = await request.json<{ endpoint?: string }>();
+        if (!endpoint) return fail("Which device?");
+        const devices = await scheduler(env).removeSubscriptions([endpoint]);
+        await loadSettings(env, true);
+        return json({ devices: devices.map(d => ({ endpoint: d.endpoint, device: d.device, added: d.added })) });
       }
     }
     if (!notesConfigured(env)) return fail("Finish setup first.", 409);

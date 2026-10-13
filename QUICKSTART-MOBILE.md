@@ -42,9 +42,9 @@ On a bigger screen you'll also see **Logs** and **Goals**.
 
 ## 5. Get phone notifications (optional)
 
-1. Install the free [ntfy](https://ntfy.sh) app and open it once. On Android, tap **Subscribe in ntfy** on the **Settings** tab. On iPhone, copy the name shown there, then in ntfy tap **+**, paste it and tap **Subscribe**.
-2. In **Settings**, tap **Save and finish**, then **Send test notification**.
-3. If it doesn't arrive, ntfy may be busy. Try again later, or switch to [Pushover](https://pushover.net) (a paid app) under *Use Pushover instead*.
+1. **iPhone:** open Daybook from your Home Screen (step above), not from Safari. Needs iOS 16.4 or newer.
+2. In **Settings**, tap **Turn on notifications**, then **Allow**.
+3. Tap **Send test notification**. Reminders now arrive like any app's, with nothing else to install. Do this on each phone or computer you want them on.
 
 ## 6. Connect Claude (optional)
 
@@ -60,6 +60,6 @@ Connectors belong to the Claude account you're signed into, so do this with your
 
 - **Forgot the password:** sign in with GitHub instead. To set a new password, open your Worker in the [Cloudflare dashboard](https://dash.cloudflare.com), go to **Settings → Variables and Secrets**, edit **MCP_BEARER_TOKEN** (or **PASSWORD** if there's no MCP_BEARER_TOKEN), and save. Then reconnect Claude, which still asks for the password.
 - **Changed your mind about reminders or time zone:** open **Settings**.
-- **Reminders are late or missing:** check **Tasks** for the time, then check that notifications are on in [ntfy](https://ntfy.sh).
+- **Reminders are late or missing:** check **Tasks** for the time, then open **Settings** on your phone: it should say notifications are on for this device. On iPhone, also check **Settings → Notifications → Daybook**.
 
 For the details behind any of this, see [TECHNICAL.md](TECHNICAL.md).

@@ -354,6 +354,7 @@ dialog.sheet h2 { margin: 0 0 14px; font-size: 21px; }
 .storage-choice label { align-items: flex-start; }
 .storage-choice input { margin-top: 3px; }
 .update-banner { border: 1.5px solid var(--mark); }
+.ok-line { font-weight: 600; }
 .update-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .update-actions .update-repo { flex: 1 1 100%; }
 .update-repo label { font-weight: 600; }
@@ -923,6 +924,91 @@ async function loadUpdate() {
   try { updateInfo = await api("/update"); } catch { updateInfo = { available: false }; }
   return updateInfo;
 }
+// ---------- Notifications on this device (web push) ----------
+// The app's own service worker shows reminders as normal notifications: no extra app. On iPhone this works
+// in the Home Screen app (iOS 16.4+); Android, Mac and PC browsers work directly.
+const pushSupported = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const standalone = () => window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+function swRegistration() {
+  return navigator.serviceWorker.register("/app/sw.js", { scope: "/app" });
+}
+if (pushSupported()) swRegistration().catch(() => {});
+const keyBytes = b64 => Uint8Array.from(atob(b64.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((b64.length + 3) % 4)), c => c.charCodeAt(0));
+const sameKey = (a, b) => a && b && a.byteLength === b.byteLength && new Uint8Array(a).every((x, i) => x === b[i]);
+async function currentSubscription() {
+  if (!pushSupported()) return null;
+  const reg = await navigator.serviceWorker.getRegistration("/app");
+  return reg ? reg.pushManager.getSubscription() : null;
+}
+async function turnOnPush(info) {
+  // Ask first, straight from the tap: Safari only shows the prompt from a direct tap.
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") throw new Error(permission === "denied"
+    ? "Notifications are blocked for Daybook. Allow them in your " + (isIOS ? "iPhone's Settings → Notifications → Daybook" : "browser's site settings") + ", then try again."
+    : "Tap Allow when your device asks, to get reminders.");
+  await swRegistration();
+  const reg = await navigator.serviceWorker.ready;
+  const key = keyBytes(info.publicKey);
+  let sub = await reg.pushManager.getSubscription();
+  if (sub && !sameKey(sub.options.applicationServerKey, key)) { await sub.unsubscribe(); sub = null; }
+  sub ||= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+  return api("/push/subscribe", { method: "POST", body: { subscription: sub.toJSON() } });
+}
+async function renderPush(box) {
+  if (!box) return;
+  if (isIOS && !standalone()) {
+    box.innerHTML = h`<p>On iPhone, reminders come from the Daybook app on your Home Screen:</p>
+      <ol><li>Tap <b>Share</b> (the square with an arrow), then <b>Add to Home Screen</b>.</li>
+      <li>Open <b>Daybook</b> from your Home Screen, go to <b>Settings</b>, and tap <b>Turn on notifications</b>.</li></ol>
+      <p class="muted">Needs iOS 16.4 or newer.</p>`;
+    return;
+  }
+  if (!pushSupported()) {
+    box.innerHTML = h`<p class="muted">This browser can't show notifications. Open Daybook in Chrome, Edge, Firefox or Safari, or from your iPhone's Home Screen.</p>`;
+    return;
+  }
+  let info;
+  try { info = await api("/push"); } catch (e) { box.innerHTML = h`<p class="err">${e.message}</p>`; return; }
+  const sub = await currentSubscription().catch(() => null);
+  const here = sub && info.devices.find(d => d.endpoint === sub.endpoint);
+  const others = info.devices.filter(d => !sub || d.endpoint !== sub.endpoint);
+  const day = t => new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const blocked = Notification.permission === "denied";
+  box.innerHTML = (here
+    ? h`<p class="ok-line">✓ Notifications are on for this ${here.device}.</p>
+      <div class="update-actions"><button class="btn quiet" type="button" id="push-test">Send test notification</button>
+      <button class="btn quiet" type="button" id="push-off">Turn off on this device</button></div>`
+    : blocked
+    ? h`<p>Notifications are blocked for Daybook on this device. Allow them in your ${isIOS ? "iPhone's Settings → Notifications → Daybook" : "browser's site settings"}, then come back here.</p>`
+    : h`<p>Get reminders as notifications on this device. Nothing else to install.</p>
+      <button class="btn" type="button" id="push-on">Turn on notifications</button>`)
+    + (others.length ? h`<p class="muted">Also on: ${others.map(d => d.device + " (since " + day(d.added) + ")").join(", ")}.</p>` : "")
+    + ((info.legacy.ntfy || info.legacy.pushover) && info.devices.length
+      ? h`<p class="muted">Reminders now go to these devices instead of ${info.legacy.pushover ? "Pushover" : "ntfy"}.</p>` : "")
+    + `<p class="err" role="alert" id="push-err"></p>`;
+  const err = m => { const p = box.querySelector("#push-err"); if (p) p.textContent = m; };
+  box.querySelector("#push-on")?.addEventListener("click", async e => {
+    const b = e.currentTarget; b.disabled = true; b.textContent = "Turning on…";
+    try { await turnOnPush(info); cfg = await api("/config"); toast("Notifications are on"); await renderPush(box); }
+    catch (x) { if (x instanceof Locked) return showLock(); err(x.message); b.disabled = false; b.textContent = "Turn on notifications"; }
+  });
+  box.querySelector("#push-test")?.addEventListener("click", async e => {
+    const b = e.currentTarget; b.disabled = true; b.textContent = "Sending…";
+    try { await api("/test-push", { method: "POST" }); toast("Sent. Check your notifications"); b.textContent = "Send again"; }
+    catch (x) { err("Didn't send: " + x.message); b.textContent = "Try again"; }
+    b.disabled = false;
+  });
+  box.querySelector("#push-off")?.addEventListener("click", async e => {
+    const b = e.currentTarget; b.disabled = true;
+    try {
+      await api("/push/unsubscribe", { method: "POST", body: { endpoint: sub.endpoint } });
+      await sub.unsubscribe().catch(() => {});
+      cfg = await api("/config"); toast("Notifications are off on this device"); await renderPush(box);
+    } catch (x) { err(x.message); b.disabled = false; }
+  });
+}
+
 // Update now starts the Update Daybook workflow in the owner's copy. Without a GitHub connection it opens
 // that page instead, and if the app can't tell which repository is the copy, it asks once.
 const updateLink = u => u.canRun
@@ -1653,6 +1739,8 @@ views.setup = async () => {
   const first = !cfg.configured && cfg.canSetup !== false;
   const tz = prev.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
   const topic = prev.ntfyTopic || randomTopic();
+  // ntfy and Pushover are older options, shown only to setups that already use them.
+  const legacy = prev.notify === "ntfy" || prev.notify === "pushover";
   let chosenRepo = prev.notesRepo || "";
   const managed = cfg.canSetup === false;
   const connect = cfg.githubConnect && !managed;
@@ -1724,26 +1812,12 @@ views.setup = async () => {
     <section class="step" id="s4"><h3><span class="n">${n.push}</span>Phone reminders (optional)</h3>
       ${raw(first
         ? `<p class="skip-note"><b>Not now?</b> Skip this and tap <b>Save and finish</b>. Notes, logs and tasks all work without it, and you can turn reminders on any time in Settings.</p>`
-        : `<p class="muted">Optional and free.</p>`)}
-      ${raw(isAndroid
-        ? h`<ol>
-        <li>Install the free <b>ntfy</b> app from <a href="${NTFY_ANDROID}" target="_blank" rel="noopener">Google Play</a>, open it once and allow notifications.</li>
-        <li>Come back here and tap <b>Subscribe in ntfy</b>. ntfy opens with your private reminder channel ready; tap <b>Subscribe</b>.</li>
-      </ol>
-      <p><a class="btn a-btn" id="ntfy-subscribe" href="${"ntfy://ntfy.sh/" + topic + "?display=Daybook"}">Subscribe in ntfy</a></p>
-      <details class="more"><summary>Do it by hand instead</summary><p class="muted">In ntfy, tap <b>+</b> and paste this name:</p>
-        <div class="copyrow"><code id="topic">${topic}</code><button class="btn quiet" id="copytopic" type="button">Copy</button></div></details>`
-        : h`<ol>
-        <li>Install the free <b>ntfy</b> app: <a href="${NTFY_IOS}" target="_blank" rel="noopener">iPhone</a> or <a href="${NTFY_ANDROID}" target="_blank" rel="noopener">Android</a>. Open it once and allow notifications.</li>
-        <li>Tap <b>Copy</b> below. In ntfy, tap <b>+</b>, paste into <b>Topic name</b>, and tap <b>Subscribe</b>.</li>
-      </ol>
-      <div class="copyrow"><code id="topic">${topic}</code><button class="btn quiet" id="copytopic" type="button">Copy</button></div>
-      <p class="muted">It's long so nobody can guess it. Keep it private.</p>`)}
-      <label class="choices" style="border:0"><input type="checkbox" id="usentfy" ${prev.notify === "pushover" ? "" : "checked"}> Send my reminders to ntfy</label>
-      <details class="more"><summary>Use Pushover instead</summary>
-        <p class="muted">Pushover is a paid app ($5 once). Enter your user key and an application token from pushover.net.</p>
-        <input type="text" id="pouser" placeholder="User key" autocomplete="off">
-        <input type="text" id="potoken" placeholder="Application API token" autocomplete="off"></details></section>
+        : "")}
+      <div id="push-box" aria-live="polite"><p class="muted">Checking this device…</p></div>
+      ${raw(legacy ? h`<details class="more" id="legacy-push"><summary>${prev.notify === "pushover" ? "Pushover" : "ntfy"} (older option)</summary>
+        <p class="muted">Still works, but needs an extra app. Once a device has notifications on above, reminders go there instead, and you can stop using ${prev.notify === "pushover" ? "Pushover" : "ntfy"}.</p>
+        ${raw(prev.notify === "ntfy" ? h`<div class="copyrow"><code id="topic">${topic}</code><button class="btn quiet" id="copytopic" type="button">Copy</button></div>` : "")}
+        <label class="choices" style="border:0"><input type="checkbox" id="uselegacy" checked> Keep ${prev.notify === "pushover" ? "Pushover" : "ntfy"} as a backup</label></details>` : "")}</section>
 
     ${raw(first ? "" : assistantBlock(location.origin + "/mcp"))}
 
@@ -1769,8 +1843,12 @@ views.setup = async () => {
   };
   const check = async () => {
     const b = $("#check"); b.disabled = true; b.textContent = "Checking…";
-    try { drawRepos((await api("/setup/repos", { method: "POST", body: { token: $("#tok").value.trim() } })).repos); }
-    catch (e) { if (e instanceof Locked) return showLock(); $("#repos").innerHTML = h`<p class="err">${e.message}</p>`; }
+    try {
+      const { repos } = await api("/setup/repos", { method: "POST", body: { token: $("#tok").value.trim() } });
+      if (!b.isConnected) return; // left Settings while loading
+      drawRepos(repos);
+    }
+    catch (e) { if (e instanceof Locked) return showLock(); if (!b.isConnected) return; $("#repos").innerHTML = h`<p class="err">${e.message}</p>`; }
     b.disabled = false; b.textContent = "Check key";
   };
   // Connect GitHub: show a code, she approves it on GitHub, and this page notices on its own.
@@ -1841,21 +1919,21 @@ views.setup = async () => {
       : h`<p>You're up to date${u.current ? " (version " + u.current + ")" : ""}.</p>`;
   });
   loadBriefings();
-  $("#copytopic").onclick = e => copy(topic, e.target);
+  if ($("#copytopic")) $("#copytopic").onclick = e => copy(topic, e.target);
+  renderPush($("#push-box"));
 
 
   $("#save").onclick = async () => {
     const b = $("#save"); b.disabled = true; b.textContent = "Saving…"; $("#saveerr").textContent = "";
-    const pushoverUser = $("#pouser").value.trim(), pushoverToken = $("#potoken").value.trim();
     try {
-      const push = { ntfyTopic: $("#usentfy").checked && !(pushoverUser && pushoverToken) ? topic : "", pushoverUser, pushoverToken };
+      // ntfy/Pushover (older options) only appear for setups that use them; unticking stops them.
+      // Otherwise nothing is sent and the server keeps what it has.
+      const push = $("#uselegacy") && !$("#uselegacy").checked ? { ntfyTopic: "", pushoverUser: "", pushoverToken: "" } : {};
       if (chosenStorage === "app") await api("/setup", { method: "POST", body: { storage: "app", timezone: $("#tz").value, ...push } });
       else {
       if (!chosenRepo) throw new Error(connect ? "Connect GitHub first." : "Check your key and pick where to save notes.");
       await api("/setup", { method: "POST", body: { storage: "github",
-        token: $("#tok") ? $("#tok").value.trim() : "", repo: chosenRepo, timezone: $("#tz").value,
-        ntfyTopic: $("#usentfy").checked && !(pushoverUser && pushoverToken) ? topic : "",
-        pushoverUser, pushoverToken } });
+        token: $("#tok") ? $("#tok").value.trim() : "", repo: chosenRepo, timezone: $("#tz").value, ...push } });
       }
       cfg = await api("/config"); drawDate(); $("#tabs").hidden = false; $("#settingsTab").hidden = !cfg.configured;
       showDone(location.origin + "/mcp");
@@ -1867,7 +1945,7 @@ views.setup = async () => {
 function showDone(mcpUrl) {
   main.innerHTML = h`<div class="setup">
     <h2>You're set up</h2>
-    <section class="step ok"><h3><span class="n">✓</span>Notes are saving to your private repository</h3>
+    <section class="step ok"><h3><span class="n">✓</span>${cfg.storage === "app" ? "Your notes are saved in this app" : "Notes are saving to your private repository"}</h3>
       ${raw(cfg.push ? `<p>Send yourself a test reminder to check your phone gets it.</p><button class="btn quiet" id="test" type="button">Send test notification</button>` : `<p class="muted">Phone notifications are off. You can turn them on in Settings.</p>`)}</section>
     <section class="step"><h3><span class="n">2</span>Connect your AI assistant</h3>
       <p>Tap the one you use. Claude and ChatGPT open with your address copied, ready to paste; Cursor adds it for you.</p>
@@ -1928,6 +2006,7 @@ async function loadBriefings() {
   if (!body) return;
   let state;
   try { state = await api("/briefings"); } catch (e) { body.innerHTML = h`<p class="muted">Couldn't load briefings: ${e.message}</p>`; return; }
+  if (!body.isConnected) return; // left Settings while loading
   const row = kind => {
     const k = state.settings[kind], st = state.status[kind], next = state.next[kind];
     const last = st ? (st.result === "sent" ? "Last sent " + briefWhen(st.at) : (st.result === "skipped" ? "Skipped " : "Failed ") + briefWhen(st.at) + (st.detail ? ": " + st.detail : "")) : "";

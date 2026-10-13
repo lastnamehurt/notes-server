@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
-import { nextOccurrence, normalizeTopic, pushConfigured, DEFAULT_TIMEZONE, type Reminder, type ReminderEnv } from "./reminder-parse";
+import { nextOccurrence, normalizeTopic, pushConfigured, legacyPushConfigured, webPushConfigured, NO_PUSH, DEFAULT_TIMEZONE, type Reminder, type ReminderEnv } from "./reminder-parse";
+import { generateVapidKeys, sendWebPush, type PushMessage, type Subscription, type WebPushState } from "./web-push";
 import { signAction } from "./action";
 import { sendOnce } from "./delivery";
 import { applySettings, type Settings } from "./settings";
@@ -17,12 +18,38 @@ async function doneUrl(env: ReminderEnv, r: Reminder, origin?: string): Promise<
   return base.replace(/\/+$/, "") + "/done?a=" + await signAction(secret, { note: r.note, text: r.text, at: r.at });
 }
 
-/** Send via Pushover when configured, otherwise ntfy. */
-export async function sendPush(env: ReminderEnv, r: Reminder, origin?: string): Promise<void> {
-  if (!pushConfigured(env)) throw new Error("No push provider configured (set PUSHOVER_TOKEN + PUSHOVER_USER, or NTFY_TOPIC)");
-  const done = await doneUrl(env, r, origin);
-  if (env.PUSHOVER_TOKEN && env.PUSHOVER_USER) return sendPushover(env, r, done);
-  return sendNtfy(env, r, done);
+/** Where to tell the app a device's push subscription has expired. */
+export interface DeliveryOptions { prune?: (gone: string[]) => Promise<void>; /** A test: no Done button. */ test?: boolean }
+
+const baseUrl = (env: ReminderEnv, origin?: string) => (env.PUBLIC_URL?.trim() || origin || "").replace(/\/+$/, "") || undefined;
+
+/**
+ * Send to every device that turned on notifications in the app. ntfy and Pushover (older options) are used
+ * only when no device has notifications on, so nobody gets everything twice after switching.
+ * Throws when nothing was delivered, so callers retry.
+ */
+async function deliver(env: ReminderEnv, message: PushMessage, legacy: () => Promise<void>, opts: DeliveryOptions = {}, origin?: string): Promise<void> {
+  if (webPushConfigured(env)) {
+    const fromUrl = (() => { try { return message.url ? new URL(message.url).origin : undefined; } catch { return undefined; } })();
+    const base = baseUrl(env, origin) ?? fromUrl;
+    const r = await sendWebPush(env.WEB_PUSH!, message, base?.startsWith("https://") ? base : "mailto:daybook@users.noreply.github.com");
+    if (r.gone.length) await opts.prune?.(r.gone).catch(e => console.error("couldn't forget expired devices", e));
+    if (r.delivered) return;
+    if (legacyPushConfigured(env)) return legacy();
+    if (r.errors.length) throw new Error("Notification didn't send: " + r.errors.join("; "));
+    throw new Error("Notifications were turned off on every device. Turn them on again in the app's Settings.");
+  }
+  if (legacyPushConfigured(env)) return legacy();
+  throw new Error(NO_PUSH);
+}
+
+/** A reminder going off: tapping opens Today; where devices show buttons, Done marks it done. */
+export async function sendPush(env: ReminderEnv, r: Reminder, origin?: string, opts: DeliveryOptions = {}): Promise<void> {
+  if (!pushConfigured(env)) throw new Error(NO_PUSH);
+  const done = opts.test ? undefined : await doneUrl(env, r, origin);
+  const base = baseUrl(env, origin);
+  return deliver(env, { title: "Reminder", body: r.text, url: base ? base + "/app#today" : "/app#today", done, tag: "r-" + r.at + "-" + r.text.slice(0, 40) },
+    () => env.PUSHOVER_TOKEN && env.PUSHOVER_USER ? sendPushover(env, r, done) : sendNtfy(env, r, done), opts, origin);
 }
 
 async function sendPushover(env: ReminderEnv, r: Reminder, done?: string): Promise<void> {
@@ -52,9 +79,14 @@ async function sendNtfy(env: ReminderEnv, r: Reminder, done?: string): Promise<v
   }
 }
 
-/** A plain notification (briefings, weekly review): title, text and an optional link. Pushover when configured, otherwise ntfy. */
-export async function sendNotice(env: ReminderEnv, n: { title: string; message: string; url?: string; urlTitle?: string; tags?: string }): Promise<void> {
-  if (!pushConfigured(env)) throw new Error("No push provider configured (set PUSHOVER_TOKEN + PUSHOVER_USER, or NTFY_TOPIC)");
+/** A plain notification (briefings, weekly review): title, text and an optional link. */
+export async function sendNotice(env: ReminderEnv, n: { title: string; message: string; url?: string; urlTitle?: string; tags?: string }, opts: DeliveryOptions = {}): Promise<void> {
+  if (!pushConfigured(env)) throw new Error(NO_PUSH);
+  return deliver(env, { title: n.title, body: n.message, url: n.url, tag: n.tags }, () => sendLegacyNotice(env, n), opts);
+}
+
+/** ntfy or Pushover (older options). */
+async function sendLegacyNotice(env: ReminderEnv, n: { title: string; message: string; url?: string; urlTitle?: string; tags?: string }): Promise<void> {
   let response: Response, provider: string;
   if (env.PUSHOVER_TOKEN && env.PUSHOVER_USER) {
     provider = "Pushover";
@@ -84,6 +116,7 @@ const RETRY_MS = 5 * 60 * 1000;
 const LAST_ERROR = "status:lastError";
 const ORIGIN = "status:origin";
 const SETTINGS = "settings";
+const WEB_PUSH = "webpush";
 const DEVICE_FLOW = "status:deviceFlow";
 const FAILS = "status:passwordFailures";
 const MAX_FAILS = 10;
@@ -179,11 +212,43 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
 
   /** Settings saved from the app's setup page (this "global" instance holds them; see settings.ts). */
   async getSettings(): Promise<Settings | undefined> {
-    return this.ctx.storage.get<Settings>(SETTINGS);
+    const settings = await this.ctx.storage.get<Settings>(SETTINGS);
+    const webPush = await this.ctx.storage.get<WebPushState>(WEB_PUSH);
+    return webPush?.subscriptions.length ? { ...settings, webPush } : settings;
   }
 
   async putSettings(settings: Settings): Promise<void> {
-    await this.ctx.storage.put(SETTINGS, settings);
+    // Devices are kept on their own (below), so saving settings never undoes a device turning notifications on.
+    const { webPush: _devices, ...rest } = settings;
+    await this.ctx.storage.put(SETTINGS, rest);
+  }
+
+  /** The app's push key (made once, on first use) and the devices with notifications on. */
+  async webPush(): Promise<{ publicKey: string; devices: Subscription[] }> {
+    let state = await this.ctx.storage.get<WebPushState>(WEB_PUSH);
+    if (!state?.vapid) {
+      state = { vapid: await generateVapidKeys(), subscriptions: state?.subscriptions ?? [] };
+      await this.ctx.storage.put(WEB_PUSH, state);
+    }
+    return { publicKey: state.vapid!.publicKey, devices: state.subscriptions };
+  }
+
+  /** A device turned notifications on (or its browser renewed its subscription). */
+  async addSubscription(sub: Subscription): Promise<Subscription[]> {
+    const state = await this.ctx.storage.get<WebPushState>(WEB_PUSH);
+    if (!state?.vapid) throw new Error("Push key missing; reload the app and try again");
+    const subscriptions = [sub, ...state.subscriptions.filter(s => s.endpoint !== sub.endpoint)].slice(0, 20);
+    await this.ctx.storage.put(WEB_PUSH, { ...state, subscriptions });
+    return subscriptions;
+  }
+
+  /** Forget devices: turned off in Settings, or expired according to their push service. */
+  async removeSubscriptions(endpoints: string[]): Promise<Subscription[]> {
+    const state = await this.ctx.storage.get<WebPushState>(WEB_PUSH);
+    if (!state) return [];
+    const subscriptions = state.subscriptions.filter(s => !endpoints.includes(s.endpoint));
+    await this.ctx.storage.put(WEB_PUSH, { ...state, subscriptions });
+    return subscriptions;
   }
 
   /** A "Connect GitHub" sign-in in progress (the device code never leaves the server). */
@@ -275,9 +340,11 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
     if (last && Date.now() - last < 60_000) throw new Error("Wait a minute before sending another test");
     await this.ctx.storage.put(BRIEF_TEST, Date.now());
     const b = await this.previewBriefing(kind);
-    await sendNotice(await this.briefingEnv(), { title: b.title, message: b.message, url: await this.appLink(origin), tags: "sunrise" });
+    await sendNotice(await this.briefingEnv(), { title: b.title, message: b.message, url: await this.appLink(origin), tags: "sunrise" }, this.pruning);
     return b;
   }
+
+  private pruning: DeliveryOptions = { prune: async gone => { await this.removeSubscriptions(gone); } };
 
   private async appLink(origin?: string): Promise<string | undefined> {
     const base = this.env.PUBLIC_URL?.trim() || origin || await this.ctx.storage.get<string>(ORIGIN);
@@ -316,7 +383,7 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
         }
         const url = await this.appLink();
         // Record the send only after the provider accepts it; a retry after that never resends.
-        await sendOnce(false, () => sendNotice(env!, { title: b.title, message: b.message, url, tags: "sunrise" }),
+        await sendOnce(false, () => sendNotice(env!, { title: b.title, message: b.message, url, tags: "sunrise" }, this.pruning),
           () => this.ctx.storage.put(briefSent(kind, date), { at: now }));
         await advance({ at: now, result: "sent" });
       } catch (e) {
@@ -389,7 +456,7 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
         if (!alreadyDone) {
           // Without a push provider the reminder still "goes off" (shows as due in the app) and repeats roll forward.
           if (pushConfigured(env) && !alreadyDelivered) {
-            await sendOnce(false, () => sendPush(env, r, origin), () => this.ctx.storage.put(deliveredKey(r), { at: r.at }));
+            await sendOnce(false, () => sendPush(env, r, origin, this.pruning), () => this.ctx.storage.put(deliveredKey(r), { at: r.at }));
             await this.ctx.storage.delete(LAST_ERROR);
           }
           await this.ctx.storage.put(firedKey(r), { note: r.note, text: r.text, at: r.at, repeat: Boolean(r.repeat) } satisfies Fired);

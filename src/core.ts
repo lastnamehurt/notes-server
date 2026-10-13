@@ -23,7 +23,7 @@ export async function scheduleNote(env: Env, name: string, content: string) {
     const out: Record<string, unknown> = { name };
     if (upcoming.length) {
       out.reminders = upcoming.map(r => fmt(env, r));
-      if (!pushConfigured(env)) out.warning = "Reminders saved but no push provider is configured (PUSHOVER_TOKEN + PUSHOVER_USER, or NTFY_TOPIC), so no push will be sent";
+      if (!pushConfigured(env)) out.warning = "Reminders saved, but notifications aren't on yet, so nothing will buzz. Open the app's Settings and tap Turn on notifications on your phone.";
     }
     return out;
   } catch (e) {
@@ -46,21 +46,24 @@ export async function loadSettings(env: Env, fresh = false): Promise<Settings | 
   // A "not set up yet" copy is never reused: Cloudflare runs several copies of the app, and one that looked
   // before setup finished must not keep saying "Finish setup first" afterwards.
   const setUp = (s: Settings | undefined) => Boolean(s?.storage || s?.notesRepo);
-  if (!fresh && cached && setUp(cached.settings) && Date.now() - cached.at < SETTINGS_TTL_MS) return cached.settings;
+  if (!fresh && cached && (setUp(cached.settings) || deployConfigured(env)) && Date.now() - cached.at < SETTINGS_TTL_MS) return cached.settings;
   const settings = await scheduler(env).getSettings();
   cached = { at: Date.now(), settings };
   return settings;
 }
 
 export async function saveSettings(env: Env, settings: Settings): Promise<void> {
-  await scheduler(env).putSettings(settings);
-  cached = { at: Date.now(), settings };
+  const s = scheduler(env);
+  await s.putSettings(settings);
+  // Re-read rather than cache what was saved: the stored settings also carry the devices with notifications on.
+  cached = { at: Date.now(), settings: await s.getSettings() };
 }
 
 /** The deployment's Env with setup-page settings filled in. Skips the lookup when the deployment sets everything. */
 export async function effectiveEnv(env: Env): Promise<Env> {
+  // Always read the app's settings: even a server configured on the deployment keeps the devices that
+  // turned on notifications there.
   const fromDeploy = deployConfigured(env);
-  if (fromDeploy && pushConfigured(env)) return { ...env, DEPLOY_CONFIGURED: true };
   return { ...applySettings(env, await loadSettings(env)), DEPLOY_CONFIGURED: fromDeploy };
 }
 

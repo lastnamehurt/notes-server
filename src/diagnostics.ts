@@ -40,8 +40,11 @@ export async function runDiagnostics(env: Env): Promise<DiagnosticReport> {
     add("reminders", error ? "warning" : "pass",
       error ? "Reminder delivery error recorded" : "Reminder scheduler is responding");
   } catch { add("reminders", "fail", "Reminder scheduler is unavailable"); }
+  const devices = env.WEB_PUSH?.subscriptions.length ?? 0;
   add("notifications", pushConfigured(env) ? "pass" : "warning",
-    pushConfigured(env) ? "Push notifications configured" : "Push notifications not configured");
+    devices ? `Notifications are on for ${devices} device${devices === 1 ? "" : "s"}`
+      : pushConfigured(env) ? "Notifications go to " + (env.PUSHOVER_TOKEN ? "Pushover" : "ntfy") + " (older option; turn on notifications on your phone in Settings)"
+      : "Notifications aren't on yet (optional): turn them on in Settings on your phone");
   add("backup", "pass", "Backup and restore API installed; full recovery must be tested separately");
   return { status: checks.some(c => c.status === "fail") ? "fail" :
     checks.some(c => c.status === "warning") ? "warning" : "pass",
