@@ -1766,6 +1766,33 @@ function assistantList(list) {
       <span><b>${a.name}</b><span class="muted">${raw((() => { const t = typeof a.since === "number" ? new Date(a.since < 1e12 ? a.since * 1000 : a.since) : new Date(a.since); return Number.isNaN(t.getTime()) ? "" : h` · connected ${t.toLocaleDateString()}`; })())}</span></span>
       <button class="btn quiet" type="button" data-disconnect="${a.id}">Disconnect</button></li>`).join(""))}</ul>`;
 }
+/** Settings → Calendar: make the feed address, subscribe to a calendar, and list its next events. */
+async function wireCalendar() {
+  const showEvents = async () => {
+    const box = $("#cal-events");
+    if (!box) return;
+    try {
+      const res = await api("/calendar/upcoming");
+      if (!box.isConnected) return;
+      if (!res.connected) { box.innerHTML = h`<p class="muted">No calendar shown yet.</p>`; return; }
+      const fmt = e => e.allDay ? new Date(e.start).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" })
+        : new Date(e.start).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: cfg.timeZone });
+      box.innerHTML = res.events.length
+        ? h`<h4>Next 14 days</h4><ul class="assistant-list">${raw(res.events.slice(0, 8).map(e => h`<li class="assistant-row"><span><b>${e.title}</b><span class="muted"> · ${fmt(e)}</span></span></li>`).join(""))}</ul>`
+        : h`<p class="muted">No events in the next 14 days.</p>`;
+    } catch (e) { if (box.isConnected) box.innerHTML = h`<p class="err">${e.message}</p>`; }
+  };
+  $("#cal-make").onclick = async () => {
+    if (!confirm("Make a new address? The old one stops working.")) return;
+    try { const { url } = await api("/calendar/token", { method: "POST", body: {} }); $("#cal-url").innerHTML = h`<div class="copyrow"><code>${url}</code><button class="btn quiet" id="cal-copy" type="button">Copy</button></div>`; $("#cal-copy").onclick = e => copy(url, e.target); }
+    catch (e) { toast(e.message); }
+  };
+  $("#cal-save").onclick = async () => {
+    try { await api("/calendar/feed", { method: "POST", body: { url: $("#cal-feed").value } }); toast($("#cal-feed").value.trim() ? "Calendar saved" : "Calendar removed"); showEvents(); }
+    catch (e) { toast(e.message); }
+  };
+  showEvents();
+}
 async function fillAssistantRow() {
   const el = $("#assistants-summary");
   if (!el) return;
@@ -1902,6 +1929,18 @@ views.setup = async () => {
       <p class="muted" id="assistants-summary">Checking which assistants are connected…</p>
       <a class="btn quiet" href="#assistants">Connect or manage assistants →</a></section>`)}
 
+    ${raw(first ? "" : `<section class="step" id="calendar"><h3>Calendar</h3>
+      <p class="muted">Show your Daybook tasks in your calendar app, and see one calendar's events here.</p>
+      <h4>Your tasks in your calendar</h4>
+      <p class="muted">In Apple Calendar, Google Calendar or Outlook, add a subscribed or internet calendar and paste this address. New address = the old one stops working.</p>
+      <button class="btn quiet" id="cal-make" type="button">Make my calendar address</button>
+      <div id="cal-url"></div>
+      <h4>Show a calendar here</h4>
+      <p class="muted">Paste the secret address of a calendar (its private ICS link). Daybook only reads it.</p>
+      <label class="field"><span>Calendar address</span><input id="cal-feed" type="url" inputmode="url" placeholder="https://…"></label>
+      <div class="row"><button class="btn" id="cal-save" type="button">Save address</button></div>
+      <div id="cal-events"><p class="muted">Loading…</p></div></section>`)}
+
     ${raw(first ? "" : `<section class="step" id="updates"><h3>Updates</h3><div id="update-status"><p class="muted">Checking for updates…</p></div></section>`)}
     ${raw(first ? "" : `<section class="step" id="diagnostics"><h3>Check everything is working</h3>
       <p>Checks your notes repository, sign-in, reminders and notifications. Nothing is changed.</p>
@@ -1992,7 +2031,7 @@ views.setup = async () => {
     $("#tok").addEventListener("paste", () => setTimeout(check, 50));
     if (prev.hasToken) check();
   }
-  if (!first) fillAssistantRow();
+  if (!first) { fillAssistantRow(); wireCalendar(); }
   if (!first) loadUpdate().then(u => {
     const box = $("#update-status"); if (!box) return;
     box.innerHTML = u.available

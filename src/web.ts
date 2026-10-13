@@ -24,6 +24,8 @@ import { pushConfigured, parseReminders, nextOccurrence } from "./reminder-parse
 import { runAppleSync, SyncError } from "./apple-sync-run";
 import { notesFor } from "./storage";
 import { taskDeferrals } from "./awareness-deferrals";
+import { buildIcs, parseIcs } from "./ics";
+import { b64url } from "./web-push";
 
 /** Best-effort post-commit capture; a history failure must never undo a saved note. */
 async function captureTaskDeferrals(env: Env, name: string, before: string, after: string): Promise<void> {
@@ -60,6 +62,41 @@ const HTML_HEADERS = {
   "Referrer-Policy": "no-referrer",
   "X-Content-Type-Options": "nosniff"
 };
+
+/** Tasks as the Shortcut and calendar feeds see them: title without the date text, and the due time if one is set. */
+function exportableTasks(notes: { name: string; content: string }[], timezone: string) {
+  return tasksFromNotes(notes).map(task => {
+    const source = notes.find(n => n.name === task.note);
+    const rawLine = source?.content.split("\n")[task.line] || "";
+    const parsed = parseReminders(task.note, rawLine, timezone);
+    const oneOff = parsed.find(rem => !rem.repeat);
+    const title = task.text.replace(/\s+@\d{4}-\d{2}-\d{2}(?:\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?)?\b/i, "").trim();
+    const repeat = parsed.find(rem => rem.repeat);
+    return { id: task.note + ":" + task.line, title, priority: task.priority,
+      dueAt: oneOff ? new Date(oneOff.at).toISOString() : null,
+      repeating: Boolean(repeat), sourceNote: task.note };
+  });
+}
+
+/** Constant-time comparison of two secrets (hashed first, so lengths and prefixes don't leak). */
+async function sameSecret(a: string, b: string): Promise<boolean> {
+  const digest = async (value: string) => new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
+  const [x, y] = await Promise.all([digest(a), digest(b)]);
+  let diff = 0;
+  for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i];
+  return diff === 0;
+}
+
+/** Subscribed calendar: only https addresses on public hostnames, fetched with a timeout and a size limit. */
+function validCalendarUrl(raw: string): string | null {
+  let u: URL;
+  try { u = new URL(raw.trim()); } catch { return null; }
+  const host = u.hostname.toLowerCase();
+  const literal = /^[\d.]+$/.test(host) || host.includes(":") || host === "localhost" || host.endsWith(".local") || host.endsWith(".internal");
+  if (u.protocol !== "https:" || literal || u.href.length > 500) return null;
+  return u.href;
+}
+const calendarCache = new Map<string, { at: number; text: string }>();
 
 /** Check the Shortcuts secret (SHORTCUTS_TOKEN). Returns an error response, or null when allowed. */
 async function shortcutAuth(request: Request, env: Env): Promise<Response | null> {
@@ -107,6 +144,20 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
     }
   }
 
+  // Calendar feed (iCalendar) of tasks with a due time. The secret in the address is the only way in.
+  if (path === "/app/calendar.ics" && request.method === "GET") {
+    const settings = await loadSettings(env, true);
+    const token = new URL(request.url).searchParams.get("token") ?? "";
+    if (!settings?.calendarToken || !token || !(await sameSecret(token, settings.calendarToken))) return fail("Not found", 404);
+    const configured = await effectiveEnv(env);
+    if (!notesConfigured(configured)) return fail("Notes not configured", 409);
+    const timezone = configured.NOTES_TIMEZONE || "America/Los_Angeles";
+    const tasks = exportableTasks(await notesFor(configured).all(), timezone).filter(t => t.dueAt);
+    return new Response(buildIcs(tasks.map(t => ({ id: t.id, title: t.title, dueAt: t.dueAt!, note: t.sourceNote })), Date.now()), {
+      headers: { "Content-Type": "text/calendar; charset=utf-8", "Cache-Control": "no-store", "Content-Disposition": 'inline; filename="daybook.ics"' },
+    });
+  }
+
   // Read-only Shortcut feed. A separate secret avoids exposing the app/MCP password to Shortcuts.
   if (path === "/app/shortcuts/tasks" && request.method === "GET") {
     const denied = await shortcutAuth(request, env);
@@ -115,18 +166,7 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
     if (!notesConfigured(configured)) return fail("Notes not configured", 409);
     const notes = await notesFor(configured).all();
     const timezone = configured.NOTES_TIMEZONE || "America/Los_Angeles";
-    const tasks = tasksFromNotes(notes);
-    const exported = tasks.map(task => {
-      const source = notes.find(n => n.name === task.note);
-      const rawLine = source?.content.split("\n")[task.line] || "";
-      const parsed = parseReminders(task.note, rawLine, timezone);
-      const oneOff = parsed.find(rem => !rem.repeat);
-      const title = task.text.replace(/\s+@\d{4}-\d{2}-\d{2}(?:\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?)?\b/i, "").trim();
-      const repeat = parsed.find(rem => rem.repeat);
-      return { id: task.note + ":" + task.line, title, priority: task.priority,
-        dueAt: oneOff ? new Date(oneOff.at).toISOString() : null,
-        repeating: Boolean(repeat), sourceNote: task.note };
-    });
+    const exported = exportableTasks(notes, timezone);
     return json({ version: 1, timezone, tasks: exported });
 
   }
@@ -378,6 +418,46 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
         if (!id || !oauth) return fail("Which assistant?");
         await oauth.revokeGrant(id, "notes-owner");
         return json({ ok: true });
+      }
+      // Calendar: a private feed of your tasks (regenerate to revoke), and one subscribed calendar to read.
+      case "POST /calendar/token": {
+        const bytes = crypto.getRandomValues(new Uint8Array(32));
+        const token = b64url(bytes);
+        const prev = (await loadSettings(env, true)) ?? {};
+        await saveSettings(env, { ...prev, calendarToken: token });
+        return json({ url: new URL(request.url).origin + "/app/calendar.ics?token=" + token });
+      }
+      case "POST /calendar/feed": {
+        const { url } = await request.json<{ url?: string }>();
+        const prev = (await loadSettings(env, true)) ?? {};
+        if (!url?.trim()) { calendarCache.clear(); await saveSettings(env, { ...prev, calendarFeed: undefined }); return json({ url: null }); }
+        const clean = validCalendarUrl(url);
+        if (!clean) return fail("Paste the calendar's secret address, starting with https://");
+        calendarCache.clear();
+        await saveSettings(env, { ...prev, calendarFeed: clean });
+        return json({ url: clean });
+      }
+      case "GET /calendar/upcoming": {
+        const settings = await loadSettings(env, true);
+        if (!settings?.calendarFeed) return json({ events: [], connected: false });
+        const cached = calendarCache.get(settings.calendarFeed);
+        let text: string;
+        if (cached && Date.now() - cached.at < 15 * 60_000) text = cached.text;
+        else {
+          try {
+            const res = await fetch(settings.calendarFeed, { signal: AbortSignal.timeout(8000), redirect: "follow" });
+            if (!res.ok) return fail("Your calendar didn't answer (" + res.status + "). Check the address.", 502);
+            const length = Number(res.headers.get("content-length") ?? 0);
+            if (length > 2_000_000) return fail("That calendar is too large to read.", 502);
+            text = await res.text();
+          } catch { return fail("Couldn't reach your calendar. Check the address and your connection.", 502); }
+          calendarCache.set(settings.calendarFeed, { at: Date.now(), text });
+        }
+        try {
+          const configured = await effectiveEnv(env);
+          const events = parseIcs(text, { days: 14, zone: configured.NOTES_TIMEZONE || "America/Los_Angeles" });
+          return json({ connected: true, events: events.slice(0, 30).map(e => ({ title: e.title, start: e.start, end: e.end, allDay: e.allDay })) });
+        } catch (e) { return fail(e instanceof Error ? e.message : String(e), 502); }
       }
       case "POST /push/unsubscribe": {
         const { endpoint } = await request.json<{ endpoint?: string }>();
