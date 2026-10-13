@@ -487,6 +487,18 @@ button.today-focus-dot:disabled{color:var(--mark)}
 .unified-task .task-from{font-size:13px;color:var(--ink-2)}
 
 .calendar-tools{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin:18px 0}.calendar-tools label{display:flex;align-items:center;gap:8px}.calendar-tools select{width:auto;max-width:200px}.calendar-nav{display:flex;align-items:center;gap:8px}.calendar-nav h3{flex:1;margin:0;font-size:18px}.task-calendar{width:100%;table-layout:fixed;border-collapse:collapse;margin:18px 0}.task-calendar th{font-size:12px;padding:8px 0;color:var(--ink-2)}.task-calendar abbr{text-decoration:none}.task-calendar td{padding:2px}.calendar-day{width:100%;min-height:65px;background:var(--sheet);border:1px solid var(--rule);border-radius:8px;color:var(--ink);font:inherit;cursor:pointer;padding:8px 2px}.calendar-day small{display:block;font-size:10px;min-height:14px;margin-top:4px}.calendar-day[aria-pressed="true"]{border:2px solid var(--mark);background:var(--sheet)}.calendar-day[aria-current="date"] span{font-weight:800;text-decoration:underline}.calendar-day:focus-visible{outline:3px solid var(--mark);outline-offset:2px}.unified-task.rem{display:flex}.unified-task .task-edit{flex:none;padding:8px}.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+
+/* Awareness: private, in-app only. Buttons meet mobile touch targets. */
+.awareness-list { display: grid; gap: 14px; margin: 20px 0 32px; }
+.awareness-card { padding: 18px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 16px; box-shadow: var(--shadow); }
+.awareness-card h3 { margin: 0 0 8px; font-size: 17px; }
+.awareness-card p { margin: 0 0 12px; color: var(--ink-2); }
+.awareness-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.awareness-actions button, .awareness-more { min-height: 44px; padding: 9px 13px; border: 1px solid var(--rule); border-radius: 10px; background: var(--sheet); }
+.awareness-actions button:first-child { background: var(--mark); color: var(--mark-ink); border-color: var(--mark); }
+.awareness-card details { margin: 12px 0; }
+.awareness-card summary { cursor: pointer; min-height: 44px; padding: 9px 0; color: var(--mark); }
+.awareness-muted { color: var(--ink-2); }
 </style>
 </head>
 <body>
@@ -510,6 +522,7 @@ button.today-focus-dot:disabled{color:var(--mark)}
   </header>
   <nav class="tabs" id="tabs" hidden aria-label="Sections">
     <a href="#today">Today</a>
+    <a href="#awareness">Awareness</a>
     <a href="#journal">Journal</a>
     <a href="#reminders">Tasks</a>
     <a href="#notes">Memory</a>
@@ -2186,6 +2199,67 @@ function unlockSheet() {
   });
 }
 
+/* ---------- Awareness inbox ---------- */
+async function renderAwareness() {
+  main.innerHTML = '<h2>Awareness</h2><p class="awareness-muted">Private suggestions based on your activity. No notifications required.</p><div id="awareness-items" class="awareness-list" aria-live="polite"><p>Loading suggestions…</p></div><button class="awareness-more" id="awareness-more" hidden>Load more</button>';
+  const list = $("#awareness-items"), more = $("#awareness-more");
+  let cursor = null;
+  const load = async (append = false) => {
+    more.disabled = true;
+    try {
+      const result = await api("/awareness/inbox?limit=20" + (cursor ? "&cursor=" + encodeURIComponent(cursor) : ""));
+      if (!append) list.replaceChildren();
+      if (!result.items.length && !append) {
+        const empty = document.createElement("p");
+        empty.className = "awareness-muted"; empty.textContent = "You're all caught up. Suggestions will appear here when Daybook notices something useful.";
+        list.append(empty);
+      }
+      for (const entry of result.items) {
+        const candidate = entry.candidate;
+        const card = document.createElement("article");
+        card.className = "awareness-card";
+        const heading = document.createElement("h3"); heading.textContent = "Something worth revisiting";
+        const reason = document.createElement("p"); reason.textContent = candidate.reason;
+        const details = document.createElement("details");
+        const summary = document.createElement("summary"); summary.textContent = "Why this?";
+        const evidence = document.createElement("p");
+        evidence.textContent = "Based on " + candidate.evidenceEventIds.length + " recorded changes to this task. No private note content is sent.";
+        details.append(summary, evidence);
+        const actions = document.createElement("div"); actions.className = "awareness-actions";
+        const act = (label, action) => {
+          const button = document.createElement("button");
+          button.type = "button"; button.textContent = label;
+          button.onclick = async () => {
+            button.disabled = true;
+            try {
+              let until;
+              if (action === "snooze") until = new Date(Date.now() + 86400000).toISOString();
+              await api("/awareness/action", { method: "POST", body: { id: candidate.id, action, ...(until ? { until } : {}) } });
+              card.remove();
+              if (!list.querySelector(".awareness-card")) {
+                const empty = document.createElement("p"); empty.className = "awareness-muted";
+                empty.textContent = "No active suggestions right now."; list.append(empty);
+              }
+            } catch (e) { button.disabled = false; toast(e.message); }
+          };
+          actions.append(button);
+        };
+        act("Dismiss", "dismiss"); act("Tomorrow", "snooze"); act("Mute", "mute");
+        card.append(heading, reason, details, actions);
+        list.append(card);
+      }
+      cursor = result.nextCursor;
+      more.hidden = !cursor;
+    } catch (e) {
+      const error = document.createElement("p"); error.className = "err";
+      error.textContent = "Could not load Awareness: " + e.message;
+      if (!append) list.replaceChildren(error); else list.append(error);
+    } finally { more.disabled = false; }
+  };
+  more.onclick = () => load(true);
+  await load();
+}
+
 /* ---------- Router ---------- */
 let currentHash = location.hash;
 // Views render straight into #main, so a slow render can land after a newer navigation. Each route has a
@@ -2206,6 +2280,7 @@ async function route() {
   $("#composer").hidden = view !== "today" && hash !== "today";
   try {
     if (!cfg.configured) { $("#tabs").hidden = true; $("#composer").hidden = true; await views.setup(); }
+    else if (view === "awareness") await renderAwareness();
     else if (view === "note") await editor(arg);
     else if (view === "new") await editor(null, arg || "inbox");
     else await (views[view] || views.today)();
