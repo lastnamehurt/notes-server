@@ -23,6 +23,17 @@ import { APP_HTML, MANIFEST, SERVICE_WORKER } from "./ui";
 import { pushConfigured, parseReminders, nextOccurrence } from "./reminder-parse";
 import { runAppleSync, SyncError } from "./apple-sync-run";
 import { notesFor } from "./storage";
+import { taskDeferrals } from "./awareness-deferrals";
+
+/** Best-effort post-commit capture; a history failure must never undo a saved note. */
+async function captureTaskDeferrals(env: Env, name: string, before: string, after: string): Promise<void> {
+  const changes = taskDeferrals(before, after, env.NOTES_TIMEZONE || "America/Los_Angeles");
+  if (!changes.length) return;
+  const revision = await noteRevision(before + "\\u0000" + after + "\\u0000" + name);
+  await scheduler(env).recordTaskDeferrals(changes.map((change, i) => ({
+    ...change, id: "defer-" + revision.slice(0, 40) + "-" + i
+  })));
+}
 
 const COOKIE = "notes_session";
 const SESSION_DAYS = 30;
@@ -387,6 +398,7 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
         }
         const updated = editCalendarTask(current.content,line,{schedule,priority,done},env.NOTES_TIMEZONE || "America/Los_Angeles");
         await notes.update(name,updated,current.sha);
+        await captureTaskDeferrals(env, name, current.content, updated).catch(e => console.error("Awareness capture failed", e));
         const result = await scheduleNote(env,name,updated);
         if (done && parsed.length) {
           await appendLog(notes,"✓ " + parsed[0].text + " #done",{timeZone:env.NOTES_TIMEZONE});
@@ -419,7 +431,10 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
       }
       case "PUT /note": {
         const { name, content, sha } = await request.json<{ name: string; content: string; sha?: string }>();
-        return json(await scheduleNote(env, await notes.update(name, content, sha), content));
+        const current = await notes.get(name);
+        const saved = await notes.update(name, content, sha);
+        await captureTaskDeferrals(env, name, current.content, content).catch(e => console.error("Awareness capture failed", e));
+        return json(await scheduleNote(env, saved, content));
       }
       case "DELETE /note": {
         const name = url.searchParams.get("name") ?? "";
