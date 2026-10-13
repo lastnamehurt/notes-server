@@ -61,7 +61,14 @@ jobs:
     concurrency:
       group: deploy-production
       cancel-in-progress: false
-    environment: production
+    # Writes are only for the "Deployed" comment on the merged PR.
+    permissions:
+      contents: read
+      pull-requests: write
+    # The url adds a "View deployment" button to the deployment shown on the merged PR.
+    environment:
+      name: production
+      url: ${{ steps.worker.outputs.deployment-url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -69,6 +76,7 @@ jobs:
           node-version: "22"
       - run: npm ci
       - name: Deploy the Worker
+        id: worker
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -86,3 +94,24 @@ jobs:
           command: deploy -c installer/wrangler.jsonc
       - name: Installer address
         run: echo "::notice title=Installer::${{ steps.installer.outputs.deployment-url }}"
+      # Tells the merged PR when its change went live. A failure here never fails the deploy.
+      - name: Comment on the merged PR
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKER_URL: ${{ steps.worker.outputs.deployment-url }}
+          INSTALLER_URL: ${{ steps.installer.outputs.deployment-url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          pr=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" --jq '[.[] | select(.merged_at != null)][0].number // empty')
+          if [ -z "$pr" ]; then echo "No merged PR for ${{ github.sha }}; skipping comment."; exit 0; fi
+          version=$(sed -n 's/^export const VERSION = "\([0-9.]*\)".*/\1/p' src/version.ts | head -1)
+          when=$(TZ=America/Los_Angeles date '+%b %-d, %-I:%M %p %Z')
+          {
+            echo "✅ **Deployed to Cloudflare** — ${when}${version:+ (version ${version})}"
+            echo
+            [ -n "$WORKER_URL" ] && echo "- Worker: ${WORKER_URL}"
+            [ -n "$INSTALLER_URL" ] && echo "- Installer: ${INSTALLER_URL}"
+            echo "- Commit: \`${GITHUB_SHA::7}\` · [deploy run](${RUN_URL})"
+          } > comment.md
+          gh pr comment "$pr" --repo "${{ github.repository }}" --body-file comment.md
