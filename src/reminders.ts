@@ -157,6 +157,10 @@ const deliveredKey = (r: Reminder) => "sent:" + r.at + SEP + r.note + SEP + r.te
 /** A reminder that already went off (kept ~2 days so Today can still offer Done). */
 export interface Fired { note: string; text: string; at: number; repeat: boolean; }
 
+/** Only native task sources with current consent may supply rule evidence. */
+const deferralSourceAllowed = (preferences: AwarenessPreferences, source: string) =>
+  source === "daybook" ? preferences.sources.daybook : source === "appleReminders" && preferences.sources.appleReminders;
+
 /** Single instance ("global") that stores upcoming reminders and fires them with an alarm. */
 export class ReminderScheduler extends DurableObject<ReminderEnv> {
   async awarenessPreferences(): Promise<AwarenessPreferences> {
@@ -204,6 +208,15 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
       stale: entry.state !== "active", alreadyDelivered: Boolean(reserved)
     }); } catch { return { status: "suppressed", reason: "invalid-policy" }; }
     if (decision.action !== "send") return { status: decision.action, reason: decision.reason };
+    // Recheck evidence consent at delivery time: source revocation also applies
+    // to suggestions already in the inbox. Missing provenance fails closed.
+    if (candidate.ruleId === "task-three-deferrals") {
+      for (const eventId of candidate.evidenceEventIds) {
+        const event = await this.ctx.storage.get<{ source: string }>("awareness:event:local:" + eventId);
+        if (!event || !deferralSourceAllowed(prefs, event.source))
+          return { status: "suppressed", reason: "source-not-authorized" };
+      }
+    }
     if (!pushConfigured(env)) return { status: "digest", reason: "push-not-configured" };
     // Reserve before network IO: prevents concurrent duplicate sends, even on provider timeout.
     await this.ctx.storage.put(dedupe, { at: now.toISOString() });
@@ -249,10 +262,14 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
 
   /**
    * Internal, owner-local event capture. The global scheduler belongs to one
-   * private Daybook installation. No notifications or rules are run here.
+   * private Daybook installation. Suggestions are inbox-only; no notifications are sent.
    * Keep this path free of Zod imports (Worker startup compatibility).
    */
-  async recordTaskDeferrals(events: { id: string; taskId: string; fromDueAt: string; toDueAt: string }[]): Promise<number> {
+  async recordTaskDeferrals(events: { id: string; taskId: string; fromDueAt: string; toDueAt: string }[], source: "daybook" | "appleReminders" = "daybook"): Promise<number> {
+    if (source !== "daybook" && source !== "appleReminders") throw new Error("Invalid deferral source");
+    // Apple is an external source: do not retain its evidence without consent.
+    const preferences = await this.awarenessPreferences();
+    if (source === "appleReminders" && (!preferences.enabled || preferences.paused || !preferences.sources.appleReminders)) return 0;
     let inserted = 0;
     for (const event of events.slice(0, 100)) {
       if (!/^[a-z0-9-]{1,160}$/.test(event.id) || !/^[a-z0-9]{4,12}$/.test(event.taskId) ||
@@ -264,7 +281,7 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
       const now = new Date().toISOString();
       await this.ctx.storage.put(key, {
         id: event.id, ownerId: "local", occurredAt: now, observedAt: now,
-        type: "task.deferred", source: "daybook",
+        type: "task.deferred", source,
         subjectRef: { kind: "task", id: event.taskId },
         metadata: { taskId: event.taskId, fromDueAt: event.fromDueAt, toDueAt: event.toDueAt }
       });
@@ -273,10 +290,9 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
     // Native inbox-only Awareness rule. This never sends push or reads note text.
     // Consent is checked after capture, so disabling Awareness cannot create suggestions.
     if (inserted > 0) {
-      const preferences = await this.awarenessPreferences();
-      if (preferences.enabled && !preferences.paused && preferences.sources.daybook) {
+      if (preferences.enabled && !preferences.paused && deferralSourceAllowed(preferences, source)) {
         const stored = await this.ctx.storage.list<DeferralEvidence & { source: string }>({ prefix: "awareness:event:local:" });
-        const evidence = [...stored.values()].filter(e => e.ownerId === "local" && e.source === "daybook");
+        const evidence = [...stored.values()].filter(e => e.ownerId === "local" && deferralSourceAllowed(preferences, e.source));
         const inbox = new AwarenessInbox(this.ctx.storage);
         for (const suggestion of threeDeferrals(evidence, "local")) {
           await inbox.add("local", suggestion);
