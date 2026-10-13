@@ -1,0 +1,56 @@
+# "Update Daybook": run this in your own copy (Actions → Update Daybook → Run workflow) to get the newest
+# version of the app. It copies the latest code from the original repository, keeps your own settings,
+# and pushes; Cloudflare then redeploys your app in a minute or two. Your notes live in a separate
+# repository and are never touched. Nothing updates unless you run this.
+name: Update Daybook
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: update-daybook
+jobs:
+  update:
+    # The original repository doesn't update itself.
+    if: github.repository != 'lastnamehurt/notes-server'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get the newest Daybook
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/latest && mkdir -p /tmp/latest
+          curl -fsSL https://codeload.github.com/lastnamehurt/notes-server/tar.gz/refs/heads/main | tar -xz -C /tmp/latest --strip-components=1
+          # Copies made before version numbers existed have no src/version.ts: treat that as "an earlier version".
+          version() { if [ -f "$1" ]; then sed -n 's/^export const VERSION = "\([0-9.]*\)".*/\1/p' "$1" | head -1; fi; }
+          before=$(version src/version.ts); after=$(version /tmp/latest/src/version.ts)
+          # Keep this copy's own Cloudflare settings (Worker name, storage ids) and workflow files
+          # (GitHub doesn't let this job change workflows).
+          # Replace everything else with the newest code (files removed from the app are removed here too).
+          find . -mindepth 1 -maxdepth 1 ! -name .git ! -name .github ! -name wrangler.jsonc -exec rm -rf {} +
+          if [ -d .github ]; then find .github -mindepth 1 -maxdepth 1 ! -name workflows -exec rm -rf {} +; fi
+          (cd /tmp/latest && tar -cf - --exclude=./.github/workflows --exclude=./wrangler.jsonc .) | tar -xf -
+          {
+            echo "## Update Daybook"
+            if [ -z "$(git status --porcelain)" ]; then
+              echo "You already have the newest version (${before:-unknown}). Nothing to do."
+            else
+              git config user.name "Update Daybook"
+              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+              git add -A
+              git commit -q -m "Update Daybook ${before:-earlier version} → ${after:-latest}"
+              git push -q origin "HEAD:${GITHUB_REF_NAME:-main}"
+              echo "Updated from **${before:-an earlier version}** to **${after:-the latest}**. Cloudflare will redeploy your app in a minute or two."
+            fi
+            mine=$(grep -o '"binding": *"[A-Z_]*"' wrangler.jsonc | sort -u || true)
+            theirs=$(grep -o '"binding": *"[A-Z_]*"' /tmp/latest/wrangler.jsonc | sort -u || true)
+            if [ "$mine" != "$theirs" ]; then
+              echo
+              echo "**Heads-up:** this version needs a change to your Cloudflare settings (wrangler.jsonc) that can't be applied automatically. See the Updating section of the guide."
+            fi
+            if ! diff -rq --exclude=update-daybook.yml .github/workflows /tmp/latest/.github/workflows >/dev/null 2>&1; then
+              echo
+              echo "(The original's automated checks changed too. They only run there, so you don't need them.)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat "$GITHUB_STEP_SUMMARY"

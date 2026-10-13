@@ -41,6 +41,9 @@ const gh = http.createServer(async (req, res) => {
   const p = new URL(req.url, "http://x").pathname;
   const send = (s, o) => { res.writeHead(s, { "content-type": "application/json" }); res.end(JSON.stringify(o ?? {})); };
   if (p.startsWith("/ntfy/")) { pushes.push(body); return send(200); }
+  // A newer published version, and her own copy of the code (found via her GitHub connection).
+  if (p === "/version.ts") { res.writeHead(200, { "content-type": "text/plain" }); return res.end('export const VERSION = "2099.1.1";\nexport const VERSION_NOTE = "Test update note.";\n'); }
+  if (p === "/repos/jane/notes-server/contents/src/version.ts") return req.headers.authorization === "Bearer " + TOKEN ? send(200, { type: "file" }) : send(401);
   if (p === "/login/device/code") return send(200, { device_code: "dev-" + ++seq, user_code: "WDJB-MJHT", verification_uri: "https://github.com/login/device", expires_in: 900, interval: 5 });
   if (p === "/login/oauth/access_token") return send(200, approved ? { access_token: TOKEN, token_type: "bearer", scope: "repo" } : { error: "authorization_pending" });
   if (req.headers.authorization !== "Bearer " + TOKEN) return send(401, { message: "Bad credentials" });
@@ -73,7 +76,7 @@ await new Promise(r => gh.listen(GH, "127.0.0.1", r));
 const devVars = ROOT + ".dev.vars";
 const saved = existsSync(devVars) ? readFileSync(devVars, "utf8") : null;
 writeFileSync(devVars, [`PASSWORD=${PASSWORD}`, `GITHUB_API_URL=http://127.0.0.1:${GH}`, `GITHUB_LOGIN_URL=http://127.0.0.1:${GH}`,
-  "GITHUB_CLIENT_ID=onboarding-test", `NTFY_SERVER=http://127.0.0.1:${GH}/ntfy`].join("\n") + "\n");
+  "GITHUB_CLIENT_ID=onboarding-test", `NTFY_SERVER=http://127.0.0.1:${GH}/ntfy`, `DAYBOOK_VERSION_URL=http://127.0.0.1:${GH}/version.ts`].join("\n") + "\n");
 rmSync(ROOT + ".wrangler/state", { recursive: true, force: true });
 const worker = spawn("npx", ["wrangler", "dev", "--port", String(PORT), "--ip", "127.0.0.1"], { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"], detached: true });
 let log = ""; worker.stdout.on("data", d => (log += d)); worker.stderr.on("data", d => (log += d));
@@ -114,6 +117,8 @@ try {
   // 2. First-run setup
   await page.waitForSelector("#gh-start");
   check(await page.locator("#tabs").isHidden(), "First run shows only setup");
+  check(/access your repositories/.test(await page.innerText("#s2")), "Setup explains what GitHub will ask");
+  check(await page.locator("#copytopic").isVisible() && await page.locator("#ntfy-subscribe").count() === 0, "iPhone/desktop: ntfy name with Copy (no Android link)");
   check(await page.locator("#diagnostics").count() === 0, "No diagnostics card during first run");
   await page.click("#gh-start");
   await page.waitForSelector("#gh-code");
@@ -155,6 +160,46 @@ try {
   await later.click("#run-diagnostics");
   await later.waitForFunction(() => { const o = document.querySelector("#diagnostics-results"); return o && !/Checking/.test(o.textContent) && o.textContent.trim(); });
   check((await later.innerText("#diagnostics-results")).trim().length > 0, "Run checks shows results when Settings is opened directly");
+
+  // 6. Updates: banner on Today with a direct link to her copy's Update Daybook, and in Settings
+  const today = await ctx.newPage();
+  today.on("pageerror", e => errors.push(String(e)));
+  await today.goto(BASE + "/app#today");
+  await today.waitForSelector("#update-banner");
+  check(/Test update note/.test(await today.innerText("#update-banner")), "Today shows 'An update is available' with the note");
+  const href = await today.getAttribute("#update-banner a.btn", "href");
+  check(href === "https://github.com/jane/notes-server/actions/workflows/update-daybook.yml", "Update button opens her own copy's Update Daybook: " + href);
+  await today.click("#update-later");
+  await today.reload(); await today.waitForTimeout(1500);
+  check(await today.locator("#update-banner").count() === 0, "Later hides the banner for this version");
+  check(/Version 2099\.1\.1 is available/.test(await later.innerText("#update-status").catch(() => "")) ||
+        /Version 2099\.1\.1 is available/.test(await (async () => { await later.reload(); await later.waitForSelector("#update-status p:not(.muted)"); return later.innerText("#update-status"); })()),
+        "Settings shows the available version");
+
+  // 7. Coming back on another phone: password box first, GitHub as the alternative
+  const fresh = await browser.newContext(phone);
+  await fresh.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, r => r.abort());
+  const back = await fresh.newPage();
+  back.on("pageerror", e => errors.push(String(e)));
+  await back.goto(BASE + "/app");
+  await back.waitForSelector("#key");
+  check(await back.locator("#ghbtn").isVisible(), "Return visit offers the password and Sign in with GitHub");
+  await back.fill("#key", PASSWORD);
+  await back.click("#lockform button[type=submit]");
+  await back.waitForSelector("#tabs:not([hidden])");
+  check(true, "Password unlocks after setup");
+
+  // 8. Android: one-tap Subscribe in ntfy
+  const android = await browser.newContext({ ...phone, userAgent: "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36" });
+  await android.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, r => r.abort());
+  const droid = await android.newPage();
+  await droid.goto(BASE + "/app");
+  await droid.fill("#key", PASSWORD); await droid.click("#lockform button[type=submit]");
+  await droid.waitForSelector("#tabs:not([hidden])");
+  await droid.goto(BASE + "/app#settings");
+  await droid.waitForSelector("#ntfy-subscribe");
+  const ntfyHref = await droid.evaluate(() => document.querySelector("#ntfy-subscribe")?.getAttribute("href"));
+  check(/^ntfy:\/\/ntfy\.sh\/notes-[a-z0-9]+\?display=Daybook$/.test(ntfyHref || ""), "Android: Subscribe in ntfy opens the app with her topic: " + ntfyHref);
 
   check(errors.length === 0, "No page errors " + JSON.stringify(errors));
 } catch (e) {

@@ -351,6 +351,9 @@ dialog.sheet h2 { margin: 0 0 14px; font-size: 21px; }
 
 /* Lock */
 .lock { padding-top: 10dvh; }
+.update-banner { border: 1.5px solid var(--mark); }
+.update-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.lock-alt { padding-top: 18px; margin-top: 18px; border-top: 1px solid var(--rule); }
 .lock p { color: var(--ink-2); max-width: 32ch; }
 .lock input { width: 100%; border: 1.5px solid var(--control); background: var(--sheet); border-radius: 12px; padding: 13px 14px; margin: 8px 0 12px; }
 .lock label { font-weight: 600; }
@@ -904,6 +907,34 @@ async function complete(note, text, at) {
 /* ---------- Views ---------- */
 const views = {};
 
+
+/* ---------- Updates (notify only; see src/updates.ts) ---------- */
+const UPDATE_GUIDE = "https://github.com/lastnamehurt/notes-server#updating";
+let updateInfo = null;
+async function loadUpdate() {
+  if (updateInfo) return updateInfo;
+  try { updateInfo = await api("/update"); } catch { updateInfo = { available: false }; }
+  return updateInfo;
+}
+const updateLink = u => u.updateUrl
+  ? h`<a class="btn a-btn" href="${u.updateUrl}" target="_blank" rel="noopener">Open Update Daybook</a>`
+  : h`<a class="btn a-btn" href="${UPDATE_GUIDE}" target="_blank" rel="noopener">How to update</a>`;
+function dismissedUpdate(v) { try { return localStorage.getItem("daybook-update-dismissed") === v; } catch { return false; } }
+function dismissUpdate(v) { try { localStorage.setItem("daybook-update-dismissed", v); } catch {} }
+/** Banner at the top of Today when a newer version exists and hasn't been dismissed. */
+async function showUpdateBanner() {
+  const u = await loadUpdate();
+  const onToday = !location.hash || location.hash === "#today";
+  if (!u.available || dismissedUpdate(u.latest) || !onToday || $("#update-banner")) return;
+  const el = document.createElement("section");
+  el.className = "step update-banner"; el.id = "update-banner";
+  el.innerHTML = h`<h3>An update is available</h3><p>${u.note || "A newer version of Daybook is ready."}</p>
+    <p class="muted">Updating takes one tap in your GitHub and about two minutes. Your notes aren't touched.</p>
+    <div class="update-actions">${raw(updateLink(u))}<button class="btn quiet" type="button" id="update-later">Later</button></div>`;
+  main.prepend(el);
+  $("#update-later").onclick = () => { dismissUpdate(u.latest); el.remove(); };
+}
+
 views.today = async () => {
   if (!main.querySelector(".rail")) main.innerHTML = '<p class="empty">Loading today…</p>';
   const [logs, rems] = await Promise.all([api("/logs?days=1"), api("/reminders")]);
@@ -1055,6 +1086,7 @@ views.today = async () => {
     b.focus({ preventScroll: true });
     logEntrySheet(today, b.dataset.line, m[1], m[2]);
   });
+  showUpdateBanner();
 };
 
 let allNotes = null;
@@ -1409,6 +1441,8 @@ const GH_NEW_KEY = "https://github.com/settings/personal-access-tokens/new?name=
   "&description=" + encodeURIComponent("Lets my notes server read and save my notes") + "&expires_in=none&contents=write";
 const NTFY_IOS = "https://apps.apple.com/app/ntfy/id1625396347";
 const NTFY_ANDROID = "https://play.google.com/store/apps/details?id=io.heckel.ntfy";
+// ntfy's one-tap subscribe link (ntfy://host/topic) is documented for its Android app only.
+const isAndroid = /Android/i.test(navigator.userAgent);
 const randomTopic = () => "notes-" + [...crypto.getRandomValues(new Uint8Array(15))].map(b => b.toString(36).padStart(2, "0")).join("").slice(0, 24);
 const zones = () => { try { return Intl.supportedValuesOf("timeZone"); } catch { return [Intl.DateTimeFormat().resolvedOptions().timeZone]; } };
 async function copy(text, btn) {
@@ -1511,6 +1545,7 @@ views.setup = async () => {
   const githubBlock = connect
     ? h`<section class="step" id="s2"><h3><span class="n">1</span>Connect your GitHub</h3>
       <p>Your notes are saved in a private repository on your GitHub. Only you can see it.</p>
+      <p class="muted">GitHub will ask to let <b>Notes server</b> access your repositories. That's GitHub's standard wording: Daybook only reads and writes your notes repository, and the key stays in your own app.</p>
       <div id="gh-flow">${raw(prev.hasToken && prev.notesRepo
         ? h`<p class="gh-ok">✓ Connected. Notes are saved in <b>${prev.notesRepo}</b>.</p><button class="btn quiet" id="gh-start" type="button">Connect again</button>`
         : `<button class="btn" id="gh-start" type="button">Connect GitHub</button>`)}</div>
@@ -1537,11 +1572,20 @@ views.setup = async () => {
 
     <section class="step" id="s4"><h3><span class="n">${n.push}</span>Reminders on your phone</h3>
       <p class="muted">Optional and free. You can do this later in Settings.</p>
-      <ol>
-        <li>Install the free <b>ntfy</b> app: <a href="${NTFY_IOS}" target="_blank" rel="noopener">iPhone</a> or <a href="${NTFY_ANDROID}" target="_blank" rel="noopener">Android</a>. Allow notifications when it asks.</li>
-        <li>In ntfy, tap <b>+</b> and paste this name. It's long so nobody can guess it; keep it private.</li>
+      ${raw(isAndroid
+        ? h`<ol>
+        <li>Install the free <b>ntfy</b> app from <a href="${NTFY_ANDROID}" target="_blank" rel="noopener">Google Play</a>, open it once and allow notifications.</li>
+        <li>Come back here and tap <b>Subscribe in ntfy</b>. ntfy opens with your private reminder channel ready; tap <b>Subscribe</b>.</li>
+      </ol>
+      <p><a class="btn a-btn" id="ntfy-subscribe" href="${"ntfy://ntfy.sh/" + topic + "?display=Daybook"}">Subscribe in ntfy</a></p>
+      <details class="more"><summary>Do it by hand instead</summary><p class="muted">In ntfy, tap <b>+</b> and paste this name:</p>
+        <div class="copyrow"><code id="topic">${topic}</code><button class="btn quiet" id="copytopic" type="button">Copy</button></div></details>`
+        : h`<ol>
+        <li>Install the free <b>ntfy</b> app: <a href="${NTFY_IOS}" target="_blank" rel="noopener">iPhone</a> or <a href="${NTFY_ANDROID}" target="_blank" rel="noopener">Android</a>. Open it once and allow notifications.</li>
+        <li>Tap <b>Copy</b> below. In ntfy, tap <b>+</b>, paste into <b>Topic name</b>, and tap <b>Subscribe</b>.</li>
       </ol>
       <div class="copyrow"><code id="topic">${topic}</code><button class="btn quiet" id="copytopic" type="button">Copy</button></div>
+      <p class="muted">It's long so nobody can guess it. Keep it private.</p>`)}
       <label class="choices" style="border:0"><input type="checkbox" id="usentfy" ${prev.notify === "pushover" ? "" : "checked"}> Send my reminders to ntfy</label>
       <details class="more"><summary>Use Pushover instead</summary>
         <p class="muted">Pushover is a paid app ($5 once). Enter your user key and an application token from pushover.net.</p>
@@ -1550,6 +1594,7 @@ views.setup = async () => {
 
     ${raw(first ? "" : assistantBlock(location.origin + "/mcp"))}
 
+    ${raw(first ? "" : `<section class="step" id="updates"><h3>Updates</h3><div id="update-status"><p class="muted">Checking for updates…</p></div></section>`)}
     ${raw(first ? "" : `<section class="step" id="diagnostics"><h3>Check everything is working</h3>
       <p>Checks your notes repository, sign-in, reminders and notifications. Nothing is changed.</p>
       <button class="btn quiet" id="run-diagnostics" type="button">Run checks</button>
@@ -1625,6 +1670,12 @@ views.setup = async () => {
   $("#tok").addEventListener("paste", () => setTimeout(check, 50));
   if (prev.hasToken) check();
   if (!first) wireAssistant(location.origin + "/mcp");
+  if (!first) loadUpdate().then(u => {
+    const box = $("#update-status"); if (!box) return;
+    box.innerHTML = u.available
+      ? h`<p><b>Version ${u.latest} is available</b> (you have ${u.current}). ${u.note || ""}</p><p class="muted">Updating takes one tap in your GitHub and about two minutes. Your notes aren't touched.</p>${raw(updateLink(u))}`
+      : h`<p>You're up to date${u.current ? " (version " + u.current + ")" : ""}.</p>`;
+  });
   loadBriefings();
   $("#copytopic").onclick = e => copy(topic, e.target);
 
@@ -1752,17 +1803,15 @@ async function showLock(message) {
   $("#tabs").hidden = true; $("#composer").hidden = true; $("#lockbtn").hidden = true;
   const info = await fetch("/app/login/info").then(r => r.json()).catch(() => ({ method: "password" }));
   const err = raw(message ? h`<p class="err" role="alert">${message}</p>` : "");
-  if (info.method === "github") {
-    main.innerHTML = h`<div class="lock" id="lockview"><p>Sign in with the GitHub account that owns your notes.</p>
-      <button class="btn" type="button" id="ghbtn">Sign in with GitHub</button>
-      <div id="ghcode"></div>${err}</div>`;
-    $("#ghbtn").onclick = startGithubLogin;
-    return;
-  }
-  main.innerHTML = h`<form class="lock" id="lockform"><p>Enter the password you chose when you set up the app.</p>
+  // The password works everywhere (it's also what Claude asks for). Once notes are set up, GitHub is offered too.
+  const github = info.method === "github";
+  main.innerHTML = h`<form class="lock" id="lockform"><p>Enter your Daybook password: the one you chose when you set up the app, and that Claude asks for.</p>
     <label for="key">Password</label><input id="key" type="password" autocomplete="current-password" required>
     <button class="btn" type="submit">Unlock</button>${err}
-    <p class="hint">Forgot it? <a href="https://github.com/lastnamehurt/notes-server#good-to-know" target="_blank" rel="noopener">Here's how to set a new one</a>.</p></form>`;
+    <p class="hint">Forgot it? ${raw(github ? "Sign in with GitHub below, or " : "")}<a href="https://github.com/lastnamehurt/notes-server#good-to-know" target="_blank" rel="noopener">${github ? "see how to set a new one" : "Here's how to set a new one"}</a>.</p></form>
+    ${raw(github ? `<div class="lock lock-alt" id="lockview"><p class="muted">Or sign in with the GitHub account that owns your notes.</p>
+      <button class="btn quiet" type="button" id="ghbtn">Sign in with GitHub</button><div id="ghcode"></div></div>` : "")}`;
+  if (github) $("#ghbtn").onclick = startGithubLogin;
   $("#key").focus();
   $("#lockform").onsubmit = async e => {
     e.preventDefault();

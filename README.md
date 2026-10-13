@@ -70,10 +70,22 @@ Open your app's address on your phone (the page you bookmarked).
 
 For a quick tour of the app on your phone, see [QUICKSTART-MOBILE.md](QUICKSTART-MOBILE.md).
 
+## Updating
+
+When a new version is out, your app shows **An update is available** on Today and in **Settings**. Nothing changes until you choose to update:
+
+1. Tap **Open Update Daybook** in the app. (Or in GitHub, open the copy of Daybook that Cloudflare made for you, usually called **notes-server**, and go to **Actions → Update Daybook**.)
+2. Tap **Run workflow**, then the green **Run workflow** button.
+3. Wait for the green check (about a minute). Cloudflare then redeploys your app in a minute or two.
+
+Updates replace the app's code only. Your notes are in a separate repository and aren't touched, and your Cloudflare settings are kept. If GitHub asks you to enable workflows the first time, tap the button to enable them.
+
 ## Good to know
 
 - **Who can see my notes?** Only people who can sign in to your GitHub or Cloudflare account. Your notes are not end-to-end encrypted: they are stored as plain text in your private GitHub repository, and your own Cloudflare Worker reads them to answer your requests. The person who shared this with you has no access to either account.
-- **Forgot your password?** Open the app and tap **Sign in with GitHub**, using the GitHub account that owns your notes. Claude still asks for the password, so to set a new one, open your Worker in Cloudflare → **Settings** → **Variables and Secrets**, edit **MCP_BEARER_TOKEN** (or **PASSWORD** if there's no MCP_BEARER_TOKEN), and save. Then reconnect Claude.
+- **What does Connect GitHub give the app?** GitHub shows it as access to your repositories, because GitHub's sign-in can't be limited to one. Daybook only ever reads and writes your notes repository, and the key is kept in your own Cloudflare account, not by anyone else. If you have other private repositories you'd rather keep out of reach, use **Use an access key instead** during setup and give the key access to your notes repository only.
+- **Connect GitHub depends on a small GitHub app called "Notes server".** If that app were ever removed, the app would ask you to connect again; your notes stay safe in your repository. You can see or revoke its access any time in GitHub → Settings → Applications.
+- **Forgot your password?** Open the app and use **Sign in with GitHub** under the password box, with the GitHub account that owns your notes. Claude still asks for the password, so to set a new one, open your Worker in Cloudflare → **Settings** → **Variables and Secrets**, edit **MCP_BEARER_TOKEN** (or **PASSWORD** if there's no MCP_BEARER_TOKEN), and save. Then reconnect Claude.
 - **Typed the wrong password too many times?** Wait 15 minutes; the app locks briefly to stop guessing.
 - **Change reminders or time zone later:** open the app and tap **Settings**.
 - **Not getting notifications?** In the app's **Settings**, tap **Save and finish**, then **Send test notification**. If it never arrives, ntfy may be busy; switch to Pushover (a $5 app) under *Use Pushover instead*.
