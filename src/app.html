@@ -1808,7 +1808,12 @@ views.setup = async () => {
       <input id="tok" type="password" autocomplete="off" spellcheck="false" placeholder="${prev.hasToken ? "Key saved (paste to replace)" : "github_pat_…"}">
       <button class="btn" id="check" type="button">Check key</button>
       <div id="repos"></div>`;
-  const githubBlock = connect
+  // Where notes are, in plain words. Servers set up on their deployment can't change it here, so no key form.
+  const githubStatus = h`<section class="step ok" id="s2"><h3><span class="n">1</span>Your notes</h3>
+      <p>✓ Saved as Markdown files in your private GitHub repository${raw(cfg.notesRepo ? h` <b>${cfg.notesRepo}</b>` : "")}.</p>
+      ${raw(managed ? `<p class="muted">Set in your server's Cloudflare settings, so it isn't changed here.</p>` : "")}
+      <p>${raw(downloadLink)}</p></section>`;
+  const githubBlock = managed ? githubStatus : connect
     ? h`<section class="step" id="s2"${raw(chooseStorage ? " hidden" : "")}><h3>${raw(chooseStorage ? "" : '<span class="n">1</span>')}Connect your GitHub</h3>
       <p>Your notes are saved in a private repository on your GitHub. Only you can see it.</p>
       <p class="muted">GitHub will ask to let <b>Notes server</b> access your repositories. That's GitHub's standard wording: Daybook only reads and writes your notes repository, and the key stays in your own app.</p>
@@ -1819,6 +1824,8 @@ views.setup = async () => {
         <p class="muted">Only if Connect GitHub doesn't work for you.${first ? " First create a private repository called notes:" : ""}</p>
         ${raw(first ? h`<p><a class="btn quiet a-btn" href="${GH_NEW_REPO}" target="_blank" rel="noopener">Create notes repository</a></p>` : "")}
         ${raw(keyFields)}</details></section>`
+    : !first && prev.hasToken && prev.notesRepo
+    ? githubStatus.replace("</section>", h`<details class="more"><summary>Replace the access key</summary>${raw(keyFields)}</details></section>`)
     : (first ? createRepoStep(1) : "") + h`<section class="step" id="s2"><h3><span class="n">${first ? 2 : 1}</span>Give this app a key to it</h3>${raw(keyFields)}</section>`;
 
   const storageChoice = h`<section class="step" id="s1"><h3><span class="n">1</span>Where should your notes live?</h3>
@@ -1844,7 +1851,7 @@ views.setup = async () => {
       <p class="muted">Used to greet you on Today, in your morning and evening briefings, and by Claude.</p></section>
 
     ${raw(chooseStorage ? storageChoice + githubBlock : onAppStorage ? appNotesBlock : githubBlock)}
-    ${raw(!first && !onAppStorage && cfg.configured ? `<section class="step" id="backup"><h3>Your notes</h3><p>Every note as a Markdown (.md) file, in the same folders.</p><p>${downloadLink}</p></section>` : "")}
+    ${raw(!first && !onAppStorage && cfg.configured && !(managed || (!connect && prev.hasToken && prev.notesRepo)) ? `<section class="step" id="backup"><h3>Your notes</h3><p>Every note as a Markdown (.md) file, in the same folders.</p><p>${downloadLink}</p></section>` : "")}
     ${raw(cfg.configured ? `<section class="step" id="briefings"><h3>Daily briefings</h3>
       <p>A short push each morning and evening: what's overdue, due today, done, and coming tomorrow. Skipped on days with nothing to report.</p>
       <div id="brief-body"><p class="muted">Loading…</p></div></section>` : "")}

@@ -225,6 +225,16 @@ try {
   check(Boolean(refreshed.access_token), "Refresh token gets a new access token");
   const bad = await fetch(BASE + "/mcp", { method: "POST", headers: { Authorization: "Bearer not-a-token", "Content-Type": "application/json" }, body: "{}" });
   check(bad.status === 401, "A made-up token is refused");
+
+  // Settings on a server set up on its deployment (like the original owner's): says where notes are, and saves.
+  const appLogin = await fetch(BASE + "/app/login", { method: "POST", headers: { "Content-Type": "application/json", Origin: BASE }, body: JSON.stringify({ key: PASSWORD }) });
+  const appCookie = (appLogin.headers.get("set-cookie") || "").split(";")[0];
+  const settingsApi = (path, init = {}) => fetch(BASE + "/app/api" + path, { ...init, headers: { "Content-Type": "application/json", Origin: BASE, Cookie: appCookie } });
+  const settingsCfg = await (await settingsApi("/config")).json();
+  check(settingsCfg.canSetup === false && settingsCfg.notesRepo === "me/notes", "Settings knows notes are in me/notes (set on the deployment): " + JSON.stringify({ canSetup: settingsCfg.canSetup, notesRepo: settingsCfg.notesRepo }));
+  const settingsSaved = await settingsApi("/setup", { method: "POST", body: JSON.stringify({ timezone: "America/Chicago" }) });
+  check(settingsSaved.ok, "Save and finish works on a deployment-configured server (" + settingsSaved.status + ")");
+  check((await (await settingsApi("/settings")).json()).timezone === "America/Chicago", "and keeps the setting");
 } catch (e) {
   failures++;
   console.log("FAIL " + (e.stack || e));

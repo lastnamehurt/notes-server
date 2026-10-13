@@ -197,7 +197,8 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
         timeZone: env.NOTES_TIMEZONE || "America/Los_Angeles", categories: CATEGORIES, push: pushConfigured(env),
         configured: notesConfigured(env), canSetup: !env.DEPLOY_CONFIGURED, githubConnect: Boolean(githubClientId(env)),
         storage: env.DEPLOY_CONFIGURED ? "github" : (env.NOTES_STORAGE ?? null), appStorage: Boolean(env.NOTES),
-        name: env.OWNER_NAME?.trim() || null
+        name: env.OWNER_NAME?.trim() || null,
+        notesRepo: env.NOTES_STORAGE !== "app" && notesConfigured(env) ? env.NOTES_REPO?.trim() || null : null
       });
       case "GET /settings": {
         const s = (await loadSettings(env, true)) ?? {};
@@ -251,7 +252,6 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
         return json({ state: "done", repo, created });
       }
       case "POST /setup": {
-        if (env.DEPLOY_CONFIGURED) return fail("This server's notes are set in its deployment settings.", 409);
         const body = await request.json<{ storage?: "app" | "github"; token?: string; repo?: string; timezone?: string; ntfyTopic?: string; pushoverUser?: string; pushoverToken?: string }>();
         const prev = (await loadSettings(env, true)) ?? {};
         const timezone = body.timezone?.trim() || prev.timezone || "America/Los_Angeles";
@@ -260,16 +260,21 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
         if (topic && !/^[A-Za-z0-9_-]{20,64}$/.test(topic)) return fail("Notification topic must be 20 to 64 letters, digits, - or _ (long, so nobody can guess it).");
         // ntfy/Pushover are older options: only changed when the page sent them (it shows them only to setups that use them).
         const legacyGiven = ["ntfyTopic", "pushoverUser", "pushoverToken"].some(k => k in body);
-        const push = legacyGiven
+        const pushSettings = legacyGiven
           ? { ntfyTopic: topic || undefined,
               pushoverUser: body.pushoverUser === undefined ? prev.pushoverUser : body.pushoverUser.trim() || undefined,
               pushoverToken: body.pushoverToken === undefined ? prev.pushoverToken : body.pushoverToken.trim() || undefined }
           : { ntfyTopic: prev.ntfyTopic, pushoverUser: prev.pushoverUser, pushoverToken: prev.pushoverToken };
+        // Notes set on the deployment: Settings still saves the time zone and notification choices.
+        if (env.DEPLOY_CONFIGURED) {
+          await saveSettings(env, { ...prev, timezone, ...pushSettings });
+          return json({ ok: true, storage: "github" });
+        }
         // Notes kept in this app: nothing to connect. (Moving to GitHub later is in Settings.)
         const storage = body.storage ?? prev.storage ?? (prev.notesRepo ? "github" : "app");
         if (storage === "app") {
           if (!env.NOTES) return fail("This copy of the app can't store notes itself yet. Update it, or connect GitHub.");
-          const settings: Settings = { ...prev, storage: "app", timezone, ...push };
+          const settings: Settings = { ...prev, storage: "app", timezone, ...pushSettings };
           await saveSettings(env, settings);
           const reminders = await rescan(applySettings({ ...env, GITHUB_TOKEN: "", NOTES_REPO: "", NOTES_TIMEZONE: undefined, NOTES_BRANCH: undefined, NOTES_STORAGE: undefined }, settings)).catch(() => 0);
           return json({ ok: true, storage: "app", reminders });
@@ -278,7 +283,7 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
         if (!token) return fail("Paste your GitHub access key first.");
         const repo = (body.repo ?? "").trim();
         const { branch } = await prepareRepo(env, token, repo);
-        const settings: Settings = { storage: "github", githubToken: token, notesRepo: repo, notesBranch: branch, timezone, codeRepo: prev.codeRepo, ...push };
+        const settings: Settings = { storage: "github", githubToken: token, notesRepo: repo, notesBranch: branch, timezone, codeRepo: prev.codeRepo, name: prev.name, ...pushSettings };
         await saveSettings(env, settings);
         // Schedule reminders already written in the notes (e.g. a repository moved from another server).
         const reminders = await rescan(applySettings({ ...env, GITHUB_TOKEN: "", NOTES_REPO: "", NOTES_TIMEZONE: undefined, NOTES_BRANCH: undefined, NOTES_STORAGE: undefined }, settings)).catch(() => 0);
