@@ -187,7 +187,9 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
     // The same candidate may be retried after a response is lost, but never re-sent.
     if (reserved) return { status: "suppressed", reason: "already-delivered" };
 
-    const date = localStamp(now.getTime(), zone).date;
+    let date: string;
+    try { date = localStamp(now.getTime(), zone).date; }
+    catch { return { status: "suppressed", reason: "invalid-timezone" }; }
     const daily = "awareness:delivery-count:local:" + date;
     const count = (await this.ctx.storage.get<number>(daily)) ?? 0;
     const last = await this.ctx.storage.get<string>("awareness:delivery:last:local");
