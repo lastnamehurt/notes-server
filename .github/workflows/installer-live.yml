@@ -23,3 +23,6 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx tsx scripts/live-install-test.ts
+      - name: Real push services accept the app's sender identity and format
+        if: always()
+        run: npx tsx scripts/live-push-check.ts
