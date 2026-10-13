@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { AwarenessInbox, type InboxCandidate } from "./awareness-inbox";
+import { AwarenessHistory } from "./awareness-history";
 import { interruptionDecision } from "./awareness-interruption";
 import { DEFAULT_AWARENESS_PREFERENCES, parseAwarenessPreferences, type AwarenessPreferences } from "./awareness-preferences";
 import { nextOccurrence, normalizeTopic, pushConfigured, legacyPushConfigured, webPushConfigured, NO_PUSH, DEFAULT_TIMEZONE, type Reminder, type ReminderEnv } from "./reminder-parse";
@@ -210,14 +211,26 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
     try {
       const url = (await this.appLink())?.replace(/#today$/, "#awareness");
       await sendNotice(env, { title: "Daybook Awareness", message: candidate.reason, url, tags: "bell" }, this.pruning);
+      await new AwarenessHistory(this.ctx.storage).record("local", id, "sent");
       return { status: "sent", reason: "delivered" };
     } catch {
       // Keep the reservation. An uncertain provider response must not create duplicate pushes.
+      await new AwarenessHistory(this.ctx.storage).record("local", id, "delivery-unconfirmed");
       return { status: "digest", reason: "delivery-unconfirmed" };
     }
   }
 
   /** Awareness inbox stays within this installation's existing private Durable Object. */
+  async awarenessHistoryList(limit = 100) {
+    return new AwarenessHistory(this.ctx.storage).list("local", limit);
+  }
+  async awarenessHistoryErase() {
+    return { deleted: await new AwarenessHistory(this.ctx.storage).erase("local") };
+  }
+  async awarenessHistoryPrune() {
+    return { deleted: await new AwarenessHistory(this.ctx.storage).prune("local") };
+  }
+
   async awarenessInboxList(limit = 20, cursor?: string) {
     return new AwarenessInbox(this.ctx.storage).list("local", { limit, cursor });
   }
@@ -225,7 +238,9 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
     return new AwarenessInbox(this.ctx.storage).get("local", id);
   }
   async awarenessInboxAction(id: string, action: "dismiss" | "snooze" | "mute", until?: string) {
-    return new AwarenessInbox(this.ctx.storage).action("local", id, action, until);
+    const result = await new AwarenessInbox(this.ctx.storage).action("local", id, action, until);
+    if (result) await new AwarenessHistory(this.ctx.storage).record("local", id, action === "snooze" ? "snoozed" : action === "mute" ? "muted" : "dismissed");
+    return result;
   }
   async awarenessInboxAdd(candidate: InboxCandidate) {
     return new AwarenessInbox(this.ctx.storage).add("local", candidate);
