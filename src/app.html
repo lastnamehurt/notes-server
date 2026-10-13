@@ -94,9 +94,18 @@ button { cursor: pointer; }
 .date .mon { font: 400 20px/1 "DM Serif Display", Georgia, serif; margin-left: 7px; color: var(--ink-2); }
 .lockbtn { min-height: 44px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 999px; color: var(--ink-2); font-size: 14px; font-weight: 600; padding: 8px 15px; box-shadow: var(--shadow); }
 
-nav.tabs { display: flex; gap: 4px; border: 1px solid var(--rule); border-radius: 14px; padding: 4px; margin: 0; overflow-x: auto; scrollbar-width: none; background: color-mix(in srgb, var(--sheet) 68%, transparent); }
-nav.tabs a { display: flex; min-height: 44px; align-items: center; padding: 8px 13px; color: var(--ink-2); text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 10px; white-space: nowrap; transition: background-color .15s ease, color .15s ease; }
-nav.tabs a[aria-current="page"] { color: var(--mark-ink); background: var(--mark); box-shadow: 0 1px 2px rgb(36 38 51 / .18); }
+/* Four primary sections plus a "More" menu, so the bar fits a phone without scrolling. */
+nav.tabs { position: relative; z-index: 15; display: flex; gap: 4px; border: 1px solid var(--rule); border-radius: 14px; padding: 4px; margin: 0; background: color-mix(in srgb, var(--sheet) 68%, transparent); }
+nav.tabs > a, .tabs-more > summary { flex: 1 1 auto; justify-content: center; }
+nav.tabs a, .tabs-more > summary { display: flex; min-height: 44px; align-items: center; padding: 8px 13px; color: var(--ink-2); text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 10px; white-space: nowrap; transition: background-color .15s ease, color .15s ease; }
+nav.tabs a[aria-current="page"], .tabs-more > summary[data-current] { color: var(--mark-ink); background: var(--mark); box-shadow: 0 1px 2px rgb(36 38 51 / .18); }
+.tabs-more { position: relative; display: flex; flex: 1 1 auto; }
+.tabs-more > summary { gap: 4px; cursor: pointer; list-style: none; }
+.tabs-more > summary::-webkit-details-marker { display: none; }
+.tabs-more > summary::after { content: "⌄"; font-size: 12px; line-height: 1; transform: translateY(-2px); }
+.tabs-menu { position: absolute; right: 0; top: calc(100% + 8px); width: 180px; padding: 6px; display: grid; gap: 2px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 14px; box-shadow: 0 8px 28px rgb(0 0 0 / .18); }
+.tabs-menu a { justify-content: flex-start; }
+.tabs-menu a:hover { background: var(--paper); }
 
 main { padding: 22px 0 calc(170px + env(safe-area-inset-bottom)); }
 .empty { color: var(--ink-2); padding: 28px 0; }
@@ -395,7 +404,7 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
   .shell { padding-left: 16px; padding-right: 16px; }
   .mast { padding-top: 16px; }
   nav.tabs { gap: 2px; }
-  nav.tabs a { padding: 8px 10px; font-size: 13px; }
+  nav.tabs > a, .tabs-more > summary { padding: 8px 8px; font-size: 13px; }
   .ev { grid-template-columns: 52px 1fr; gap: 20px; }
   .rail::before { left: 64px; }
   .ev::after { left: 60px; }
@@ -455,7 +464,7 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
 .brief-actions .btn{flex:1;min-height:40px}
 #brief-preview{width:100%;margin-bottom:12px}
 .brief-out{white-space:pre-wrap;background:var(--sheet);border:1px solid var(--rule);border-radius:12px;padding:12px;font:inherit;font-size:14px;margin-top:12px}
-.journal-day{border:1px solid #8885;border-radius:16px;padding:16px;margin:12px 0}.journal-day-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}.journal-day-heading h3{margin:0}.journal-activities{line-height:1.8}.journal-reflection{white-space:pre-wrap;line-height:1.5}@media(max-width:700px){.tabs .advanced-tab{display:none}}
+.journal-day{border:1px solid #8885;border-radius:16px;padding:16px;margin:12px 0}.journal-day-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}.journal-day-heading h3{margin:0}.journal-activities{line-height:1.8}.journal-reflection{white-space:pre-wrap;line-height:1.5}
 /* Add a task form: wrapping single-choice buttons */
 .task-form fieldset.pick{border:0;padding:0;margin:0 0 14px}
 .task-form legend{font-weight:600;margin-bottom:8px;padding:0}
@@ -522,13 +531,18 @@ button.today-focus-dot:disabled{color:var(--mark)}
   </header>
   <nav class="tabs" id="tabs" hidden aria-label="Sections">
     <a href="#today">Today</a>
-    <a href="#awareness">Awareness</a>
-    <a href="#journal">Journal</a>
     <a href="#reminders">Tasks</a>
+    <a href="#journal">Journal</a>
     <a href="#notes">Memory</a>
-    <a href="#logs" class="advanced-tab">Logs</a>
-    <a href="#goals" class="advanced-tab">Goals</a>
-    <a href="#settings" id="settingsTab" hidden>Settings</a>
+    <details class="tabs-more" id="tabs-more">
+      <summary id="tabs-more-label">More</summary>
+      <div class="tabs-menu" role="group" aria-label="More sections">
+        <a href="#awareness">Awareness</a>
+        <a href="#goals">Goals</a>
+        <a href="#logs">Logs</a>
+        <a href="#settings" id="settingsTab" hidden>Settings</a>
+      </div>
+    </details>
   </nav>
   <main id="main" aria-live="polite"></main>
 </div>
@@ -583,6 +597,12 @@ appearance.addEventListener("click", e => {
 document.addEventListener("click", e => { if (!appearance.contains(e.target)) appearance.open = false; });
 appearance.addEventListener("keydown", e => {
   if (e.key === "Escape") { appearance.open = false; themeToggle.focus(); e.preventDefault(); }
+});
+// "More" sections menu: close on outside tap, on picking a section (even the current one), and on Escape.
+const tabsMore = $("#tabs-more");
+document.addEventListener("click", e => { if (!tabsMore.contains(e.target) || e.target.closest(".tabs-menu a")) tabsMore.open = false; });
+tabsMore.addEventListener("keydown", e => {
+  if (e.key === "Escape") { tabsMore.open = false; $("#tabs-more-label").focus(); e.preventDefault(); }
 });
 const main = $("#main");
 const sheet = $("#sheet");
@@ -2367,6 +2387,10 @@ async function route() {
   const tab = view === "inbox" ? "notes" : view === "new-goal" ? "goals" : view === "note" || view === "new" ? (arg.startsWith("goals") ? "goals" : "notes") : view;
   const link = $(`#tabs a[href="#${tab}"]`);
   if (link) link.setAttribute("aria-current", "page");
+  const more = $("#tabs-more"), inMore = !!(link && more.contains(link));
+  more.open = false;
+  $("#tabs-more-label").toggleAttribute("data-current", inMore);
+  $("#tabs-more-label").textContent = inMore ? link.textContent : "More";
   $("#composer").hidden = view !== "today" && hash !== "today";
   try {
     if (!cfg.configured) { $("#tabs").hidden = true; $("#composer").hidden = true; await views.setup(); }
