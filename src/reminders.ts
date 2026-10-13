@@ -275,7 +275,7 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
     if (inserted > 0) {
       const preferences = await this.awarenessPreferences();
       if (preferences.enabled && !preferences.paused && preferences.sources.daybook) {
-        const stored = await this.ctx.storage.list<DeferralEvidence>({ prefix: "awareness:event:local:" });
+        const stored = await this.ctx.storage.list<DeferralEvidence & { source: string }>({ prefix: "awareness:event:local:" });
         const evidence = [...stored.values()].filter(e => e.ownerId === "local" && e.source === "daybook");
         const inbox = new AwarenessInbox(this.ctx.storage);
         for (const suggestion of threeDeferrals(evidence, "local")) {
