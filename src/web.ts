@@ -186,6 +186,11 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
   try {
     // Setup page: works before notes are configured.
     switch (route) {
+      case "GET /awareness/preferences": return json(await scheduler(env).awarenessPreferences());
+      case "PUT /awareness/preferences": {
+        const body: unknown = await request.json();
+        return json(await scheduler(env).setAwarenessPreferences(body));
+      }
       case "GET /awareness/inbox": {
         const limit = Number(url.searchParams.get("limit") ?? "20");
         const cursor = url.searchParams.get("cursor") || undefined;

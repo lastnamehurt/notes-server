@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { AwarenessInbox, type InboxCandidate } from "./awareness-inbox";
+import { DEFAULT_AWARENESS_PREFERENCES, parseAwarenessPreferences, type AwarenessPreferences } from "./awareness-preferences";
 import { nextOccurrence, normalizeTopic, pushConfigured, legacyPushConfigured, webPushConfigured, NO_PUSH, DEFAULT_TIMEZONE, type Reminder, type ReminderEnv } from "./reminder-parse";
 import { generateVapidKeys, sendWebPush, type PushMessage, type Subscription, type WebPushState } from "./web-push";
 import { signAction } from "./action";
@@ -155,6 +156,16 @@ export interface Fired { note: string; text: string; at: number; repeat: boolean
 
 /** Single instance ("global") that stores upcoming reminders and fires them with an alarm. */
 export class ReminderScheduler extends DurableObject<ReminderEnv> {
+  async awarenessPreferences(): Promise<AwarenessPreferences> {
+    const saved = await this.ctx.storage.get<AwarenessPreferences>("awareness:preferences:local");
+    return saved ? parseAwarenessPreferences(saved) : DEFAULT_AWARENESS_PREFERENCES;
+  }
+  async setAwarenessPreferences(input: unknown): Promise<AwarenessPreferences> {
+    const preferences = parseAwarenessPreferences(input);
+    await this.ctx.storage.put("awareness:preferences:local", preferences);
+    return preferences;
+  }
+
   /** Awareness inbox stays within this installation's existing private Durable Object. */
   async awarenessInboxList(limit = 20, cursor?: string) {
     return new AwarenessInbox(this.ctx.storage).list("local", { limit, cursor });

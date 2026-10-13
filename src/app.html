@@ -2199,6 +2199,56 @@ function unlockSheet() {
   });
 }
 
+/* ---------- Awareness preferences ---------- */
+async function renderAwarenessPreferences() {
+  const prefs = await api("/awareness/preferences");
+  const section = document.createElement("section");
+  section.className = "awareness-card";
+  const heading = document.createElement("h3"); heading.textContent = "Awareness settings";
+  const description = document.createElement("p"); description.textContent = "Off by default. Suggestions stay in Daybook; proactive notifications require separate notification setup.";
+  const form = document.createElement("form");
+  const toggle = (name, label, checked) => {
+    const row = document.createElement("label"); row.style.display = "block"; row.style.minHeight = "44px";
+    const input = document.createElement("input"); input.type = "checkbox"; input.name = name; input.checked = checked;
+    row.append(input, " " + label); form.append(row); return input;
+  };
+  const enabled = toggle("enabled", "Enable Awareness", prefs.enabled);
+  const paused = toggle("paused", "Pause suggestions", prefs.paused);
+  const sources = {};
+  for (const [key, label] of [["daybook","Daybook tasks"],["appleReminders","Apple Reminders"],["calendar","Calendar"],["github","GitHub"]])
+    sources[key] = toggle(key, label, prefs.sources[key]);
+  const field = (name, label, type, value) => {
+    const wrap = document.createElement("label"); wrap.style.display = "block"; wrap.style.margin = "12px 0";
+    wrap.textContent = label + " ";
+    const input = document.createElement("input"); input.name = name; input.type = type; input.value = value;
+    input.style.maxWidth = "100%"; wrap.append(input); form.append(wrap); return input;
+  };
+  const mode = document.createElement("select"); mode.name = "mode"; mode.setAttribute("aria-label","Awareness mode");
+  for (const value of ["inbox","digest","proactive"]) {
+    const option = document.createElement("option"); option.value = value; option.textContent = value; mode.append(option);
+  }
+  mode.value = prefs.mode; form.append(mode);
+  const start = field("quiet-start", "Quiet hours start", "time", prefs.quietHours.start);
+  const end = field("quiet-end", "Quiet hours end", "time", prefs.quietHours.end);
+  const budget = field("push-budget", "Maximum proactive prompts per day (0–2)", "number", String(prefs.dailyPushBudget));
+  budget.min = "0"; budget.max = "2"; budget.step = "1";
+  const save = document.createElement("button"); save.className = "btn"; save.type = "submit"; save.textContent = "Save Awareness settings";
+  form.append(save);
+  form.onsubmit = async event => {
+    event.preventDefault(); save.disabled = true;
+    try {
+      await api("/awareness/preferences", { method: "PUT", body: {
+        enabled: enabled.checked, paused: paused.checked, mode: mode.value,
+        sources: Object.fromEntries(Object.entries(sources).map(([k,input]) => [k,input.checked])),
+        quietHours: { start: start.value, end: end.value }, dailyPushBudget: Number(budget.value)
+      } });
+      toast("Awareness settings saved");
+    } catch (error) { toast(error.message); } finally { save.disabled = false; }
+  };
+  section.append(heading,description,form);
+  return section;
+}
+
 /* ---------- Awareness inbox ---------- */
 async function renderAwareness() {
   main.innerHTML = '<h2>Awareness</h2><p class="awareness-muted">Private suggestions based on your activity. No notifications required.</p><div id="awareness-items" class="awareness-list" aria-live="polite"><p>Loading suggestions…</p></div><button class="awareness-more" id="awareness-more" hidden>Load more</button>';
@@ -2258,6 +2308,7 @@ async function renderAwareness() {
   };
   more.onclick = () => load(true);
   await load();
+  main.append(await renderAwarenessPreferences());
 }
 
 /* ---------- Router ---------- */
