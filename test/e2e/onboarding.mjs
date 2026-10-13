@@ -117,8 +117,11 @@ try {
   await page.click("button[type=submit]");
 
   // 2. First-run setup
-  await page.waitForSelector("#gh-start");
+  await page.waitForSelector('input[name="storage"]');
   check(await page.locator("#tabs").isHidden(), "First run shows only setup");
+  // This walk-through takes the GitHub path; test:app-storage covers the default (notes kept in the app).
+  await page.click('input[name="storage"][value="github"]');
+  await page.waitForSelector("#gh-start");
   check(/access your repositories/.test(await page.innerText("#s2")), "Setup explains what GitHub will ask");
   check(await page.locator("#copytopic").isVisible() && await page.locator("#ntfy-subscribe").count() === 0, "iPhone/desktop: ntfy name with Copy (no Android link)");
   check(await page.locator("#diagnostics").count() === 0, "No diagnostics card during first run");

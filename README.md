@@ -20,7 +20,7 @@ You'll make two free accounts along the way: **GitHub** (where your notes are sa
 
 ## Step 1: Make your two accounts
 
-1. Sign up at [github.com/signup](https://github.com/signup). Confirm your email.
+1. Sign up at [github.com/signup](https://github.com/signup). Confirm your email. (Cloudflare uses it to set up your app.)
 2. Sign up at [dash.cloudflare.com/sign-up](https://dash.cloudflare.com/sign-up). Confirm your email.
 
 ## Step 2: Make up a password
@@ -45,7 +45,7 @@ Enter your password on the page that opened.
 
 The app walks you through the rest:
 
-1. **Connect your GitHub.** Tap **Connect GitHub**, then **Copy code and open GitHub**. On GitHub, paste the code, tap **Continue**, then **Authorize**. Come back to the app: it makes a private place for your notes by itself.
+1. **Choose where your notes live.** Keep the default, **In this app**: nothing else to set up. Or pick **In my GitHub, as files** if you want history, Obsidian or the `note` command line; then tap **Connect GitHub**, **Copy code and open GitHub**, paste the code, tap **Continue** and **Authorize**, and come back.
 2. **Check your time zone.**
 3. **Turn on phone reminders** with the free ntfy app (optional).
 
@@ -82,8 +82,10 @@ Updates replace the app's code only. Your notes are in a separate repository and
 
 ## Good to know
 
-- **Who can see my notes?** Only people who can sign in to your GitHub or Cloudflare account. Your notes are not end-to-end encrypted: they are stored as plain text in your private GitHub repository, and your own Cloudflare Worker reads them to answer your requests. The person who shared this with you has no access to either account.
-- **What does Connect GitHub give the app?** GitHub shows it as access to your repositories, because GitHub's sign-in can't be limited to one. Daybook only ever reads and writes your notes repository, and the key is kept in your own Cloudflare account, not by anyone else. If you have other private repositories you'd rather keep out of reach, use **Use an access key instead** during setup and give the key access to your notes repository only.
+- **Who can see my notes?** Only you. Kept in the app, they're stored in your own Cloudflare account; kept on GitHub, they're plain-text files in your own private repository. Either way, your own app reads them to answer you and Claude. They're not end-to-end encrypted, and the person who shared this with you has no access to either account.
+- **Can I get my notes out?** Yes. In **Settings**, tap **Download all my notes** for a zip of plain text files, any time.
+- **Can I move them to GitHub later?** Yes. In **Settings**, open **Move my notes to GitHub** and connect your GitHub. Every note is copied into a new private repository called **daybook-notes**, and saved there from then on.
+- **What does Connect GitHub give the app?** GitHub shows it as access to your repositories, because GitHub's sign-in can't be limited to one. Daybook only ever reads and writes your notes repository, and the key is kept in your own Cloudflare account, not by anyone else. If you have other private repositories you'd rather keep out of reach, use **Use an access key instead** and give the key access to your notes repository only.
 - **Connect GitHub depends on a small GitHub app called "Notes server".** If that app were ever removed, the app would ask you to connect again; your notes stay safe in your repository. You can see or revoke its access any time in GitHub → Settings → Applications.
 - **Forgot your password?** Open the app and use **Sign in with GitHub** under the password box, with the GitHub account that owns your notes. Claude still asks for the password, so to set a new one, open your Worker in Cloudflare → **Settings** → **Variables and Secrets**, edit **MCP_BEARER_TOKEN** (or **PASSWORD** if there's no MCP_BEARER_TOKEN), and save. Then reconnect Claude.
 - **Typed the wrong password too many times?** Wait 15 minutes; the app locks briefly to stop guessing.

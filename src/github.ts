@@ -1,7 +1,12 @@
 import type { ReminderEnv, ReminderScheduler } from "./reminders";
+import type { NotesStore } from "./app-notes";
 
 export interface Env extends ReminderEnv {
   REMINDERS: DurableObjectNamespace<ReminderScheduler>;
+  /** App storage for notes (see app-notes.ts); used when NOTES_STORAGE is "app". */
+  NOTES?: DurableObjectNamespace<NotesStore>;
+  /** "app" = notes in this app's own Cloudflare storage; otherwise GitHub (NOTES_REPO). Set from setup, per request. */
+  NOTES_STORAGE?: "app" | "github";
   GITHUB_TOKEN: string;
   /** Override for tests only; defaults to https://api.github.com. */
   GITHUB_API_URL?: string;

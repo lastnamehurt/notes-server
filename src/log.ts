@@ -1,4 +1,4 @@
-import type { GithubNotes } from "./github";
+import type { Notes } from "./storage";
 import { localStamp, DEFAULT_TIMEZONE } from "./reminder-parse";
 
 // One note per day: journal/log/YYYY-MM-DD.md, lines "- HH:MM entry #tag", kept in time order.
@@ -44,7 +44,7 @@ export function journalWithActivity(existing: string | null, date: string, logCo
 }
 
 /** Rebuild journal activity from the canonical log; safe to retry after partial failure. */
-export async function syncDailyJournal(notes: GithubNotes, date: string): Promise<void> {
+export async function syncDailyJournal(notes: Notes, date: string): Promise<void> {
   const source = await notes.get(logPath(date));
   const path = journalPath(date);
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -62,7 +62,7 @@ export async function syncDailyJournal(notes: GithubNotes, date: string): Promis
 
 export interface LogOptions { date?: string; time?: string; timeZone?: string; now?: number; }
 
-export async function appendLog(notes: GithubNotes, entry: string, opts: LogOptions = {}): Promise<{ name: string; line: string }> {
+export async function appendLog(notes: Notes, entry: string, opts: LogOptions = {}): Promise<{ name: string; line: string }> {
   const clean = entry.replace(/\s*\n+\s*/g, " ").trim();
   if (!clean) throw new Error("Log entry cannot be empty");
   if (opts.date && !/^\d{4}-\d{2}-\d{2}$/.test(opts.date)) throw new Error("date must be YYYY-MM-DD");
@@ -88,7 +88,7 @@ export async function appendLog(notes: GithubNotes, entry: string, opts: LogOpti
 }
 
 /** Daily logs from the last `days` calendar days (including today), newest first. */
-export async function recentLogs(notes: GithubNotes, days: number, timeZone = DEFAULT_TIMEZONE, now = Date.now()): Promise<{ date: string; content: string }[]> {
+export async function recentLogs(notes: Notes, days: number, timeZone = DEFAULT_TIMEZONE, now = Date.now()): Promise<{ date: string; content: string }[]> {
   const span = Math.max(1, Math.min(Math.floor(days), 90));
   const cutoff = logPath(localStamp(now - (span - 1) * 86_400_000, timeZone).date);
   return (await notes.all(undefined, LOG_PREFIX)).filter(n => n.name >= cutoff)
@@ -98,7 +98,7 @@ export async function recentLogs(notes: GithubNotes, days: number, timeZone = DE
 export interface LogEdit { date: string; original: string; entry?: string; time?: string; remove?: boolean; }
 
 /** Change or delete one line (matched exactly) in a day's log, keeping time order. */
-export async function editLog(notes: GithubNotes, edit: LogEdit): Promise<{ name: string; line: string | null }> {
+export async function editLog(notes: Notes, edit: LogEdit): Promise<{ name: string; line: string | null }> {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(edit.date)) throw new Error("date must be YYYY-MM-DD");
   const name = logPath(edit.date);
   const { content, sha } = await notes.get(name);

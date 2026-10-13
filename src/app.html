@@ -351,6 +351,8 @@ dialog.sheet h2 { margin: 0 0 14px; font-size: 21px; }
 
 /* Lock */
 .lock { padding-top: 10dvh; }
+.storage-choice label { align-items: flex-start; }
+.storage-choice input { margin-top: 3px; }
 .update-banner { border: 1.5px solid var(--mark); }
 .update-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .lock-alt { padding-top: 18px; margin-top: 18px; border-top: 1px solid var(--rule); }
@@ -1525,8 +1527,15 @@ views.setup = async () => {
   let chosenRepo = prev.notesRepo || "";
   const managed = cfg.canSetup === false;
   const connect = cfg.githubConnect && !managed;
-  // Step numbers: with Connect GitHub, one step covers the repository and its key.
-  const n = connect ? { tz: 2, push: 3 } : first ? { tz: 3, push: 4 } : { tz: 2, push: 3 };
+  // Where notes live: new installs default to this app's own storage; GitHub is an option, and a later switch.
+  const appCapable = cfg.appStorage && !managed;
+  const chooseStorage = first && appCapable;
+  const onAppStorage = !first && prev.storage === "app";
+  let chosenStorage = chooseStorage || onAppStorage ? "app" : "github";
+  const ghMove = onAppStorage;
+  // Step numbers: with Connect GitHub (or the storage choice), one step covers where notes live.
+  const n = connect || chooseStorage || onAppStorage ? { tz: 2, push: 3 } : first ? { tz: 3, push: 4 } : { tz: 2, push: 3 };
+  const downloadLink = `<a class="btn quiet a-btn" href="/app/api/export" download>Download all my notes</a>`;
 
   const createRepoStep = (num) => h`<section class="step" id="s1"><h3><span class="n">${num}</span>Make a private place for your notes</h3>
       <p>This opens GitHub with a private repository called <b>notes</b> ready to create. Check <b>Private</b> is selected, then tap <b>Create repository</b>.</p>
@@ -1543,7 +1552,7 @@ views.setup = async () => {
       <button class="btn" id="check" type="button">Check key</button>
       <div id="repos"></div>`;
   const githubBlock = connect
-    ? h`<section class="step" id="s2"><h3><span class="n">1</span>Connect your GitHub</h3>
+    ? h`<section class="step" id="s2"${raw(chooseStorage ? " hidden" : "")}><h3>${raw(chooseStorage ? "" : '<span class="n">1</span>')}Connect your GitHub</h3>
       <p>Your notes are saved in a private repository on your GitHub. Only you can see it.</p>
       <p class="muted">GitHub will ask to let <b>Notes server</b> access your repositories. That's GitHub's standard wording: Daybook only reads and writes your notes repository, and the key stays in your own app.</p>
       <div id="gh-flow">${raw(prev.hasToken && prev.notesRepo
@@ -1555,11 +1564,24 @@ views.setup = async () => {
         ${raw(keyFields)}</details></section>`
     : (first ? createRepoStep(1) : "") + h`<section class="step" id="s2"><h3><span class="n">${first ? 2 : 1}</span>Give this app a key to it</h3>${raw(keyFields)}</section>`;
 
+  const storageChoice = h`<section class="step" id="s1"><h3><span class="n">1</span>Where should your notes live?</h3>
+      <div class="choices storage-choice" role="radiogroup">
+        <label><input type="radio" name="storage" value="app" checked><span><b>In this app</b> (simplest)<br><span class="muted">Nothing else to set up. Only you can see them. You can download them any time, or move them to GitHub later.</span></span></label>
+        <label><input type="radio" name="storage" value="github"><span><b>In my GitHub, as files</b><br><span class="muted">For history, editing in apps like Obsidian, and the note command line. Needs a free GitHub account.</span></span></label>
+      </div></section>`;
+  const appNotesBlock = h`<section class="step ok" id="s2"><h3><span class="n">1</span>Your notes</h3>
+      <p>Your notes are stored in this app. Only you can see them.</p>
+      <p>${raw(downloadLink)}</p>
+      ${raw(connect ? h`<details class="more" id="move-gh"><summary>Move my notes to GitHub</summary>
+        <p class="muted">Copies every note into a new private repository on your GitHub, as plain files you can read anywhere, with history, and use with Obsidian or the note command line. From then on, notes are saved there. GitHub will ask to let <b>Notes server</b> access your repositories; Daybook only uses the new notes repository.</p>
+        <div id="gh-flow"><button class="btn" id="gh-start" type="button">Connect GitHub and move my notes</button></div></details>` : "")}</section>`;
+
   main.innerHTML = h`<div class="setup">
     <h2>${first ? "Let's set up your notes" : "Settings"}</h2>
-    <p class="lede">${first ? "About 5 minutes. Your notes are saved to your own private GitHub repository; nobody else can see them." : "Change where notes are saved, your time zone, or phone notifications."}</p>
+    <p class="lede">${first ? "A couple of minutes. Only you can see your notes." : "Where your notes live, your time zone, and phone notifications."}</p>
 
-    ${raw(githubBlock)}
+    ${raw(chooseStorage ? storageChoice + githubBlock : onAppStorage ? appNotesBlock : githubBlock)}
+    ${raw(!first && !onAppStorage && cfg.configured ? `<section class="step" id="backup"><h3>Your notes</h3><p>Every note as plain text files.</p><p>${downloadLink}</p></section>` : "")}
     ${raw(cfg.configured ? `<section class="step" id="briefings"><h3>Daily briefings</h3>
       <p>A short push each morning and evening: what's overdue, due today, done, and coming tomorrow. Skipped on days with nothing to report.</p>
       <div id="brief-body"><p class="muted">Loading…</p></div></section>` : "")}
@@ -1636,8 +1658,13 @@ views.setup = async () => {
     if (!ghActive || ghBusy) return;
     ghBusy = true; clearTimeout(ghTimer);
     try {
-      const r = await api("/setup/github/poll", { method: "POST", body: { timezone: $("#tz").value } });
-      if (r.state === "done") ghConnected(r.repo, r.created);
+      const r = await api("/setup/github/poll", { method: "POST", body: { timezone: $("#tz").value, move: ghMove } });
+      if (r.state === "done" && ghMove) {
+        ghActive = false; clearTimeout(ghTimer);
+        $("#gh-flow").innerHTML = h`<p class="gh-ok">✓ Moved ${r.moved} note${r.moved === 1 ? "" : "s"} to <b>${r.repo}</b> (private). Your notes are saved there from now on.</p>`;
+        cfg = await api("/config"); toast("Your notes are now on GitHub");
+      }
+      else if (r.state === "done") ghConnected(r.repo, r.created);
       else if (r.state === "failed") ghFailed(r.message);
       else { if (r.interval) ghInterval = r.interval; ghTimer = setTimeout(ghPoll, ghInterval * 1000); }
     } catch (e) { if (e instanceof Locked) { ghBusy = false; return showLock(); } ghFailed(e.message); }
@@ -1657,7 +1684,7 @@ views.setup = async () => {
       ghActive = true; ghTimer = setTimeout(ghPoll, ghInterval * 1000);
     } catch (e) { if (e instanceof Locked) return showLock(); ghFailed(e.message); }
   }
-  if (connect) {
+  if (connect && $("#gh-start")) {
     $("#gh-start").onclick = ghStart;
     // Coming back from GitHub: check straight away instead of waiting for the next poll.
     const onBack = () => { if (!document.hidden && ghActive && $("#gh-flow")) { clearTimeout(ghTimer); setTimeout(ghPoll, 300); } };
@@ -1666,9 +1693,15 @@ views.setup = async () => {
   }
 
   isDirty = () => ghActive || Boolean($("#tok") && $("#tok").value.trim());
-  $("#check").onclick = check;
-  $("#tok").addEventListener("paste", () => setTimeout(check, 50));
-  if (prev.hasToken) check();
+  main.querySelectorAll('input[name="storage"]').forEach(r => r.onchange = () => {
+    chosenStorage = r.value;
+    const gh = $("#s2"); if (gh) gh.hidden = chosenStorage !== "github";
+  });
+  if ($("#check")) {
+    $("#check").onclick = check;
+    $("#tok").addEventListener("paste", () => setTimeout(check, 50));
+    if (prev.hasToken) check();
+  }
   if (!first) wireAssistant(location.origin + "/mcp");
   if (!first) loadUpdate().then(u => {
     const box = $("#update-status"); if (!box) return;
@@ -1684,11 +1717,15 @@ views.setup = async () => {
     const b = $("#save"); b.disabled = true; b.textContent = "Saving…"; $("#saveerr").textContent = "";
     const pushoverUser = $("#pouser").value.trim(), pushoverToken = $("#potoken").value.trim();
     try {
-      if (!chosenRepo) throw new Error(connect ? "Connect GitHub in step 1 first." : "Check your key and pick where to save notes.");
-      await api("/setup", { method: "POST", body: {
+      const push = { ntfyTopic: $("#usentfy").checked && !(pushoverUser && pushoverToken) ? topic : "", pushoverUser, pushoverToken };
+      if (chosenStorage === "app") await api("/setup", { method: "POST", body: { storage: "app", timezone: $("#tz").value, ...push } });
+      else {
+      if (!chosenRepo) throw new Error(connect ? "Connect GitHub first." : "Check your key and pick where to save notes.");
+      await api("/setup", { method: "POST", body: { storage: "github",
         token: $("#tok") ? $("#tok").value.trim() : "", repo: chosenRepo, timezone: $("#tz").value,
         ntfyTopic: $("#usentfy").checked && !(pushoverUser && pushoverToken) ? topic : "",
         pushoverUser, pushoverToken } });
+      }
       cfg = await api("/config"); drawDate(); $("#tabs").hidden = false; $("#settingsTab").hidden = !cfg.configured;
       showDone(location.origin + "/mcp");
     } catch (e) { if (e instanceof Locked) return showLock(); $("#saveerr").textContent = e.message; }

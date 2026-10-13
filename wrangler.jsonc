@@ -8,9 +8,9 @@
   // No id: Wrangler reuses the namespace already bound to a deployed Worker, or creates one on a first deploy.
   "kv_namespaces": [{ "binding": "OAUTH_KV" }],
   "durable_objects": {
-    "bindings": [{ "name": "REMINDERS", "class_name": "ReminderScheduler" }]
+    "bindings": [{ "name": "REMINDERS", "class_name": "ReminderScheduler" }, { "name": "NOTES", "class_name": "NotesStore" }]
   },
-  "migrations": [{ "tag": "v1-reminders", "new_sqlite_classes": ["ReminderScheduler"] }],
+  "migrations": [{ "tag": "v1-reminders", "new_sqlite_classes": ["ReminderScheduler"] }, { "tag": "v2-app-notes", "new_sqlite_classes": ["NotesStore"] }],
   "triggers": { "crons": ["7 * * * *"] },
   // Per-owner settings (NOTES_REPO, NOTES_TIMEZONE, PUBLIC_URL, push keys) live in Cloudflare, not in this file,
   // so one copy of the code serves every owner. keep_vars stops deploys from wiping ones set as dashboard variables.

@@ -10,13 +10,17 @@ import { GithubNotes, CATEGORIES, type Category, type Env } from "./github";
 import { appendLog, recentLogs, editLog, journalPath, journalWithActivity, LOG_PREFIX } from "./log";
 import { scheduler, scheduleNote, loadSettings, saveSettings, rescan, checkPassword, completeReminder, addReminder, addTask, startOfToday, effectiveEnv } from "./core";
 import { applySettings, notesConfigured, type Settings } from "./settings";
-import { listRepos, prepareRepo, startDeviceFlow, pollDeviceFlow, ensureNotesRepo, githubClientId, githubLogin, ownsNotesRepo } from "./setup";
+import { listRepos, prepareRepo, startDeviceFlow, pollDeviceFlow, ensureNotesRepo, githubClientId, githubLogin, ownsNotesRepo, moveAppNotesToGithub } from "./setup";
+import { AppNotes } from "./app-notes";
+import { GithubNotes as GithubStore } from "./github";
+import { makeZip } from "./zip";
 import { sendPush } from "./reminders";
 import { makeBackup, parseBackup, restoreMissing } from "./backup";
 import { signSession, verifySession } from "./action";
 import { APP_HTML, MANIFEST } from "./ui";
 import { pushConfigured, parseReminders } from "./reminder-parse";
 import { runAppleSync, SyncError } from "./apple-sync-run";
+import { notesFor } from "./storage";
 
 const COOKIE = "notes_session";
 const SESSION_DAYS = 30;
@@ -77,7 +81,7 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
     try { body = await request.json(); } catch { return fail("Send the reminders as JSON", 400); }
     try {
       return json(await runAppleSync(body, {
-        notes: new GithubNotes(configured), scheduler: scheduler(configured), timeZone: configured.NOTES_TIMEZONE,
+        notes: notesFor(configured), scheduler: scheduler(configured), timeZone: configured.NOTES_TIMEZONE,
         url: id => url.origin + "/app#task/" + id,
         noteChanged: (name, content) => scheduleNote(configured, name, content)
       }));
@@ -93,7 +97,7 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
     if (denied) return denied;
     const configured = await effectiveEnv(env);
     if (!notesConfigured(configured)) return fail("Notes not configured", 409);
-    const notes = await new GithubNotes(configured).all();
+    const notes = await notesFor(configured).all();
     const timezone = configured.NOTES_TIMEZONE || "America/Los_Angeles";
     const tasks = tasksFromNotes(notes);
     const exported = tasks.map(task => {
@@ -117,7 +121,7 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
   // Which single sign-in the lock screen shows: GitHub once notes are set up, the password before that.
   if (path === "/app/login/info" && request.method === "GET") {
     const configured = await effectiveEnv(env);
-    return json({ method: configured.NOTES_REPO ? "github" : "password" });
+    return json({ method: configured.NOTES_STORAGE !== "app" && configured.NOTES_REPO ? "github" : "password" });
   }
   if (path === "/app/login" && request.method === "POST") {
     const { key } = await request.json<{ key?: string }>().catch(() => ({ key: "" }));
@@ -169,11 +173,13 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
       case "GET /update": return json(await checkForUpdate(env));
       case "GET /config": return json({
         timeZone: env.NOTES_TIMEZONE || "America/Los_Angeles", categories: CATEGORIES, push: pushConfigured(env),
-        configured: notesConfigured(env), canSetup: !env.DEPLOY_CONFIGURED, githubConnect: Boolean(githubClientId(env))
+        configured: notesConfigured(env), canSetup: !env.DEPLOY_CONFIGURED, githubConnect: Boolean(githubClientId(env)),
+        storage: env.DEPLOY_CONFIGURED ? "github" : (env.NOTES_STORAGE ?? null), appStorage: Boolean(env.NOTES)
       });
       case "GET /settings": {
         const s = (await loadSettings(env, true)) ?? {};
-        return json({ notesRepo: s.notesRepo ?? null, timezone: s.timezone ?? null, hasToken: Boolean(s.githubToken),
+        return json({ storage: env.DEPLOY_CONFIGURED ? "github" : (env.NOTES_STORAGE ?? null), appStorage: Boolean(env.NOTES),
+          notesRepo: s.notesRepo ?? null, timezone: s.timezone ?? null, hasToken: Boolean(s.githubToken),
           notify: s.pushoverUser ? "pushover" : s.ntfyTopic ? "ntfy" : null, ntfyTopic: s.ntfyTopic ?? null });
       }
       case "POST /setup/repos": {
@@ -200,36 +206,53 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
           return json(result);
         }
         await s.setDeviceFlow(null);
-        // Connected: find or create a private "notes" repository and save it right away.
+        const { timezone, move } = await request.json<{ timezone?: string; move?: boolean }>().catch(() => ({ timezone: undefined, move: false }));
+        const prev = (await loadSettings(env, true)) ?? {};
+        // Settings → Move my notes to GitHub: copy everything into a new private repo, then switch.
+        if (move) {
+          if (env.NOTES_STORAGE !== "app") return json({ state: "failed", message: "Your notes are already on GitHub." });
+          const appNotes = await new AppNotes(env).snapshot();
+          const moved = await moveAppNotesToGithub(env, result.token, appNotes, (repo, branch) =>
+            new GithubStore({ ...env, GITHUB_TOKEN: result.token, NOTES_REPO: repo, NOTES_BRANCH: branch, NOTES_STORAGE: "github" }));
+          const next: Settings = { ...prev, storage: "github", githubToken: result.token, notesRepo: moved.repo, notesBranch: moved.branch };
+          await saveSettings(env, next);
+          await rescan(applySettings({ ...env, GITHUB_TOKEN: "", NOTES_REPO: "", NOTES_BRANCH: undefined, NOTES_STORAGE: undefined }, next)).catch(() => 0);
+          return json({ state: "done", repo: moved.repo, moved: moved.moved });
+        }
+        // Connected during setup: find or create a private "notes" repository and save it right away.
         const { repo, created } = await ensureNotesRepo(env, result.token);
         const { branch } = await prepareRepo(env, result.token, repo);
-        const { timezone } = await request.json<{ timezone?: string }>().catch(() => ({ timezone: undefined }));
-        const prev = (await loadSettings(env, true)) ?? {};
         let tz = prev.timezone || "America/Los_Angeles";
         if (timezone) try { new Intl.DateTimeFormat("en-US", { timeZone: timezone }); tz = timezone; } catch { /* keep */ }
-        await saveSettings(env, { ...prev, githubToken: result.token, notesRepo: repo, notesBranch: branch, timezone: tz });
+        await saveSettings(env, { ...prev, storage: "github", githubToken: result.token, notesRepo: repo, notesBranch: branch, timezone: tz });
         return json({ state: "done", repo, created });
       }
       case "POST /setup": {
         if (env.DEPLOY_CONFIGURED) return fail("This server's notes are set in its deployment settings.", 409);
-        const body = await request.json<{ token?: string; repo?: string; timezone?: string; ntfyTopic?: string; pushoverUser?: string; pushoverToken?: string }>();
+        const body = await request.json<{ storage?: "app" | "github"; token?: string; repo?: string; timezone?: string; ntfyTopic?: string; pushoverUser?: string; pushoverToken?: string }>();
         const prev = (await loadSettings(env, true)) ?? {};
-        const token = body.token?.trim() || prev.githubToken;
-        if (!token) return fail("Paste your GitHub access key first.");
         const timezone = body.timezone?.trim() || prev.timezone || "America/Los_Angeles";
         try { new Intl.DateTimeFormat("en-US", { timeZone: timezone }); } catch { return fail("Unknown time zone " + timezone); }
         const topic = body.ntfyTopic?.trim();
         if (topic && !/^[A-Za-z0-9_-]{20,64}$/.test(topic)) return fail("Notification topic must be 20 to 64 letters, digits, - or _ (long, so nobody can guess it).");
+        const push = { ntfyTopic: topic || undefined, pushoverUser: body.pushoverUser?.trim() || undefined, pushoverToken: body.pushoverToken?.trim() || undefined };
+        // Notes kept in this app: nothing to connect. (Moving to GitHub later is in Settings.)
+        const storage = body.storage ?? prev.storage ?? (prev.notesRepo ? "github" : "app");
+        if (storage === "app") {
+          if (!env.NOTES) return fail("This copy of the app can't store notes itself yet. Update it, or connect GitHub.");
+          const settings: Settings = { ...prev, storage: "app", timezone, ...push };
+          await saveSettings(env, settings);
+          const reminders = await rescan(applySettings({ ...env, GITHUB_TOKEN: "", NOTES_REPO: "", NOTES_TIMEZONE: undefined, NOTES_BRANCH: undefined, NOTES_STORAGE: undefined }, settings)).catch(() => 0);
+          return json({ ok: true, storage: "app", reminders });
+        }
+        const token = body.token?.trim() || prev.githubToken;
+        if (!token) return fail("Paste your GitHub access key first.");
         const repo = (body.repo ?? "").trim();
         const { branch } = await prepareRepo(env, token, repo);
-        const settings: Settings = {
-          githubToken: token, notesRepo: repo, notesBranch: branch, timezone,
-          ntfyTopic: topic || undefined,
-          pushoverUser: body.pushoverUser?.trim() || undefined, pushoverToken: body.pushoverToken?.trim() || undefined
-        };
+        const settings: Settings = { storage: "github", githubToken: token, notesRepo: repo, notesBranch: branch, timezone, ...push };
         await saveSettings(env, settings);
         // Schedule reminders already written in the notes (e.g. a repository moved from another server).
-        const reminders = await rescan(applySettings({ ...env, GITHUB_TOKEN: "", NOTES_REPO: "", NOTES_TIMEZONE: undefined, NOTES_BRANCH: undefined }, settings)).catch(() => 0);
+        const reminders = await rescan(applySettings({ ...env, GITHUB_TOKEN: "", NOTES_REPO: "", NOTES_TIMEZONE: undefined, NOTES_BRANCH: undefined, NOTES_STORAGE: undefined }, settings)).catch(() => 0);
         return json({ ok: true, repo, branch, reminders });
       }
       case "POST /test-push": {
@@ -238,8 +261,15 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
       }
     }
     if (!notesConfigured(env)) return fail("Finish setup first.", 409);
-    const notes = new GithubNotes(env);
+    const notes = notesFor(env);
     switch (route) {
+      // Settings → Download all my notes: every note as plain Markdown files in a zip, from either storage.
+      case "GET /export": {
+        const zip = makeZip(await notes.snapshot());
+        const day = new Date().toISOString().slice(0, 10);
+        return new Response(zip as unknown as BodyInit, { headers: { "Content-Type": "application/zip", "Cache-Control": "no-store",
+          "Content-Disposition": `attachment; filename="daybook-notes-${day}.zip"` } });
+      }
       case "GET /briefings": return json(await scheduler(env).getBriefings());
       case "PUT /briefings": {
         const { settings, revision } = await request.json<{ settings: unknown; revision: number }>();

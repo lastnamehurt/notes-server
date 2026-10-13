@@ -41,6 +41,9 @@ jobs:
       - name: First-run onboarding walk-through (phone)
         if: ${{ !inputs.base_url }}
         run: npm run test:onboarding
+      - name: Notes kept in the app (setup, Claude tools, download, move to GitHub)
+        if: ${{ !inputs.base_url }}
+        run: npm run test:app-storage
       - name: Upload failure evidence
         if: always()
         uses: actions/upload-artifact@v4

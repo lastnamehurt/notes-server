@@ -2,6 +2,7 @@ import { GithubNotes, localDate, type Env } from "./github";
 import { tasksFromNotes } from "./priorities";
 import { pushConfigured, DEFAULT_TIMEZONE } from "./reminder-parse";
 import { sendNotice } from "./reminders";
+import { notesFor } from "./storage";
 
 
 type Note = { name: string; content: string };
@@ -61,7 +62,7 @@ export async function runWeeklyReview(env: Env, now = Date.now()): Promise<boole
   if (!reviewDue(now, zone)) return false;
   const date = localDate(zone, new Date(now));
   const path = "journal/weekly-review-" + date + ".md";
-  const github = new GithubNotes(env);
+  const github = notesFor(env);
   const snapshot = await github.all();
   if (snapshot.some(n => n.name === path)) return false;
   const dates = new Set(Array.from({length: 7}, (_, daysAgo) =>

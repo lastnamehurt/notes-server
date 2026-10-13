@@ -3,6 +3,7 @@ import { parseReminders, pushConfigured, localStamp, zonedTime, DEFAULT_TIMEZONE
 import { LOG_PREFIX, appendLog } from "./log";
 import { equalSecret } from "./action";
 import { applySettings, deployConfigured, type Settings } from "./settings";
+import { notesFor } from "./storage";
 
 // Shared by the MCP tools and the web app.
 
@@ -32,7 +33,7 @@ export async function scheduleNote(env: Env, name: string, content: string) {
 
 export async function rescan(env: Env): Promise<number> {
   // Daily logs never hold reminders and grow by one a day; skip them so the scan stays bounded.
-  const notes = await new GithubNotes(env).all(LOG_PREFIX);
+  const notes = await notesFor(env).all(LOG_PREFIX);
   return scheduler(env).replaceAll(notes.flatMap(n => parseReminders(n.name, n.content, env.NOTES_TIMEZONE)));
 }
 
@@ -86,7 +87,7 @@ export function startOfToday(env: Env, now = Date.now()): number {
  * omitted (e.g. from chat), the occurrence today closest to now is used.
  */
 export async function completeReminder(env: Env, note: string, text: string, at?: number): Promise<{ ticked: boolean }> {
-  const notes = new GithubNotes(env);
+  const notes = notesFor(env);
   const s = scheduler(env);
   if (at === undefined) {
     const since = startOfToday(env);
@@ -134,7 +135,7 @@ export async function addTask(env: Env, input: { text: string; schedule?: string
     if (!parsed.length) throw new Error("Couldn't read that date and time");
     if (!parsed[0].repeat && parsed.every(r => r.at <= Date.now())) throw new Error("That time has already passed");
   }
-  const notes = new GithubNotes(env);
+  const notes = notesFor(env);
   const name = input.note || (await notes.list()).find(n => TASKS_NOTE.test(n));
   if (!name) {
     const content = "# Tasks\n\n" + line + "\n";

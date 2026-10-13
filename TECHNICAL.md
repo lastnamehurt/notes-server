@@ -106,3 +106,15 @@ Never deploy without both secrets. Protect the bearer token like a password. Cla
 
 - `npm test`: unit tests (reminder parsing, logs, signed links, setup, archive reading at 600+ notes).
 - `npm run test:mcp`: MCP acceptance test. Starts the Worker with `wrangler dev` against a stand-in GitHub and does what Claude does: OAuth discovery, client registration, password sign-in with PKCE, token exchange and refresh, `initialize`, `tools/list`, then save, read, update, search, list, log and delete a note, plus search, logs and rescan over 800 notes with one GitHub call each. Claude registers via a client metadata document rather than dynamic registration; `ALLOW_CLIENT_REGISTRATION=true` turns registration on for this test only. Both run in CI.
+
+## Where notes are stored
+
+New installs keep notes in the app's own storage: `NotesStore`, a SQLite-backed Durable Object (`src/app-notes.ts`, binding `NOTES`). `AppNotes` has the same interface and error messages as `GithubNotes`, and `notesFor(env)` (`src/storage.ts`) picks one from `NOTES_STORAGE`, which comes from the setup page's choice. A version number stands in for a commit, so Apple Reminders sync gets the same consistent read-then-write as on GitHub.
+
+- A deployment that sets `GITHUB_TOKEN` and `NOTES_REPO` always uses GitHub; the setup page's storage choice is ignored.
+- Installs set up with GitHub before storage choices existed have no `storage` setting and stay on GitHub.
+- **Download all my notes** (`GET /app/api/export`) returns a zip of every note from either storage (`src/zip.ts`).
+- **Move my notes to GitHub** copies every note into a new private `daybook-notes` repository as one commit, checks they all arrived, then switches storage. The copy in app storage is left in place.
+- The `note` CLI and Obsidian-style editing need GitHub storage.
+
+`npm run test:app-storage` covers setup with no GitHub, every MCP note tool on app storage, 200+ notes, the zip, and the move.
