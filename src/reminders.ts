@@ -331,7 +331,7 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
     const env = await this.briefingEnv();
     const settings = (await this.ctx.storage.get<BriefingSettings>(BRIEFINGS)) ?? DEFAULT_BRIEFINGS;
     const notes = await notesFor(env).all();
-    return buildBriefing({ kind, notes, done: await this.doneSince(now - 2 * 86_400_000), now, timeZone: this.zone(env), preview: settings.preview });
+    return buildBriefing({ kind, notes, done: await this.doneSince(now - 2 * 86_400_000), now, timeZone: this.zone(env), preview: settings.preview, name: env.OWNER_NAME });
   }
 
   /** Send a briefing right now (Settings' "Send test"). At most once a minute. */
@@ -375,7 +375,7 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
       if (now - due > BRIEF_STALE_MS) { await advance({ at: now, result: "skipped", detail: "Missed its time by over two hours" }); continue; }
       try {
         notes ??= await notesFor(env).all();
-        const b = buildBriefing({ kind, notes, done: await this.doneSince(now - 2 * 86_400_000), now, timeZone: zone, preview: settings.preview });
+        const b = buildBriefing({ kind, notes, done: await this.doneSince(now - 2 * 86_400_000), now, timeZone: zone, preview: settings.preview, name: env!.OWNER_NAME });
         if (b.empty) {
           await this.ctx.storage.put(briefSent(kind, date), { at: now });
           await advance({ at: now, result: "skipped", detail: "Nothing to report" });

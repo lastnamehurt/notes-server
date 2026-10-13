@@ -127,11 +127,15 @@ try {
   await page.click('input[name="storage"][value="github"]');
   check(await page.locator("#s2").isVisible(), "Choosing GitHub shows Connect GitHub");
   await page.click('input[name="storage"][value="app"]');
+  check(await page.locator("#pname").isVisible(), "Setup asks what Daybook should call you (optional)");
+  await page.fill("#pname", "Jane");
   await page.click("#save");
   await page.waitForSelector("#copymcp");
   check(/You're set up/.test(await page.innerText("main")), "Save and finish works with no GitHub at all");
   await page.click("text=Open my notes");
   await page.waitForSelector("#tabs:not([hidden])");
+  await page.waitForSelector(".today-top-heading h2");
+  check(/^Good (morning|afternoon|evening), Jane$/.test(await page.innerText(".today-top-heading h2")), "Today greets her by name: " + await page.innerText(".today-top-heading h2"));
 
   // ---------- 2. Claude's connection: OAuth, then every note tool ----------
   const meta = await (await fetch(BASE + "/.well-known/oauth-authorization-server")).json();
@@ -170,7 +174,8 @@ try {
     const text = res.content?.[0]?.text ?? "";
     return { error: Boolean(res.isError), text, data: (() => { try { return JSON.parse(text); } catch { return text; } })() };
   };
-  await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "app-storage", version: "1" } });
+  const init = await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "app-storage", version: "1" } });
+  check(/The owner's name is Jane\./.test(JSON.stringify(init)), "Claude is told her name");
   await rpc("notifications/initialized", {}, true);
   const saved1 = await call("save_note", { content: "# Plants\nwater the ferns marker-a1\n- [ ] Water plants @2099-01-01 9am", category: "inbox" });
   check(!saved1.error && /^inbox\/.*plants\.md$/.test(saved1.data.name) && saved1.data.reminders?.length === 1, "save_note stores in the app and schedules its reminder: " + saved1.text.slice(0, 120));
@@ -198,6 +203,15 @@ try {
   await page.goto(BASE + "/app#settings");
   await page.waitForSelector("#move-gh");
   check(/stored in this app/i.test(await page.innerText("#s2")), "Settings says notes are stored in the app");
+  check(await page.inputValue("#pname") === "Jane", "Settings shows her name");
+  await page.fill("#pname", "Janie"); await page.click("#pname-save");
+  await page.waitForSelector(".toast");
+  check(/Hi, Janie!/.test(await page.innerText(".toast")), "Changing her name in Settings saves it");
+  await page.goto(BASE + "/app#today"); await page.reload();
+  await page.waitForSelector(".today-top-heading h2");
+  check(/, Janie$/.test(await page.innerText(".today-top-heading h2")), "and Today uses the new name");
+  await page.goto(BASE + "/app#settings"); await page.reload();
+  await page.waitForSelector("#move-gh");
   const [download] = await Promise.all([page.waitForEvent("download"), page.click('a[href="/app/api/export"]')]);
   const dir = mkdtempSync(join(tmpdir(), "daybook-")), zipPath = join(dir, "notes.zip");
   await download.saveAs(zipPath);

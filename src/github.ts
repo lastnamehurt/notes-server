@@ -24,6 +24,8 @@ export interface Env extends ReminderEnv {
   CF_API_URL?: string;
   DAYBOOK_SCRIPT?: string;
   DAYBOOK_INSTALLER?: string;
+  /** What the owner likes to be called (Settings → Your name), for greetings. */
+  OWNER_NAME?: string;
   /** "true" enables OAuth dynamic client registration (local MCP acceptance test only). */
   ALLOW_CLIENT_REGISTRATION?: string;
   MCP_BEARER_TOKEN: string;

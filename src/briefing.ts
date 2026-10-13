@@ -118,9 +118,12 @@ export interface BriefingInput {
   /** Occurrences marked done (from the scheduler), so a finished meds dose doesn't show as open. */
   done: { note: string; text: string; at: number }[];
   now: number; timeZone: string; preview: BriefingSettings["preview"];
+  /** The owner's name, for "Good morning, Courtney". */
+  name?: string;
 }
 
-export function buildBriefing({ kind, notes, done, now, timeZone, preview }: BriefingInput): Briefing {
+export function buildBriefing({ kind, notes, done, now, timeZone, preview, name }: BriefingInput): Briefing {
+  const who = name?.trim() ? ", " + name.trim() : "";
   const date = localStamp(now, timeZone).date;
   const today = midnight(now, 0, timeZone), tomorrow = midnight(now, 1, timeZone), dayAfter = midnight(now, 2, timeZone);
   const isDone = new Set(done.map(d => d.note + "\u0000" + d.text + "\u0000" + d.at));
@@ -149,12 +152,12 @@ export function buildBriefing({ kind, notes, done, now, timeZone, preview }: Bri
   const day = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short", month: "short", day: "numeric" }).format(new Date(now));
   let lines: (string | null)[], counts: string[], title: string, empty: boolean;
   if (kind === "morning") {
-    title = "Good morning · " + day;
+    title = "Good morning" + who + " · " + day;
     empty = !overdue.length && !dueToday.length && !doNow.length;
     lines = [listLine("Overdue", overdue.map(i => clean(i.text))), listLine("Today", dueToday.map(label)), listLine("Do now", doNow.map(i => clean(i.text)))];
     counts = [overdue.length && `${overdue.length} overdue`, dueToday.length && `${dueToday.length} due today`, doNow.length && `${doNow.length} do now`].filter(Boolean) as string[];
   } else {
-    title = "Evening wrap-up · " + day;
+    title = (who ? "Evening" + who : "Evening wrap-up") + " · " + day;
     empty = !doneToday.length && !dueToday.length && !overdue.length && !dueTomorrow.length;
     lines = [doneToday.length ? `Done today: ${doneToday.length}` : null, listLine("Still open", dueToday.map(label)),
       listLine("Overdue", overdue.map(i => clean(i.text))), listLine("Tomorrow", dueTomorrow.map(label))];

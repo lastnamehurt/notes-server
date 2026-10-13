@@ -94,3 +94,10 @@ test("settings merge validates and keeps what wasn't sent", () => {
   assert.throws(() => mergeBriefings(s, { preview: "titles" }), /full.*counts/);
   assert.equal(DEFAULT_BRIEFINGS.morning.enabled, false, "the default object is never mutated");
 });
+
+test("briefings greet the owner by name when they've given one", () => {
+  assert.equal(buildBriefing(input({ name: "Courtney" })).title, "Good morning, Courtney · Mon, Oct 12");
+  assert.equal(buildBriefing(input({ kind: "evening", now: at(2026, 10, 12, 20), name: "Courtney" })).title, "Evening, Courtney · Mon, Oct 12");
+  assert.equal(buildBriefing(input({ kind: "evening", now: at(2026, 10, 12, 20) })).title, "Evening wrap-up · Mon, Oct 12");
+  assert.equal(buildBriefing(input({ name: "  " })).title, "Good morning · Mon, Oct 12");
+});

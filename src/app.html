@@ -587,6 +587,13 @@ const longDay = ms => new Intl.DateTimeFormat("en-US", { timeZone: cfg.timeZone,
 const shortDate = iso => new Date(iso + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 const addDays = (iso, n) => { const d = new Date(iso + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 
+/** "Good morning, Courtney" in the owner's time zone; plain "Today" until they've told us their name. */
+function greeting(now = new Date()) {
+  if (!cfg.name) return "Today";
+  const hour = Number(new Intl.DateTimeFormat("en-US", { timeZone: cfg.timeZone, hour: "numeric", hourCycle: "h23" }).format(now));
+  return (hour < 5 ? "Good evening" : hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening") + ", " + cfg.name;
+}
+
 function drawDate() {
   const now = new Date();
   const f = o => new Intl.DateTimeFormat("en-US", { timeZone: cfg.timeZone, ...o }).format(now);
@@ -1166,7 +1173,7 @@ views.today = async () => {
     const dateLabel = new Intl.DateTimeFormat(undefined,{timeZone:cfg.timeZone,weekday:"long",month:"long",day:"numeric"}).format(new Date());
     html = h`<section class="today-dashboard promised-today">
       <div class="today-date-label">${dateLabel}</div>
-      <div class="today-top-heading"><h2>Today</h2><a href="#reminders" aria-label="Open tasks">▦</a></div>
+      <div class="today-top-heading"><h2>${greeting()}</h2><a href="#reminders" aria-label="Open tasks">▦</a></div>
       <div class="today-focus-card">
         <div class="today-focus-heading"><h3>Focus</h3><span class="muted">${activeTasks.length} priorities</span></div>
         ${activeTasks.length ? raw('<ul class="today-focus-list">'+topTasks+'</ul>') : raw('<p class="muted">Nothing urgent right now.</p>')}
@@ -1795,7 +1802,13 @@ views.setup = async () => {
 
   main.innerHTML = h`<div class="setup">
     <h2>${first ? "Let's set up your notes" : "Settings"}</h2>
-    <p class="lede">${first ? "A couple of minutes. Only you can see your notes." : "Where your notes live, your time zone, and phone notifications."}</p>
+    <p class="lede">${first ? "A couple of minutes. Only you can see your notes." : "Your name, where your notes live, your time zone, and phone notifications."}</p>
+
+    <section class="step" id="profile"><h3>What should Daybook call you?</h3>
+      <label for="pname" style="position:absolute;left:-9999px">Your name</label>
+      <div class="copyrow"><input type="text" id="pname" value="${cfg.name || ""}" placeholder="Your first name (optional)" autocomplete="given-name" maxlength="40">
+      ${raw(first ? "" : '<button class="btn quiet" id="pname-save" type="button">Save</button>')}</div>
+      <p class="muted">Used to greet you on Today, in your morning and evening briefings, and by Claude.</p></section>
 
     ${raw(chooseStorage ? storageChoice + githubBlock : onAppStorage ? appNotesBlock : githubBlock)}
     ${raw(!first && !onAppStorage && cfg.configured ? `<section class="step" id="backup"><h3>Your notes</h3><p>Every note as a Markdown (.md) file, in the same folders.</p><p>${downloadLink}</p></section>` : "")}
@@ -1921,6 +1934,16 @@ views.setup = async () => {
   loadBriefings();
   if ($("#copytopic")) $("#copytopic").onclick = e => copy(topic, e.target);
   renderPush($("#push-box"));
+  const savePname = $("#pname-save");
+  if (savePname) savePname.onclick = async () => {
+    savePname.disabled = true;
+    try {
+      const r = await api("/profile", { method: "POST", body: { name: $("#pname").value } });
+      cfg.name = r.name; $("#pname").value = r.name || "";
+      toast(r.name ? "Hi, " + r.name + "!" : "Name removed");
+    } catch (e) { if (e instanceof Locked) return showLock(); toast("Couldn't save: " + e.message); }
+    savePname.disabled = false;
+  };
 
 
   $("#save").onclick = async () => {
@@ -1929,6 +1952,7 @@ views.setup = async () => {
       // ntfy/Pushover (older options) only appear for setups that use them; unticking stops them.
       // Otherwise nothing is sent and the server keeps what it has.
       const push = $("#uselegacy") && !$("#uselegacy").checked ? { ntfyTopic: "", pushoverUser: "", pushoverToken: "" } : {};
+      if ($("#pname") && $("#pname").value.trim() !== (cfg.name || "")) await api("/profile", { method: "POST", body: { name: $("#pname").value } });
       if (chosenStorage === "app") await api("/setup", { method: "POST", body: { storage: "app", timezone: $("#tz").value, ...push } });
       else {
       if (!chosenRepo) throw new Error(connect ? "Connect GitHub first." : "Check your key and pick where to save notes.");

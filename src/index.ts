@@ -8,7 +8,7 @@ import { z } from "zod";
 import { GithubNotes, CATEGORIES, localDate, type Env } from "./github";
 import { appendLog, recentLogs } from "./log";
 import { scheduler, fmt, scheduleNote, rescan, effectiveEnv, checkPassword, completeReminder } from "./core";
-import { notesConfigured } from "./settings";
+import { cleanName, notesConfigured } from "./settings";
 import { handleApp } from "./web";
 import { DEFAULT_TIMEZONE, localStamp, pushConfigured } from "./reminder-parse";
 import { clock } from "./briefing";
@@ -48,7 +48,9 @@ How to help:
 - For reviews or check-ins, read the goals notes and get_logs, then summarize what moved, what slipped and patterns worth noticing.`;
 
 function serverFor(env: Env): McpServer {
-  const server = new McpServer({ name: "personal-notes", version: "0.4.0" }, { instructions: INSTRUCTIONS });
+  const owner = cleanName(env.OWNER_NAME);
+  const instructions = owner ? `The owner's name is ${owner}. Use it naturally when greeting them or summarizing their day; don't overdo it.\n\n` + INSTRUCTIONS : INSTRUCTIONS;
+  const server = new McpServer({ name: "personal-notes", version: "0.4.0" }, { instructions });
   const notes = notesFor(env);
   const result = async (fn: () => Promise<unknown>) => {
     try { return { content: [{ type: "text" as const, text: JSON.stringify(await fn()) }] }; }
