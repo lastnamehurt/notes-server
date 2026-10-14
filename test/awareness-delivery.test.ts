@@ -24,3 +24,13 @@ test("opt-out and no-provider paths return without sending",()=>{
   assert.match(block,/decision.action !== "send"/);
   assert.match(block,/!pushConfigured\(env\)/);
 });
+test("automatic dispatch only offers suggestions to the gated delivery path (#95)",()=>{
+  const block = reminders.slice(reminders.indexOf("async awarenessDispatchPending("),reminders.indexOf("/** Awareness inbox stays"));
+  assert.match(block,/prefs\.mode !== "proactive"/, "nothing happens unless proactive mode is on");
+  assert.match(block,/await this\.awarenessDeliver\(entry\.candidate\.id\)/, "every send goes through awarenessDeliver");
+  assert.doesNotMatch(block,/sendNotice\(/, "no direct provider calls");
+  const capture = reminders.slice(reminders.indexOf("async recordTaskDeferrals("));
+  assert.match(capture,/if \(created\) \{\s*try \{ await this\.awarenessDispatchPending\(\); \}/, "new suggestions are offered once, best-effort");
+  const index = readFileSync(new URL("../src/index.ts",import.meta.url),"utf8");
+  assert.match(index,/scheduler\(merged\)\.awarenessDispatchPending\(\)/, "hourly cron retries held-back suggestions");
+});
