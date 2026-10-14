@@ -8,11 +8,11 @@ It's opt-in, free, and needs no app: one Shortcut on your iPhone does the syncin
 
 **What doesn't:** subtasks, flags, tags, images and location alerts in Apple Reminders. Nothing in your other Reminders lists is ever read or changed.
 
-## 1. Add the Shortcut secret
+## 1. Get the sync address and secret
 
-In Cloudflare: **Workers & Pages → your Worker → Settings → Variables and Secrets**, add an **encrypted secret** named `SHORTCUTS_TOKEN` with a random value of at least 32 characters. On a Mac, `openssl rand -hex 24` makes one. Don't reuse your Daybook password or GitHub token.
+In Daybook, open **Settings** (the gear) → **Apple Reminders** and tap **Make my Shortcut secret**. Copy the sync address and the secret shown there; you'll paste both into the Shortcut. Don't reuse your Daybook password or GitHub token.
 
-This secret only reaches Daybook tasks (`/app/shortcuts/sync` and `/app/shortcuts/tasks`). Rotating it in Cloudflare cuts off the Shortcut immediately.
+The secret only reaches Daybook tasks (`/app/shortcuts/sync` and `/app/shortcuts/tasks`). **Make a new secret** in the same place cuts off the old one immediately. If your deployment sets an encrypted `SHORTCUTS_TOKEN` secret in Cloudflare (at least 32 characters), that one is used instead and Settings says so.
 
 ## 2. Create the list
 
@@ -20,7 +20,7 @@ In **Reminders**, create a list named exactly **Daybook**.
 
 ## 3. Build the Shortcut
 
-In **Shortcuts**, tap **+** and name it **Sync Daybook**. Replace `YOUR-WORKER` with your Worker's address (for example `notes.yourname.workers.dev`) and `YOUR-SECRET` with the value from step 1.
+In **Shortcuts**, tap **+** and name it **Sync Daybook**. Replace `https://YOUR-WORKER/app/shortcuts/sync` with the sync address from step 1 and `YOUR-SECRET` with the secret.
 
 Shortcuts action names shift a little between iOS versions. Search the action list for the word in bold if a name doesn't match exactly.
 
@@ -74,7 +74,11 @@ In **Shortcuts → Automation → +**:
 - **App** → *Reminders* → **Is Closed** → *Run Immediately* → **Sync Daybook**. Checking something off and leaving Reminders syncs it within seconds.
 - **Time of Day**, a few times a day (for example 7am, noon and 6pm) → *Run Immediately* → **Sync Daybook**. This picks up changes you made in Daybook.
 
-You can also add **Sync Daybook** to your Home Screen to sync on demand. Checking something off on Apple Watch reaches your phone through iCloud and syncs on the next run.
+You can also add **Sync Daybook** to your Home Screen, or tap **Sync now** in Daybook's Settings, to sync on demand. Checking something off on Apple Watch reaches your phone through iCloud and syncs on the next run.
+
+## Who sends the alert
+
+Once a task is in the Daybook list, Apple Reminders alerts you for it and Daybook skips its own notification, so you don't get two. Daybook counts a task as "in Reminders" only after the Shortcut has reported it back, so a reminder is never silenced before it exists on your phone. If the Shortcut hasn't synced for 36 hours, Daybook sends its own notifications again for everything. To get both alerts anyway, choose **Reminders and Daybook notifications** in Settings → Apple Reminders.
 
 ## How changes are resolved
 

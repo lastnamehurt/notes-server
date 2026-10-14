@@ -29,6 +29,8 @@ export interface SyncScheduler {
   syncFinish(runId: string, response: unknown | null): Promise<void>;
   doneSince(since: number): Promise<{ note: string; text: string; at: number }[]>;
   markDone(note: string, text: string, at: number): Promise<void>;
+  /** Tasks (note + title) Apple Reminders confirmed having in this run, so Daybook can skip their push. */
+  recordMirror?(keys: string[], summary?: unknown): Promise<void>;
 }
 
 export interface SyncResponse {
@@ -216,13 +218,20 @@ async function syncOnce(runId: string, apple: ReturnType<typeof normalizeReminde
     await o.scheduler.putSyncBase(plan.base);
 
     const count = (op: Action["op"]) => actions.filter(a => a.op === op).length;
+    // Only tasks Apple already reported (open, in this snapshot) count as mirrored. A reminder this run
+    // asks the Shortcut to create is confirmed on the next run, so a half-applied run never silences one.
+    const inApple = new Set(apple.filter(r => r.taskId && !r.completed).map(r => r.taskId!));
+    // Same for a reminder this run changes (either side): Apple's copy matches only once the Shortcut applies it.
+    const pending = new Set([...plan.edits.map(e => e.id), ...actions.filter(a => a.op === "update").map(a => a.taskId)]);
+    const mirrored = daybook.filter(d => d.inScope && inApple.has(d.id) && !pending.has(d.id)).map(d => d.note + "\u0000" + d.state.title);
+    const summary = {
+      reminders: apple.length, created: count("create"), updated: count("update"), deleted: count("delete"), tagged: count("tag"),
+      daybookChanges: [...assign.values()].reduce((n, l) => n + l.length, 0) - lost.size + plan.edits.length + plan.added.length,
+      conflicts: plan.logs.filter(l => l.includes("#sync-conflict")).length
+    };
+    try { await o.scheduler.recordMirror?.(mirrored, summary); } catch (e) { console.warn("Recording the Reminders mirror failed", e instanceof Error ? e.message : "unknown"); }
     return {
-      version: 1, runId, actions,
-      summary: {
-        reminders: apple.length, created: count("create"), updated: count("update"), deleted: count("delete"), tagged: count("tag"),
-        daybookChanges: [...assign.values()].reduce((n, l) => n + l.length, 0) - lost.size + plan.edits.length + plan.added.length,
-        conflicts: plan.logs.filter(l => l.includes("#sync-conflict")).length
-      }
+      version: 1, runId, actions, summary
     };
   }
 }

@@ -84,7 +84,7 @@ with sync_playwright() as p:
     pg.click(".doc h1"); pg.wait_for_selector("#title")
     check(pg.input_value("#title") == "Errands", "Tapping the note opens the editor with a Title field")
     pg.fill("#body", pg.input_value("#body") + "- Return library books\n")
-    dialog_answer["v"] = False; pg.click("#tabs-more-label"); pg.click("nav.tabs a[href='#goals']"); pg.wait_for_timeout(500)
+    dialog_answer["v"] = False; pg.click("nav.tabs a[href='#reminders']"); pg.wait_for_timeout(500)
     check(bool(dialogs) and "Discard" in dialogs[-1] and pg.locator("#body").count() == 1 and "library" in pg.input_value("#body"),
           "Leaving with unsaved changes asks first; saying no keeps your text")
     dialogs.clear(); pg.click("#cancel"); pg.wait_for_timeout(300)

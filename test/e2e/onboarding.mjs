@@ -196,11 +196,9 @@ try {
   // 4. First use
   await page.click("text=Open my notes");
   await page.waitForTimeout(1200);
-  // Settings lives in the "More" menu, so open it before checking the link is shown.
+  // Settings is the gear in the header.
   const tabsShown = await page.locator("#tabs").isVisible();
-  await page.click("#tabs-more-label");
   check(tabsShown && await page.locator("#settingsTab").isVisible(), "Tabs and Settings appear after setup");
-  await page.keyboard.press("Escape");
 
   // 5. Settings later: checks work when Settings is opened directly
   const later = await ctx.newPage();
@@ -292,6 +290,8 @@ try {
   await settings.goto(BASE + "/app#settings"); await settings.reload();
   await settings.waitForSelector("#legacy-push");
   check(/ntfy \(older option\)/.test(await settings.innerText("#legacy-push summary")) && await settings.isChecked("#uselegacy"), "ntfy shows as the older option, kept as a backup");
+  // The notifications box fills in after Settings draws, alongside other Settings requests.
+  await settings.waitForFunction(() => /instead of ntfy/.test(document.querySelector("#push-box")?.innerText || ""), null, { timeout: 5000 }).catch(() => {});
   check(/instead of ntfy/.test(await settings.innerText("#push-box")), "and says reminders now go to devices instead");
   await settings.click("#legacy-push summary");
   await settings.uncheck("#uselegacy");

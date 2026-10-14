@@ -147,6 +147,16 @@ export interface BriefingState { settings: BriefingSettings; next: Partial<Recor
 const SYNC_BASE = "sync:base:";
 const SYNC_LOCK = "sync:lock";
 const SYNC_RUN = "sync:run:";
+/** Tasks Apple Reminders reported having at the last successful sync, and when that was. */
+const SYNC_MIRROR = "sync:mirror";
+/** After this long without a sync, Daybook sends its own notifications again for every task. */
+export const MIRROR_FRESH_MS = 36 * 3600 * 1000;
+export interface SyncMirror { at: number; keys: string[]; summary?: unknown; }
+/** Whether Apple Reminders should alert for this reminder instead of a Daybook notification. */
+export function alertedByReminders(mirror: SyncMirror | undefined, r: { note: string; text: string }, now: number, mode: Settings["taskAlerts"]): boolean {
+  if (mode === "both" || !mirror || now - mirror.at > MIRROR_FRESH_MS) return false;
+  return mirror.keys.includes(r.note + SEP + r.text);
+}
 // "Done" marker for one occurrence, so a reminder completed early doesn't push when its time comes.
 const doneKey = (note: string, text: string, at: number) => "d:" + at + SEP + note + SEP + text;
 const firedKey = (r: Reminder) => "f:" + r.at + SEP + r.note + SEP + r.text;
@@ -592,10 +602,19 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
     if (stale.length) await this.ctx.storage.delete(stale.slice(0, 128));
   }
 
+  /** Record which tasks Apple Reminders has (note + title), after a successful sync run. */
+  async recordMirror(keys: string[], summary?: unknown): Promise<void> {
+    await this.ctx.storage.put(SYNC_MIRROR, { at: Date.now(), keys, summary } satisfies SyncMirror);
+  }
+
+  async syncMirror(): Promise<SyncMirror | undefined> { return this.ctx.storage.get<SyncMirror>(SYNC_MIRROR); }
+
   async alarm(): Promise<void> {
     let failed = false;
     const origin = await this.ctx.storage.get<string>(ORIGIN);
-    const env = applySettings(this.env as unknown as Env, await this.getSettings());
+    const settings = await this.getSettings();
+    const env = applySettings(this.env as unknown as Env, settings);
+    const mirror = await this.syncMirror();
     for (const [k, r] of await this.all()) {
       if (r.at > Date.now() + 1000) continue;
       try {
@@ -603,7 +622,8 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
         const alreadyDelivered = await this.ctx.storage.get(deliveredKey(r));
         if (!alreadyDone) {
           // Without a push provider the reminder still "goes off" (shows as due in the app) and repeats roll forward.
-          if (pushConfigured(env) && !alreadyDelivered) {
+          // A task that's in Apple Reminders gets its alert from iOS; sending ours too would double it.
+          if (pushConfigured(env) && !alreadyDelivered && !alertedByReminders(mirror, r, Date.now(), settings?.taskAlerts)) {
             await sendOnce(false, () => sendPush(env, r, origin, this.pruning), () => this.ctx.storage.put(deliveredKey(r), { at: r.at }));
             await this.ctx.storage.delete(LAST_ERROR);
           }

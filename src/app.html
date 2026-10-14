@@ -94,18 +94,17 @@ button { cursor: pointer; }
 .date .mon { font: 400 20px/1 "DM Serif Display", Georgia, serif; margin-left: 7px; color: var(--ink-2); }
 .lockbtn { min-height: 44px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 999px; color: var(--ink-2); font-size: 14px; font-weight: 600; padding: 8px 15px; box-shadow: var(--shadow); }
 
-/* Four primary sections plus a "More" menu, so the bar fits a phone without scrolling. */
-nav.tabs { position: relative; z-index: 15; display: flex; gap: 4px; border: 1px solid var(--rule); border-radius: 14px; padding: 4px; margin: 0; background: color-mix(in srgb, var(--sheet) 68%, transparent); }
-nav.tabs > a, .tabs-more > summary { flex: 1 1 auto; justify-content: center; }
-nav.tabs a, .tabs-more > summary { display: flex; min-height: 44px; align-items: center; padding: 8px 13px; color: var(--ink-2); text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 10px; white-space: nowrap; transition: background-color .15s ease, color .15s ease; }
-nav.tabs a[aria-current="page"], .tabs-more > summary[data-current] { color: var(--mark-ink); background: var(--mark); box-shadow: 0 1px 2px rgb(36 38 51 / .18); }
-.tabs-more { position: relative; display: flex; flex: 1 1 auto; }
-.tabs-more > summary { gap: 4px; cursor: pointer; list-style: none; }
-.tabs-more > summary::-webkit-details-marker { display: none; }
-.tabs-more > summary::after { content: "⌄"; font-size: 12px; line-height: 1; transform: translateY(-2px); }
-.tabs-menu { position: absolute; right: 0; top: calc(100% + 8px); width: 180px; padding: 6px; display: grid; gap: 2px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 14px; box-shadow: 0 8px 28px rgb(0 0 0 / .18); }
-.tabs-menu a { justify-content: flex-start; }
-.tabs-menu a:hover { background: var(--paper); }
+/* Three sections, equal width, so the bar fits any phone without scrolling or a "More" menu. */
+nav.tabs { position: relative; z-index: 15; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; border: 1px solid var(--rule); border-radius: 14px; padding: 4px; margin: 0; background: color-mix(in srgb, var(--sheet) 68%, transparent); }
+nav.tabs a { display: flex; justify-content: center; min-height: 44px; align-items: center; padding: 8px 13px; color: var(--ink-2); text-decoration: none; font-size: 15px; font-weight: 600; border-radius: 10px; white-space: nowrap; transition: background-color .15s ease, color .15s ease; }
+nav.tabs a[aria-current="page"] { color: var(--mark-ink); background: var(--mark); box-shadow: 0 1px 2px rgb(36 38 51 / .18); }
+/* Pages inside the current section: quiet text links with an underline, clearly secondary to the tabs. */
+nav.subtabs { display: flex; gap: 18px; margin: 12px 4px 0; border-bottom: 1px solid var(--rule); overflow-x: auto; scrollbar-width: none; }
+nav.subtabs a { display: flex; align-items: center; min-height: 44px; padding: 0 2px; color: var(--ink-2); text-decoration: none; font-size: 14px; font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+nav.subtabs a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--mark); }
+.gearbtn { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--rule); border-radius: 50%; background: var(--sheet); color: var(--ink-2); box-shadow: var(--shadow); }
+.gearbtn svg { width: 20px; height: 20px; }
+.gearbtn[aria-current="page"] { color: var(--mark-ink); background: var(--mark); border-color: var(--mark); }
 
 main { padding: 22px 0 calc(170px + env(safe-area-inset-bottom)); }
 .empty { color: var(--ink-2); padding: 28px 0; }
@@ -398,13 +397,22 @@ dialog.sheet h2 { margin: 0 0 14px; font-size: 21px; }
 .ghcode { font-size: 28px !important; letter-spacing: .12em; text-align: center; font-weight: 600; }
 .gh-ok { color: var(--done); font-weight: 600; }
 .copyrow code { flex: 1; min-width: 0; overflow-wrap: anywhere; background: var(--paper); border-radius: 8px; padding: 10px 12px; font-size: 15px; }
+.apple-state { padding: 10px 12px; border: 1px solid var(--rule); border-radius: 12px; }
+.apple-state.ok { border-color: color-mix(in srgb, var(--done) 45%, var(--rule)); }
+.apple-state.warn { border-color: color-mix(in srgb, var(--mark) 55%, var(--rule)); }
+.apple-steps { padding-left: 20px; display: grid; gap: 10px; }
+.apple-steps .copyrow { margin-top: 6px; }
+.apple-alerts { border: 0; padding: 0; margin: 14px 0 0; }
+.apple-alerts legend { font-weight: 600; margin-bottom: 6px; }
+.apple-alerts label { display: flex; gap: 10px; align-items: center; min-height: 44px; margin: 0; }
+.apple-alerts input { width: auto; flex: none; }
 details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color: var(--ink-2); margin: 4px 0; }
 .toast { position: fixed; z-index: 10; left: 50%; transform: translateX(-50%); bottom: calc(112px + env(safe-area-inset-bottom)); background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 12px; font-weight: 600; font-size: 14px; max-width: calc(100% - 32px); box-shadow: 0 8px 28px rgb(0 0 0 / .18); }
 @media (max-width: 480px) {
   .shell { padding-left: 16px; padding-right: 16px; }
   .mast { padding-top: 16px; }
   nav.tabs { gap: 2px; }
-  nav.tabs > a, .tabs-more > summary { padding: 8px 8px; font-size: 13px; }
+  nav.tabs a { padding: 8px 8px; font-size: 14px; }
   .ev { grid-template-columns: 52px 1fr; gap: 20px; }
   .rail::before { left: 64px; }
   .ev::after { left: 60px; }
@@ -422,7 +430,7 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
 .promised-today .today-date-label{text-transform:uppercase;color:var(--ink-2);font-size:12px;letter-spacing:.07em;font-weight:650}
 .promised-today .today-top-heading{display:flex;justify-content:space-between;align-items:center;margin:8px 0 16px}
 .promised-today .today-top-heading h2{font-size:26px;margin:0}
-.promised-today .today-top-heading a{color:var(--ink);text-decoration:none;border-radius:50%;background:var(--sheet);padding:10px}
+.promised-today .today-top-heading a{flex:none;display:inline-flex;align-items:center;min-height:44px;color:var(--mark);font-size:14px;font-weight:600;text-decoration:none}
 .promised-today .today-focus-card{background:var(--sheet);border-radius:20px;padding:16px;border:1px solid var(--rule)}
 .promised-today .today-focus-heading{display:flex;justify-content:space-between;align-items:center;margin:0 0 10px}
 .promised-today .today-focus-heading h3{margin:0;font-size:19px}
@@ -454,9 +462,6 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
 .later{margin:28px 0 6px}
 @media(max-width:480px){.rail{--tl-time:52px;--tl-gap:28px}}
 @media(max-width:360px){.rail{--tl-time:46px;--tl-gap:24px}}
-.cal-choose { list-style: none; padding: 0; margin: 8px 0 4px; display: grid; gap: 8px; }
-.cal-choose li { padding: 10px 12px; border: 1px solid var(--rule); border-radius: 12px; line-height: 1.45; }
-.cal-jump { border: 0; background: none; padding: 0; color: var(--mark); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .cal-pick { padding: 10px 12px; border-radius: 12px; background: var(--paper); }
 .repo-link { color: inherit; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 3px; }
 .repo-link:hover { text-decoration-color: currentColor; }
@@ -534,24 +539,18 @@ button.today-focus-dot:disabled{color:var(--mark)}
           <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
         </div>
       </details>
+      <a class="gearbtn" href="#settings" id="settingsTab" hidden aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg></a>
       <button class="lockbtn" id="lockbtn" hidden>Lock</button>
     </div>
   </header>
+  <!-- Three sections. Pages that belong to a section (Goals, Journal, Logs, Suggestions) are reached from
+       the section's own switcher below, so the main bar never needs a "More" menu. -->
   <nav class="tabs" id="tabs" hidden aria-label="Sections">
     <a href="#today">Today</a>
     <a href="#reminders">Tasks</a>
-    <a href="#journal">Journal</a>
-    <a href="#notes">Memory</a>
-    <details class="tabs-more" id="tabs-more">
-      <summary id="tabs-more-label">More</summary>
-      <div class="tabs-menu" role="group" aria-label="More sections">
-        <a href="#awareness">Awareness</a>
-        <a href="#goals">Goals</a>
-        <a href="#logs">Logs</a>
-        <a href="#settings" id="settingsTab" hidden>Settings</a>
-      </div>
-    </details>
+    <a href="#notes">Notes</a>
   </nav>
+  <nav class="subtabs" id="subtabs" hidden aria-label="Pages in this section"></nav>
   <main id="main" aria-live="polite"></main>
 </div>
 
@@ -577,6 +576,23 @@ const TAGS = ["food", "drink", "med", "exercise", "sleep", "mood"];
 const DAYS = ["S", "M", "T", "W", "T", "F", "S"];
 const DAY_IDS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 const DAY_NAMES = ["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"];
+const SHORT_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+/** "Repeats Mon, Wed, Fri–Sun · 7am" from a task's schedule ({days: 0–6, minutes past midnight}). */
+function repeatLabel(repeat) {
+  const set = new Set(repeat.days);
+  let days;
+  if (set.size === 7) days = "daily";
+  else if (set.size === 5 && [1,2,3,4,5].every(d => set.has(d))) days = "weekdays";
+  else if (set.size === 2 && set.has(0) && set.has(6)) days = "weekends";
+  else {
+    // Monday-first, with runs of three or more joined by a dash.
+    const order = [1,2,3,4,5,6,0].filter(d => set.has(d)), runs = [];
+    for (const d of order) { const last = runs.at(-1); if (last && ([1,2,3,4,5,6,0].indexOf(d) === [1,2,3,4,5,6,0].indexOf(last.at(-1)) + 1)) last.push(d); else runs.push([d]); }
+    days = runs.flatMap(r => r.length >= 3 ? [SHORT_DAYS[r[0]] + "\u2060–\u2060" + SHORT_DAYS[r.at(-1)]] : r.map(d => SHORT_DAYS[d])).join(", ");
+  }
+  const times = repeat.minutes.map(m => fmt12(String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0"))).join(", ");
+  return "Repeats " + days + " · " + times;
+}
 const $ = (s, el = document) => el.querySelector(s);
 const appearance = $("#appearance"), themeToggle = $("#theme-toggle");
 const themeIcons = {
@@ -606,12 +622,31 @@ document.addEventListener("click", e => { if (!appearance.contains(e.target)) ap
 appearance.addEventListener("keydown", e => {
   if (e.key === "Escape") { appearance.open = false; themeToggle.focus(); e.preventDefault(); }
 });
-// "More" sections menu: close on outside tap, on picking a section (even the current one), and on Escape.
-const tabsMore = $("#tabs-more");
-document.addEventListener("click", e => { if (!tabsMore.contains(e.target) || e.target.closest(".tabs-menu a")) tabsMore.open = false; });
-tabsMore.addEventListener("keydown", e => {
-  if (e.key === "Escape") { tabsMore.open = false; $("#tabs-more-label").focus(); e.preventDefault(); }
-});
+// Each top-level section and the pages inside it. A page's section decides which tab is highlighted and
+// which switcher (if any) is shown under the tabs. Routes not listed here (note, new, setup…) map below.
+const SECTIONS = {
+  today: [["today", "Today"], ["awareness", "Suggestions"]],
+  reminders: [["reminders", "Tasks"], ["goals", "Goals"]],
+  notes: [["notes", "Notes"], ["journal", "Journal"], ["logs", "Logs"]]
+};
+function sectionOf(view, arg) {
+  if (view === "inbox") return ["notes", "notes"];
+  if (view === "new-goal") return ["reminders", "goals"];
+  if (view === "note" || view === "new") return arg.startsWith("goals") ? ["reminders", "goals"] : ["notes", "notes"];
+  for (const [section, pages] of Object.entries(SECTIONS)) if (pages.some(([id]) => id === view)) return [section, view];
+  return [null, view];
+}
+function drawNav(view, arg) {
+  const [section, page] = sectionOf(view, arg);
+  const mark = (el, on) => on ? el.setAttribute("aria-current", "page") : el.removeAttribute("aria-current");
+  document.querySelectorAll("#tabs a").forEach(a => mark(a, a.getAttribute("href") === "#" + section));
+  mark($("#settingsTab"), view === "settings" || view === "setup");
+  const sub = $("#subtabs"), pages = section && SECTIONS[section];
+  // Today's switcher only appears on the Suggestions page, to keep the main screen uncluttered.
+  const show = pages && !$("#tabs").hidden && (section !== "today" || page !== "today");
+  sub.hidden = !show;
+  sub.innerHTML = show ? pages.map(([id, label]) => h`<a href="#${id}" ${id === page ? raw('aria-current="page"') : ""}>${label}</a>`).join("") : "";
+}
 const main = $("#main");
 const sheet = $("#sheet");
 let cfg = { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, categories: [], push: true };
@@ -1183,7 +1218,8 @@ views.today = async () => {
   const taskDate = task => task.dueAt === null || task.dueAt === undefined ? null : {date:new Date(task.dueAt),title:task.title};
   const displayTaskDate = date => {
     const delta = Math.round((Date.parse(dayKey(date.getTime()) + "T12:00:00Z") - Date.parse(dayKey(Date.now()) + "T12:00:00Z"))/86400000);
-    const relative = delta < 0 ? "Overdue" : delta === 0 ? "Today" : delta === 1 ? "Tomorrow" : delta <= 7 ? "In " + delta + " days" : "";
+    // Overdue is already the row's label on the right, so the date line just gives the date.
+    const relative = delta < 0 ? "" : delta === 0 ? "Today" : delta === 1 ? "Tomorrow" : delta <= 7 ? "In " + delta + " days" : "";
     const calendar = new Intl.DateTimeFormat(undefined,{timeZone:cfg.timeZone,weekday:"short",month:"short",day:"numeric"}).format(date);
     return (relative ? relative + " · " : "") + (delta === 0 || delta === 1 ? "" : calendar + " · ") + fmt12(hhmm(date.getTime()));
   };
@@ -1198,7 +1234,8 @@ views.today = async () => {
       ["inbox", "No priority", "Unsorted tasks"]
     ];
     const todayKey = dayKey(Date.now());
-    const annotated = tasks.map(t => ({...t,due:taskDate(t)}));
+    // The server's title has the schedule (@2026-10-14 9am, @mon,wed 07:00) and priority tag removed.
+    const annotated = tasks.map(t => ({...t,text:t.title || t.text,due:taskDate(t)}));
     const completedToday = entries.filter(e => /^✓\s/.test(e.text)).map(e => e.text.replace(/^✓\s*/, "").replace(/\s*#[\w-]+/g, "").trim().toLowerCase());
     const normalized = text => text.replace(/\s*@\d{4}-\d{2}-\d{2}.*$/, "").replace(/\s+/g," ").trim().toLowerCase();
     const doneKeys = new Set((rems.doneToday || []).map(r => key(r)));
@@ -1213,11 +1250,11 @@ views.today = async () => {
       activeTasks.push({note:r.note,text:r.text,priority:"",due:{date:new Date(r.at),title:r.text},reminder:r});
     }
     activeTasks.sort((a,b) => (a.due?.date.getTime() ?? Infinity)-(b.due?.date.getTime() ?? Infinity));
-    const topTasks = activeTasks.slice(0,4).map(t => h`<li class="today-focus-row"><button type="button" class="today-focus-dot" data-note="${t.note}" data-line="${t.line ?? ""}" data-text="${t.reminder ? t.reminder.text : ""}" data-at="${t.reminder ? t.reminder.at : ""}" aria-label="Mark ${t.due ? t.due.title : t.text} done">○</button><div class="today-focus-content"><a href="#note/${t.note}">${t.due ? t.due.title : t.text}</a>${t.due ? raw(h`<span class="muted today-focus-due">${displayTaskDate(t.due.date)}</span>`) : ""}</div><span class="today-focus-priority">${t.due && t.due.date < Date.now() ? "Overdue" : t.priority === "do" ? "Do now" : "Due today"}</span></li>`).join("");
+    const topTasks = activeTasks.slice(0,4).map(t => h`<li class="today-focus-row"><button type="button" class="today-focus-dot" data-note="${t.note}" data-line="${t.line ?? ""}" data-text="${t.reminder ? t.reminder.text : ""}" data-at="${t.reminder ? t.reminder.at : ""}" aria-label="Mark ${t.due ? t.due.title : t.text} done">○</button><div class="today-focus-content"><a href="#note/${t.note}">${t.due ? t.due.title : t.text}</a>${t.due ? raw(h`<span class="muted today-focus-due">${displayTaskDate(t.due.date)}</span>`) : t.repeat ? raw(h`<span class="muted today-focus-due">${repeatLabel(t.repeat)}</span>`) : ""}</div><span class="today-focus-priority">${t.due && t.due.date < Date.now() ? "Overdue" : t.priority === "do" ? "Do now" : "Due today"}</span></li>`).join("");
     const dateLabel = new Intl.DateTimeFormat(undefined,{timeZone:cfg.timeZone,weekday:"long",month:"long",day:"numeric"}).format(new Date());
     html = h`<section class="today-dashboard promised-today">
       <div class="today-date-label">${dateLabel}</div>
-      <div class="today-top-heading"><h2>${greeting()}</h2><a href="#reminders" aria-label="Open tasks">▦</a></div>
+      <div class="today-top-heading"><h2>${greeting()}</h2><a class="today-suggestions" href="#awareness">Suggestions</a></div>
       <div class="today-focus-card">
         <div class="today-focus-heading"><h3>Focus</h3><span class="muted">${activeTasks.length} priorities</span></div>
         ${activeTasks.length ? raw('<ul class="today-focus-list">'+topTasks+'</ul>') : raw('<p class="muted">Nothing urgent right now.</p>')}
@@ -1393,7 +1430,7 @@ views.inbox = async () => {
 };
 views.notes = async () => {
   main.innerHTML = h`<section class="notes-browser">
-    <div class="notes-heading"><div><h2>Memory</h2><p class="muted">Everything you've captured, searchable and yours.</p></div><a class="btn" href="#new">+ New</a></div>
+    <div class="notes-heading"><div><h2>Notes</h2><p class="muted">Everything you've captured, searchable and yours.</p></div><a class="btn" href="#new">+ New</a></div>
     <label class="notes-search-wrap"><span class="sr-only">Search notes</span><input class="search" id="q" type="search" placeholder="Search titles and contents…" autocomplete="off"></label>
     <div class="notes-toolbar"><div class="notes-filters" id="notes-filters" role="group" aria-label="Filter notes"></div><a class="notes-inbox-link" href="#inbox">Review inbox →</a></div>
     <p class="notes-result-count muted" id="notes-count" aria-live="polite"></p>
@@ -1807,6 +1844,63 @@ function assistantList(list) {
       <span><b>${a.name}</b><span class="muted">${raw((() => { const t = typeof a.since === "number" ? new Date(a.since < 1e12 ? a.since * 1000 : a.since) : new Date(a.since); return Number.isNaN(t.getTime()) ? "" : h` · connected ${t.toLocaleDateString()}`; })())}</span></span>
       <button class="btn quiet" type="button" data-disconnect="${a.id}">Disconnect</button></li>`).join(""))}</ul>`;
 }
+/** "just now", "5 min ago", "3 hours ago", "2 days ago". */
+const ago = ms => { const m = Math.round((Date.now() - ms) / 60000); return m < 1 ? "just now" : m < 60 ? m + " min ago" : m < 1440 ? Math.round(m / 60) + (Math.round(m / 60) === 1 ? " hour ago" : " hours ago") : Math.round(m / 1440) + (Math.round(m / 1440) === 1 ? " day ago" : " days ago"); };
+const SHORTCUT_GUIDE = "https://github.com/lastnamehurt/notes-server/blob/main/docs/apple-reminders-shortcuts.md";
+const RUN_SHORTCUT = "shortcuts://run-shortcut?name=" + encodeURIComponent("Sync Daybook");
+
+/** Settings → Apple Reminders: sync status, the Shortcut's address and secret, setup steps and who alerts. */
+async function wireAppleReminders() {
+  const box = $("#apple-status");
+  if (!box) return;
+  let st;
+  try { st = await api("/apple-sync"); } catch (e) { if (box.isConnected) box.innerHTML = h`<p class="err">${e.message}</p>`; return; }
+  // Settings may have been redrawn while this loaded; only fill the panel that's still on screen.
+  if (!box.isConnected) return;
+  const $b = sel => box.querySelector(sel);
+  const synced = st.lastSyncAt !== null;
+  const fresh = synced && Date.now() - st.lastSyncAt < st.freshForMs;
+  const status = !synced
+    ? h`<p class="apple-state"><b>Not set up yet.</b> Takes about ten minutes, once, on your iPhone.</p>`
+    : fresh
+      ? h`<p class="apple-state ok"><b>Synced ${ago(st.lastSyncAt)}</b> · ${st.mirrored} ${st.mirrored === 1 ? "task" : "tasks"} in Reminders</p>`
+      : h`<p class="apple-state warn"><b>Last synced ${ago(st.lastSyncAt)}.</b> Daybook is sending its own notifications until the Shortcut runs again.</p>`;
+  const secretRow = st.fromDeploy
+    ? h`<p class="muted">The secret is set on this copy's deployment (SHORTCUTS_TOKEN). Use that value.</p>`
+    : st.token
+      ? h`<div class="copyrow"><code id="apple-token">${st.token}</code><button class="btn quiet" type="button" id="apple-token-copy">Copy</button></div>
+         <details class="more"><summary>Make a new secret</summary><p class="muted">The old one stops working, so the Shortcut needs the new one pasted in.</p><button class="btn quiet" type="button" id="apple-token-new">Make a new secret</button></details>`
+      : h`<button class="btn" type="button" id="apple-token-new">Make my Shortcut secret</button>`;
+  const steps = h`<ol class="apple-steps">
+      <li>In <b>Reminders</b>, make a list named exactly <b>Daybook</b>.</li>
+      <li>Copy the sync address and secret:
+        <div class="copyrow"><code>${st.syncUrl}</code><button class="btn quiet" type="button" id="apple-url-copy">Copy</button></div>
+        ${raw(secretRow)}</li>
+      <li>In <b>Shortcuts</b>, build <b>Sync Daybook</b> using those two values. <a href="${SHORTCUT_GUIDE}" target="_blank" rel="noopener">Step-by-step guide ↗</a></li>
+      <li>In Shortcuts → <b>Automation</b>, run it when the Reminders app is closed, and at a few times a day (say 7am, noon, 6pm), set to <b>Run Immediately</b>.</li>
+    </ol>`;
+  box.innerHTML = status
+    + (synced ? h`<p><a class="btn a-btn" href="${RUN_SHORTCUT}">Sync now</a></p>` : "")
+    + (synced ? h`<details class="more"><summary>Shortcut setup</summary>${raw(steps)}</details>` : steps)
+    + h`<fieldset class="apple-alerts"><legend>Alerts for tasks in Reminders</legend>
+        <label><input type="radio" name="task-alerts" value="reminders" ${st.taskAlerts === "reminders" ? "checked" : ""}> <span><b>Reminders only</b> <span class="muted">(recommended)</span></span></label>
+        <label><input type="radio" name="task-alerts" value="both" ${st.taskAlerts === "both" ? "checked" : ""}> <span><b>Reminders and Daybook notifications</b></span></label>
+        <p class="muted">If the Shortcut hasn't synced in a day and a half, Daybook sends its own notifications again so nothing goes quiet. Tasks without a date or priority stay in Daybook only.</p>
+      </fieldset>`;
+  $b("#apple-url-copy").onclick = e => copy(st.syncUrl, e.target);
+  if ($b("#apple-token-copy")) $b("#apple-token-copy").onclick = e => copy(st.token, e.target);
+  if ($b("#apple-token-new")) $b("#apple-token-new").onclick = async e => {
+    if (st.token && !confirm("Make a new secret? The Shortcut stops syncing until you paste the new one in.")) return;
+    e.target.disabled = true;
+    try { await api("/apple-sync/token", { method: "POST", body: {} }); toast("Secret ready. Copy it into the Shortcut."); await wireAppleReminders(); }
+    catch (err) { handle(err); e.target.disabled = false; }
+  };
+  box.querySelectorAll('input[name="task-alerts"]').forEach(input => input.onchange = async () => {
+    try { await api("/apple-sync/alerts", { method: "POST", body: { taskAlerts: input.value } }); toast(input.value === "reminders" ? "Reminders will alert for synced tasks" : "You'll get both alerts"); }
+    catch (err) { handle(err); }
+  });
+}
+
 /** Settings → Calendar: make the feed address, subscribe to a calendar, and list its next events. */
 async function wireCalendar() {
   const showEvents = async () => {
@@ -1835,7 +1929,6 @@ async function wireCalendar() {
     catch (e) { toast(e.message); }
   };
   // The two "I want…" choices jump to their part (buttons, since #links would change the page).
-  document.querySelectorAll("#calendar .cal-jump").forEach(b => b.onclick = () => document.getElementById(b.dataset.jump)?.scrollIntoView({ behavior: "smooth", block: "start" }));
   showEvents();
 }
 async function fillAssistantRow() {
@@ -1974,26 +2067,12 @@ views.setup = async () => {
       <p class="muted" id="assistants-summary">Checking which assistants are connected…</p>
       <a class="btn quiet" href="#assistants">Connect or manage assistants →</a></section>`)}
 
-    ${raw(first ? "" : `<section class="step" id="calendar"><h3>Calendar</h3>
-      <p class="muted">Two separate options. Pick the one that matches what you want, or use both.</p>
-      <ul class="cal-choose">
-        <li><b>I want my Daybook tasks to show up in my calendar app</b> → <button type="button" class="cal-jump" data-jump="cal-out">Tasks in your calendar</button></li>
-        <li><b>I want to see my calendar's events in Daybook</b> → <button type="button" class="cal-jump" data-jump="cal-in">Your calendar in Daybook</button></li>
-      </ul>
+    ${raw(first ? "" : `<section class="step" id="apple-reminders"><h3>Apple Reminders</h3>
+      <p class="muted">Your dated and prioritized tasks appear in a <b>Daybook</b> list in Reminders. Check them off on your phone, Watch or with Siri, and Daybook follows. Reminders handles the alerts, so they stay on your lock screen until you deal with them.</p>
+      <div id="apple-status" aria-live="polite"><p class="muted">Checking…</p></div>
+      </section>`)}
 
-      <h4 id="cal-out">Tasks in your calendar</h4>
-      <p class="muted">Daybook makes a private address. Your calendar app subscribes to it and shows your dated tasks, updating on its own every few hours.</p>
-      <button class="btn quiet" id="cal-make" type="button">Make my calendar address</button>
-      <div id="cal-url"></div>
-      <details class="more"><summary>How to add it to your calendar app</summary>
-        <p><b>iPhone:</b> Settings → Apps → Calendar → Calendar Accounts → Add Account → Other → <b>Add Subscribed Calendar</b>, then paste.</p>
-        <p><b>Mac:</b> in Calendar, File → <b>New Calendar Subscription…</b>, then paste.</p>
-        <p><b>Google Calendar</b> (on a computer): next to <b>Other calendars</b>, tap + → <b>From URL</b>, then paste.</p>
-        <p><b>Outlook:</b> Add calendar → <b>Subscribe from web</b>, then paste.</p>
-        <p class="muted">Making a new address turns the old one off. Do that only if you shared it by mistake.</p>
-      </details>
-
-      <h4 id="cal-in">Your calendar in Daybook</h4>
+    ${raw(first ? "" : `<section class="step" id="calendar"><h3>Your calendar in Daybook</h3>
       <p class="muted">Paste your calendar's address and Daybook shows its next two weeks of events below. Daybook only reads it and never changes your calendar.</p>
       <label class="field"><span>Calendar address</span><input id="cal-feed" type="url" inputmode="url" placeholder="https://… or webcal://…"></label>
       <div class="row"><button class="btn" id="cal-save" type="button">Save address</button></div>
@@ -2005,6 +2084,16 @@ views.setup = async () => {
         <p><b>Apple / iCloud, Mac:</b> in Calendar, right-click the calendar → <b>Share Calendar…</b> → tick <b>Public Calendar</b> → copy the address.</p>
         <p><b>Outlook:</b> on outlook.com, Settings → Calendar → <b>Shared calendars</b> → under <b>Publish a calendar</b> pick a calendar and <b>Can view all details</b> → Publish → copy the <b>ICS</b> link.</p>
         <p class="muted">Calendars stored only on your device ("On My iPhone") and most work accounts can't give an address. Apple links start with webcal:// and that's fine; paste them as they are.</p>
+      </details>
+      <details class="more" id="cal-out"><summary>Prefer tasks in a calendar app instead?</summary>
+        <p class="muted">Daybook can make a private address your calendar app subscribes to, showing your dated tasks. It's read-only and refreshes every few hours, so Apple Reminders above is usually the better fit.</p>
+        <button class="btn quiet" id="cal-make" type="button">Make my calendar address</button>
+        <div id="cal-url"></div>
+        <p><b>iPhone:</b> Settings → Apps → Calendar → Calendar Accounts → Add Account → Other → <b>Add Subscribed Calendar</b>, then paste.</p>
+        <p><b>Mac:</b> in Calendar, File → <b>New Calendar Subscription…</b>, then paste.</p>
+        <p><b>Google Calendar</b> (on a computer): next to <b>Other calendars</b>, tap + → <b>From URL</b>, then paste.</p>
+        <p><b>Outlook:</b> Add calendar → <b>Subscribe from web</b>, then paste.</p>
+        <p class="muted">Making a new address turns the old one off. Do that only if you shared it by mistake.</p>
       </details>
       </section>`)}
 
@@ -2098,7 +2187,7 @@ views.setup = async () => {
     $("#tok").addEventListener("paste", () => setTimeout(check, 50));
     if (prev.hasToken) check();
   }
-  if (!first) { fillAssistantRow(); wireCalendar(); }
+  if (!first) { fillAssistantRow(); wireCalendar(); wireAppleReminders(); }
   if (!first) loadUpdate().then(u => {
     const box = $("#update-status"); if (!box) return;
     box.innerHTML = u.available
@@ -2247,7 +2336,7 @@ async function loadBriefings() {
 /* ---------- Lock ---------- */
 async function showLock(message) {
   closeSheet();
-  $("#tabs").hidden = true; $("#composer").hidden = true; $("#lockbtn").hidden = true;
+  $("#tabs").hidden = true; $("#subtabs").hidden = true; $("#settingsTab").hidden = true; $("#composer").hidden = true; $("#lockbtn").hidden = true;
   const info = await fetch("/app/login/info").then(r => r.json()).catch(() => ({ method: "password" }));
   const err = raw(message ? h`<p class="err" role="alert">${message}</p>` : "");
   // The password works everywhere (it's also what Claude asks for). Once notes are set up, GitHub is offered too.
@@ -2357,7 +2446,7 @@ async function renderAwarenessPreferences() {
 
 /* ---------- Awareness inbox ---------- */
 async function renderAwareness() {
-  main.innerHTML = '<h2>Awareness</h2><p class="awareness-muted">Private suggestions based on your activity. No notifications required.</p><div id="awareness-items" class="awareness-list" aria-live="polite"><p>Loading suggestions…</p></div><button class="awareness-more" id="awareness-more" hidden>Load more</button>';
+  main.innerHTML = '<h2>Suggestions</h2><p class="awareness-muted">Private suggestions based on your activity. No notifications required.</p><div id="awareness-items" class="awareness-list" aria-live="polite"><p>Loading suggestions…</p></div><button class="awareness-more" id="awareness-more" hidden>Load more</button>';
   const list = $("#awareness-items"), more = $("#awareness-more");
   let cursor = null;
   const load = async (append = false) => {
@@ -2430,17 +2519,10 @@ async function route() {
   const hash = decodeURIComponent(location.hash.slice(1)) || "today";
   const [view, ...rest] = hash.split("/");
   const arg = rest.join("/");
-  document.querySelectorAll("#tabs a").forEach(a => a.removeAttribute("aria-current"));
-  const tab = view === "inbox" ? "notes" : view === "new-goal" ? "goals" : view === "note" || view === "new" ? (arg.startsWith("goals") ? "goals" : "notes") : view;
-  const link = $(`#tabs a[href="#${tab}"]`);
-  if (link) link.setAttribute("aria-current", "page");
-  const more = $("#tabs-more"), inMore = !!(link && more.contains(link));
-  more.open = false;
-  $("#tabs-more-label").toggleAttribute("data-current", inMore);
-  $("#tabs-more-label").textContent = inMore ? link.textContent : "More";
+  drawNav(view, arg);
   $("#composer").hidden = view !== "today" && hash !== "today";
   try {
-    if (!cfg.configured) { $("#tabs").hidden = true; $("#composer").hidden = true; await views.setup(); }
+    if (!cfg.configured) { $("#tabs").hidden = true; $("#subtabs").hidden = true; $("#composer").hidden = true; await views.setup(); }
     else if (view === "awareness") await renderAwareness();
     else if (view === "note") await editor(arg);
     else if (view === "new") await editor(null, arg || "inbox");

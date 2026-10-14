@@ -1,6 +1,6 @@
 # Apple Reminders ↔ Daybook: two-way sync
 
-**Status:** Phase 1 is built: a two-way sync driven by an iPhone Shortcut, with no native app, no Apple developer account and no new paid services. Setup steps are in [apple-reminders-shortcuts.md](apple-reminders-shortcuts.md). Keep the existing push notifications (Pushover or ntfy) on until it has run cleanly on your phone for a while.
+**Status:** Phases 1 and 3 are built: a two-way sync driven by an iPhone Shortcut, with no native app, no Apple developer account and no new paid services, and Apple Reminders as the alert for synced tasks. Setup is in Daybook's Settings → Apple Reminders, with full steps in [apple-reminders-shortcuts.md](apple-reminders-shortcuts.md).
 
 ## Why
 
@@ -134,7 +134,7 @@ Watch check-offs reach the phone through iCloud and sync on the next phone run.
 
 - **Phase 1 (built):** task IDs and parser updates (`src/task-id.ts`); the merge engine (`src/apple-sync.ts`) and run (`src/apple-sync-run.ts`) behind `POST /app/shortcuts/sync`; the Shortcut setup guide. The read-only feed stays available.
 - **Phase 2 (only if Phase 1 falls short):** a native iOS EventKit companion for background sync. It needs a $99/yr Apple Developer account, TestFlight or 7-day re-signing, and ongoing Xcode upkeep, and other self-hosters couldn't install it without that. The same sync endpoint serves it unchanged.
-- **Phase 3:** after a few weeks of clean runs, decide whether task reminders can rely on Apple Reminders alone, keeping push notifications for non-task alerts.
+- **Phase 3 (built):** task alerts come from Apple Reminders alone. After each run the Worker records the tasks Apple *reported* in its snapshot (open, unchanged this run) as the mirror (`sync:mirror` in the scheduler). The alarm skips a Daybook push for a mirrored task while the last run is under 36 hours old; after that, or with `taskAlerts: "both"` in settings, Daybook pushes everything again. Briefings and other notices are unaffected. The Shortcut secret can be made in Settings (`shortcutsToken`); a deployment `SHORTCUTS_TOKEN` takes priority.
 
 ## Decisions
 
