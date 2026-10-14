@@ -51,6 +51,8 @@ class FakeScheduler implements SyncScheduler {
   }
   async doneSince() { return this.done; }
   async markDone(note: string, text: string, at: number) { this.done.push({ note, text, at }); }
+  mirror: string[] | null = null;
+  async recordMirror(keys: string[]) { this.mirror = keys; }
 }
 
 interface Rem { taskId: string | null; title: string; due: string | null; allDay: boolean; completed: boolean; priority: string; }
@@ -232,4 +234,29 @@ test("Apple postponements emit only committed transitions, not replays, echoes o
   assert.equal(new Set(captured.map(e=>e.id)).size,3);
   assert.equal(captured[0].toDueAt,captured[1].fromDueAt);
   assert.equal(captured[1].toDueAt,captured[2].fromDueAt);
+});
+
+test("only tasks Apple confirmed having are marked as alerted by Reminders", async () => {
+  const { sched, apple, sync } = setup({ "inbox/errands.md": TASKS });
+  // Run 1 asks the Shortcut to create reminders; none exist in Apple yet, so Daybook keeps alerting.
+  await sync();
+  assert.deepEqual(sched.mirror, []);
+  // Run 2: Apple now reports them, so their alerts can come from Reminders.
+  await sync();
+  assert.deepEqual([...sched.mirror!].sort(), ["inbox/errands.md\u0000Book flights", "inbox/errands.md\u0000Call airline",
+    "inbox/errands.md\u0000Pay bill", "inbox/errands.md\u0000Take meds"]);
+  // A reminder completed in Apple isn't mirrored any more.
+  apple.find("Pay bill").completed = true;
+  await sync();
+  assert.ok(!sched.mirror!.includes("inbox/errands.md\u0000Pay bill"));
+});
+
+test("a task changed in Daybook waits for the next run before Reminders takes over its alert", async () => {
+  const { repo, sched, sync } = setup({ "inbox/errands.md": TASKS });
+  await sync(); await sync();
+  repo.edit("inbox/errands.md", repo.files.get("inbox/errands.md")!.replace("Call airline @2026-10-15 9am", "Call airline @2026-10-15 3pm"));
+  await sync();
+  assert.ok(!sched.mirror!.includes("inbox/errands.md\u0000Call airline"), "Apple still has the old time until the update is applied");
+  await sync();
+  assert.ok(sched.mirror!.includes("inbox/errands.md\u0000Call airline"));
 });

@@ -15,7 +15,7 @@ import { listRepos, prepareRepo, startDeviceFlow, pollDeviceFlow, ensureNotesRep
 import { AppNotes } from "./app-notes";
 import { GithubNotes as GithubStore } from "./github";
 import { makeZip } from "./zip";
-import { sendPush } from "./reminders";
+import { sendPush, MIRROR_FRESH_MS, type SyncMirror } from "./reminders";
 import { deviceName, validEndpoint, type Subscription } from "./web-push";
 import { makeBackup, parseBackup, restoreMissing } from "./backup";
 import { signSession, verifySession } from "./action";
@@ -70,7 +70,8 @@ function exportableTasks(notes: { name: string; content: string }[], timezone: s
     const rawLine = source?.content.split("\n")[task.line] || "";
     const parsed = parseReminders(task.note, rawLine, timezone);
     const oneOff = parsed.find(rem => !rem.repeat);
-    const title = task.text.replace(/\s+@\d{4}-\d{2}-\d{2}(?:\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?)?\b/i, "").trim();
+    // The parser's text is the title before any schedule (one-off or repeating); fall back to the raw text.
+    const title = parsed[0]?.text ?? task.text;
     const repeat = parsed.find(rem => rem.repeat);
     return { id: task.note + ":" + task.line, title, priority: task.priority,
       dueAt: oneOff ? new Date(oneOff.at).toISOString() : null,
@@ -99,16 +100,20 @@ function validCalendarUrl(raw: string): string | null {
 }
 const calendarCache = new Map<string, { at: number; text: string }>();
 
-/** Check the Shortcuts secret (SHORTCUTS_TOKEN). Returns an error response, or null when allowed. */
+/** The Shortcut's secret: SHORTCUTS_TOKEN on the deployment, otherwise the one made in Settings. */
+async function shortcutSecret(env: Env): Promise<{ token: string; fromDeploy: boolean } | null> {
+  if (env.SHORTCUTS_TOKEN && env.SHORTCUTS_TOKEN.length >= 32) return { token: env.SHORTCUTS_TOKEN, fromDeploy: true };
+  const made = (await loadSettings(env, true))?.shortcutsToken;
+  return made && made.length >= 32 ? { token: made, fromDeploy: false } : null;
+}
+
+/** Check the Shortcuts secret. Returns an error response, or null when allowed. */
 async function shortcutAuth(request: Request, env: Env): Promise<Response | null> {
-  if (!env.SHORTCUTS_TOKEN || env.SHORTCUTS_TOKEN.length < 32) return fail("Shortcut sync is not configured", 404);
+  const secret = await shortcutSecret(env);
+  if (!secret) return fail("Shortcut sync is not configured", 404);
   const supplied = request.headers.get("Authorization")?.replace(/^Bearer /i, "") ?? "";
-  // Hash both inputs before comparison to avoid timing differences from prefix matches.
-  const digest = async (value: string) => new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
-  const [expected, actual] = await Promise.all([digest(env.SHORTCUTS_TOKEN), digest(supplied)]);
-  let diff = 0;
-  for (let i = 0; i < expected.length; i++) diff |= expected[i] ^ actual[i];
-  return diff === 0 ? null : fail("Unauthorized", 401);
+  // Hashed before comparing, so timing doesn't reveal matching prefixes.
+  return await sameSecret(supplied, secret.token) ? null : fail("Unauthorized", 401);
 }
 
 export async function handleApp(request: Request, env: Env): Promise<Response> {
@@ -421,6 +426,32 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
         await oauth.revokeGrant(id, "notes-owner");
         return json({ ok: true });
       }
+      // Apple Reminders: the Shortcut's secret (made here unless the deployment sets one), last sync, alerts.
+      case "GET /apple-sync": {
+        const [secret, settings, mirror] = await Promise.all([shortcutSecret(env), loadSettings(env, true), scheduler(env).syncMirror() as Promise<SyncMirror | undefined>]);
+        return json({
+          configured: Boolean(secret), fromDeploy: Boolean(secret?.fromDeploy),
+          // The owner's own session may see the secret it made, to paste into the Shortcut.
+          token: secret && !secret.fromDeploy ? secret.token : null,
+          syncUrl: new URL(request.url).origin + "/app/shortcuts/sync",
+          lastSyncAt: mirror?.at ?? null, mirrored: mirror?.keys.length ?? 0, summary: mirror?.summary ?? null,
+          freshForMs: MIRROR_FRESH_MS, taskAlerts: settings?.taskAlerts ?? "reminders"
+        });
+      }
+      case "POST /apple-sync/token": {
+        if (env.SHORTCUTS_TOKEN) return fail("This copy's Shortcut secret is set on the deployment (SHORTCUTS_TOKEN); change it in Cloudflare.", 409);
+        const token = b64url(crypto.getRandomValues(new Uint8Array(32)));
+        const prev = (await loadSettings(env, true)) ?? {};
+        await saveSettings(env, { ...prev, shortcutsToken: token });
+        return json({ token });
+      }
+      case "POST /apple-sync/alerts": {
+        const { taskAlerts } = await request.json<{ taskAlerts?: string }>();
+        if (taskAlerts !== "reminders" && taskAlerts !== "both") return fail("Choose reminders or both");
+        const prev = (await loadSettings(env, true)) ?? {};
+        await saveSettings(env, { ...prev, taskAlerts });
+        return json({ taskAlerts });
+      }
       // Calendar: a private feed of your tasks (regenerate to revoke), and one subscribed calendar to read.
       case "POST /calendar/token": {
         const bytes = crypto.getRandomValues(new Uint8Array(32));
@@ -527,7 +558,10 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
       case "GET /priorities": return json(tasksFromNotes(await notes.all()).map(task => {
         const parsed = parseReminders(task.note, "- [ ] " + task.text, env.NOTES_TIMEZONE);
         const oneOff = parsed.find(r => !r.repeat);
-        return {...task, dueAt:oneOff?.at ?? null, title:parsed[0]?.text ?? task.text};
+        // A repeating task has no due date; send its schedule so the app can say it in words.
+        const repeats = parsed.filter(r => r.repeat);
+        const repeat = repeats.length ? { days: repeats[0].repeat!.days, minutes: repeats.map(r => r.repeat!.minute), nextAt: Math.min(...repeats.map(r => r.at)) } : null;
+        return {...task, dueAt:oneOff?.at ?? null, title:parsed[0]?.text ?? task.text, repeat};
       }));
       case "POST /priorities": {
         const { name, line, priority, sha } = await request.json<{name:string;line:number;priority:"do"|"plan"|"delegate"|"someday"|"inbox";sha?:string}>();

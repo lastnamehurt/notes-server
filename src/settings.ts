@@ -21,6 +21,10 @@ export interface Settings {
   codeRepo?: string;
   /** Secret address for Daybook's tasks as a calendar feed (regenerate to revoke). */
   calendarToken?: string;
+  /** Secret the Apple Reminders Shortcut sends (SHORTCUTS_TOKEN on the deployment takes priority). */
+  shortcutsToken?: string;
+  /** Tasks synced to Apple Reminders: alert from Reminders only (default), or from Daybook as well. */
+  taskAlerts?: "reminders" | "both";
   /** Address of a calendar the owner subscribed to (read, not changed). */
   calendarFeed?: string;
   /** Devices with notifications on. Kept separately in the scheduler and only attached when settings are read. */
