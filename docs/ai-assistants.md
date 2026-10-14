@@ -2,21 +2,22 @@
 
 Your notes server speaks standard remote MCP over HTTPS, so any assistant that can add a custom remote MCP server can connect to it. The phone app at `/app` works without any assistant.
 
-Status means what we have actually checked. "Reported" means a third-party guide says it works; we have not tested it.
+Status distinguishes confirmed Daybook connections from documented provider support that still needs end-to-end testing. For guided connection buttons, see the [Daybook connection page](https://lastnamehurt.github.io/notes-server/connect.html).
 
 | Assistant | Status | Notes |
 |---|---|---|
 | Claude (claude.ai) | Confirmed | Connected through **Settings → Connectors**. Connectors belong to the Claude account you're signed into. |
 | ChatGPT | Confirmed (ChatGPT Pro, 2026-10-11) | Added as a custom MCP server under Plugins, using OAuth. Requires the `/mcp` address. |
 | Gemini (gemini.google.com) | Documented by Google, not tested; may ask for credentials | Web only to connect. Personal accounts only, 18+, US only, Keep Activity on. See below. |
-| Cursor | Documented by Cursor, not tested | Add a remote server to `~/.cursor/mcp.json`. OAuth may need a client ID. See below. |
+| Cursor | Documented by Cursor, not tested end-to-end | Use the Daybook install button or add a remote server to `~/.cursor/mcp.json`. See below. |
+| Codex | Documented setup, not tested end-to-end | Use the Daybook copy-command button or `codex mcp add daybook --url https://your-worker.workers.dev/mcp`. |
 | Microsoft Copilot | Not evaluated | |
 | Perplexity | Not evaluated | |
 
 ## Connecting Claude
 
 1. Open [claude.ai](https://claude.ai) in a browser and go to **Settings → Connectors**.
-2. Choose **Add custom connector**. Name it **Notes** and paste your app's address with `/mcp` on the end, for example `https://personal-notes-mcp.yourname.workers.dev/mcp`.
+2. Choose **Add custom connector**. Name it **Daybook** and paste your app's address with `/mcp` on the end, for example `https://personal-notes-mcp.yourname.workers.dev/mcp`.
 3. A sign-in page opens. Enter your password and tap **Allow**.
 
 The Claude connector still asks for the password, even when the phone app uses GitHub sign-in.
@@ -51,7 +52,7 @@ Steps (web only):
 
 1. Go to gemini.google.com, then **Settings → Connected Apps**. If you don't see it, choose **Personal Intelligence**, then **Connected Apps**.
 2. Under **Custom apps**, add a custom app and enter the MCP server URL: `https://your-worker.workers.dev/mcp`.
-3. If the server doesn't support Dynamic Client Registration, open **Show more** under "Advanced features" and enter credentials. Our server doesn't issue fixed credentials, so this step will fail unless Gemini can use client metadata documents. That's untested.
+3. If Gemini requests a client ID and secret under **Advanced features**, do not enter your Daybook password as a client secret. This Daybook deployment uses OAuth; compatibility with Gemini’s client registration flow still needs end-to-end verification.
 4. Select **Next** and follow the prompts.
 
 To use the app in a chat, type `@` and pick it. The app works on the Gemini mobile app once connected. Gemini asks for confirmation before any write action.
@@ -72,19 +73,30 @@ Sources: [Cursor docs: MCP](https://cursor.com/docs/mcp), and a [Cursor forum re
    }
    ```
 
-2. Cursor supports OAuth for servers that need it. If the server doesn't support Dynamic Client Registration, add an `auth` object with a `CLIENT_ID`. Our server doesn't issue fixed client IDs, so that route may not work.
-3. Cursor's OAuth callbacks are `https://www.cursor.com/agents/mcp/oauth/callback` (web) and `http://localhost:8787/callback` (desktop). Our server must accept these redirects. We haven't checked that.
+2. Cursor supports OAuth for servers that need it. Use the [Daybook Connect page](https://lastnamehurt.github.io/notes-server/connect.html) for its install button, or the configuration above. If authorization fails, check the OAuth exchange; do not place your Daybook password or bearer token in the config.
+3. Cursor manages its OAuth redirect during authorization. We have not verified the full Daybook → Cursor sign-in flow.
 
 Known issue: a Cursor forum report says **Connect** does nothing for URL servers that need OAuth, with no browser window and no network request. If that happens, the config file is probably being read but the OAuth step never starts.
 
-Cursor's docs don't give menu paths for adding a remote server by hand, so the config file is the reliable route.
+If the install link does not work, use the config-file fallback above.
+
+## Connecting Codex (not yet tested end-to-end)
+
+From a terminal with Codex installed, run:
+
+```sh
+codex mcp add daybook --url https://your-worker.workers.dev/mcp
+```
+
+Replace the example URL with your own Daybook `/mcp` address. Then follow any OAuth login prompt. The installed Daybook app can copy this command for you. Verify by asking Codex to list your Daybook notes.
 
 ## Sources
 
-The OpenAI link is official developer documentation. The others are third-party guides; verify them against each vendor's current help page before relying on them.
+Google and OpenAI links below are official documentation; Cursor documentation is official, while the forum report is a third-party issue report. Documented support does not mean we have completed Daybook-specific OAuth testing.
 
 - [OpenAI: MCP developer docs](https://developers.openai.com/api/docs/mcp) (ChatGPT steps; checked against the live flow)
 - [Gemini Apps Help: connect custom apps](https://support.google.com/gemini/answer/17209137?hl=en) (consumer app)
 - [Cursor docs: MCP](https://cursor.com/docs/mcp)
 - [Cursor forum: Connect button does nothing](https://forum.cursor.com/t/remote-mcp-server-connect-button-produces-zero-network-requests-oauth-flow-never-starts/150962)
+- [Codex MCP documentation](https://developers.openai.com/codex/mcp/) (CLI setup)
 - [Google Cloud: custom MCP servers for Gemini Enterprise](https://docs.cloud.google.com/gemini/enterprise/docs/connectors/custom-mcp-server/set-up-custom-mcp-server) (enterprise product, not the consumer app)
