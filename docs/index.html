@@ -29,10 +29,13 @@ section{margin:0 0 96px}
 .hero p.lede{max-width:600px;font-size:21px}
 .phone{justify-self:center;width:min(340px,100%);background:#121318;border:1px solid #3a3c4a;border-radius:42px;padding:12px;box-shadow:0 40px 90px rgb(0 0 0 / .45),0 0 0 6px #22232c}
 .screen{background:#f5f4f0;color:#232430;border-radius:32px;padding:22px 18px 18px;font-size:13px;line-height:1.35}
-.screen .top{margin-bottom:12px}
+.screen .top{margin-bottom:12px;display:flex;justify-content:space-between;align-items:flex-end}
+.screen .acts{display:flex;gap:6px}.screen .ib{display:grid;place-items:center;width:30px;height:30px;border:1px solid #e1dfd8;border-radius:50%;background:#fff;color:#5d5e6c}
+.screen .ib svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.screen .hi{display:flex;justify-content:space-between;align-items:baseline;margin:0 2px 10px}.screen .hi b{font-size:16px}.screen .hi span{color:#5552c9;font-weight:600;font-size:12px}
 .screen .dow{color:#6b6c7a;font-weight:600;font-size:12px}.screen .day{font:400 46px/1 Georgia,serif;letter-spacing:-.04em}.screen .mon{font:400 17px Georgia,serif;color:#6b6c7a;margin-left:4px}
-.tabs{display:flex;gap:2px;border:1px solid #e1dfd8;border-radius:11px;padding:3px;margin-bottom:12px;font-weight:600;font-size:11.5px;color:#5d5e6c}
-.tabs span{flex:1;text-align:center;padding:6px 0;border-radius:8px}.tabs .on{background:#5552c9;color:#fff}
+.tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;border:1px solid #e1dfd8;border-radius:11px;padding:3px;margin-bottom:12px;font-weight:600;font-size:12.5px;color:#5d5e6c}
+.tabs span{text-align:center;padding:7px 0;border-radius:8px}.tabs .on{background:#5552c9;color:#fff}
 .card{background:#fff;border:1px solid #e6e4dd;border-radius:16px;padding:12px 14px}
 .card h4{margin:0 0 6px;font-size:14px;display:flex;justify-content:space-between}.card h4 small{font-weight:500;color:#6b6c7a}
 .todo{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid #efede7}
@@ -102,16 +105,18 @@ footer a{color:#c7c5ff}
       <p class="fine">Your own copy on a free Cloudflare account. About 10 minutes, no coding, no credit card.</p>
     </div>
 
-    <div class="phone" role="img" aria-label="Daybook's Today screen on a phone: a reminder notification, three focus priorities and a timeline of today's activity">
+    <div class="phone" role="img" aria-label="Daybook's Today screen on a phone: a reminder notification, the Today, Tasks and Notes tabs, three focus priorities and a timeline of today's activity">
       <div class="notif"><span class="ic">D</span><div><b>Reminder</b>Drink water</div><span class="btn">Done</span></div>
       <div class="screen">
-        <div class="top"><div class="dow">Tuesday</div><span class="day">13</span><span class="mon">Oct</span></div>
-        <div class="tabs"><span class="on">Today</span><span>Tasks</span><span>Journal</span><span>Memory</span><span>More</span></div>
+        <div class="top"><div><div class="dow">Tuesday</div><span class="day">13</span><span class="mon">Oct</span></div>
+          <div class="acts" aria-hidden="true"><span class="ib"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/></svg></span><span class="ib"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg></span></div></div>
+        <div class="tabs"><span class="on">Today</span><span>Tasks</span><span>Notes</span></div>
+        <div class="hi"><b>Good morning, Sam</b><span>Suggestions</span></div>
         <div class="card">
           <h4>Focus <small>3 priorities</small></h4>
           <div class="todo"><i></i><div><b>Call the dentist</b><em>Today · 10am</em></div><span class="due">Do now</span></div>
-          <div class="todo"><i></i><div><b>Weekly money review</b><em>Sun · 6pm</em></div><span class="due">Overdue</span></div>
-          <div class="todo"><i></i><div><b>30 min walk</b><em>Mon, Wed, Fri · 7am</em></div><span class="due">Today</span></div>
+          <div class="todo"><i></i><div><b>Weekly money review</b><em>Sun, Oct 11 · 6pm</em></div><span class="due">Overdue</span></div>
+          <div class="todo"><i></i><div><b>Take vitamins</b><em>Repeats daily · 8am</em></div><span class="due">Due today</span></div>
         </div>
         <div class="rail">
           <div><time>7:40</time>✓ 30 min walk <span>#exercise</span></div>
@@ -148,7 +153,7 @@ footer a{color:#c7c5ff}
       <article class="f"><div class="k">🎯</div><h3>Goals that move</h3><p>Write down why it matters and how you'll measure it, then add next steps with dates and log progress as you go.</p></article>
       <article class="f"><div class="k">🧠</div><h3>Memory that's yours</h3><p>Notes, projects, decisions and reference, searchable by you and your assistant. Download everything as Markdown any time.</p></article>
       <article class="f"><div class="k">📅</div><h3>Works with your calendar</h3><p>Your dated tasks show up in Apple, Google or Outlook calendar, and your calendar's events can show up in Daybook.</p></article>
-      <article class="f"><div class="k">✅</div><h3>Apple Reminders sync</h3><p>Two-way sync through an iPhone Shortcut. Check things off from your Watch, Siri or lock screen, and Daybook stays in step.</p></article>
+      <article class="f"><div class="k">✅</div><h3>Apple Reminders sync</h3><p>Two-way sync through an iPhone Shortcut, set up from Settings. Reminders handles the alerts, so you never get two, and you can check things off from your Watch, Siri or lock screen.</p></article>
       <article class="f"><div class="k">📱</div><h3>An app on your home screen</h3><p>Add it to your iPhone or Android home screen. When there's an update, tap <b>Update now</b> and it updates itself.</p></article>
     </div>
   </section>
