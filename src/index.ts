@@ -317,7 +317,8 @@ export default {
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
     const merged = await effectiveEnv(env);
     if (notesConfigured(merged)) {
-      ctx.waitUntil(Promise.allSettled([rescan(merged), runWeeklyReview(merged)]).then(results => {
+      // The Awareness dispatch sends nothing unless the owner turned on proactive suggestions.
+      ctx.waitUntil(Promise.allSettled([rescan(merged), runWeeklyReview(merged), scheduler(merged).awarenessDispatchPending()]).then(results => {
         for (const result of results) {
           if (result.status === "rejected") console.error("Scheduled Daybook job failed", result.reason);
         }

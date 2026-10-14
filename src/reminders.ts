@@ -244,6 +244,31 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
     }
   }
 
+  /**
+   * Send pending suggestions on the owner's behalf (#95). Runs right after a new suggestion is
+   * created and from the hourly cron, so one held back by quiet hours, cooldown or the daily cap
+   * goes out once it's allowed. Every gate (opt-in, mode, consent, quiet hours, budget, dedupe)
+   * stays in awarenessDeliver; this only decides which suggestions to offer it. At most one push
+   * per run, since the cooldown would hold back the rest anyway.
+   */
+  async awarenessDispatchPending(): Promise<{ sent: number; checked: number }> {
+    const prefs = await this.awarenessPreferences();
+    if (!prefs.enabled || prefs.paused || prefs.mode !== "proactive") return { sent: 0, checked: 0 };
+    const { items } = await new AwarenessInbox(this.ctx.storage).list("local", { limit: 20 });
+    let checked = 0;
+    for (const entry of items) {
+      if (entry.state !== "active") continue;
+      const dedupe = "awareness:delivery:local:" + encodeURIComponent(entry.candidate.dedupeKey);
+      if (await this.ctx.storage.get(dedupe)) continue; // already sent (or attempted)
+      checked++;
+      const result = await this.awarenessDeliver(entry.candidate.id);
+      if (result.status === "sent") return { sent: 1, checked };
+      // Held back for a reason that applies to every suggestion right now: stop and retry next hour.
+      if (["quiet-hours", "daily-cap", "cooldown", "push-not-configured", "delivery-unconfirmed"].includes(result.reason)) break;
+    }
+    return { sent: 0, checked };
+  }
+
   /** Awareness inbox stays within this installation's existing private Durable Object. */
   async awarenessHistoryList(limit = 100) {
     return new AwarenessHistory(this.ctx.storage).list("local", limit);
@@ -272,7 +297,7 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
 
   /**
    * Internal, owner-local event capture. The global scheduler belongs to one
-   * private Daybook installation. Suggestions are inbox-only; no notifications are sent.
+   * private Daybook installation. Suggestions go to the inbox; a push is offered only in proactive mode.
    * Keep this path free of Zod imports (Worker startup compatibility).
    */
   async recordTaskDeferrals(events: { id: string; taskId: string; fromDueAt: string; toDueAt: string }[], source: "daybook" | "appleReminders" = "daybook"): Promise<number> {
@@ -297,15 +322,21 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
       });
       inserted++;
     }
-    // Native inbox-only Awareness rule. This never sends push or reads note text.
+    // Native Awareness rule. It never reads note text; pushes go through awarenessDeliver's gates.
     // Consent is checked after capture, so disabling Awareness cannot create suggestions.
     if (inserted > 0) {
       if (preferences.enabled && !preferences.paused && deferralSourceAllowed(preferences, source)) {
         const stored = await this.ctx.storage.list<DeferralEvidence & { source: string }>({ prefix: "awareness:event:local:" });
         const evidence = [...stored.values()].filter(e => e.ownerId === "local" && deferralSourceAllowed(preferences, e.source));
         const inbox = new AwarenessInbox(this.ctx.storage);
+        let created = false;
         for (const suggestion of threeDeferrals(evidence, "local")) {
-          await inbox.add("local", suggestion);
+          if ((await inbox.add("local", suggestion)).inserted) created = true;
+        }
+        // Proactive mode only: offer the new suggestion for push. Never fails the capture.
+        if (created) {
+          try { await this.awarenessDispatchPending(); }
+          catch (e) { console.warn("Awareness dispatch failed", e instanceof Error ? e.message : "unknown"); }
         }
       }
     }

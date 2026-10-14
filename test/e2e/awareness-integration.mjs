@@ -253,6 +253,28 @@ test('concurrent delivery reserves once; provider failure and restart cannot res
 });
 
 // A second installation proves storage isolation despite identical DO instance names.
+test('proactive mode pushes a new suggestion without an explicit deliver request (#95)', async () => {
+  // Fresh installation: earlier scenarios used up today's cooldown on the shared one.
+  await worker.close();
+  await initialize();
+  const before = worker.pushes.length;
+  // Inbox-only (the default): a new suggestion stays in the app.
+  await preferences({ enabled: true });
+  await threeMoves('autoinbox');
+  assert.equal(worker.pushes.length, before);
+  // Proactive: the next new suggestion is pushed as soon as it's created, once.
+  await preferences({ enabled: true, mode: 'proactive', quietHours: outsideQuiet() });
+  const item = await threeMoves('autopush');
+  assert.equal(worker.pushes.length, before + 1);
+  assert.match(worker.pushes.at(-1).headers.click, /#awareness$/);
+  assert.ok(!worker.pushes.at(-1).body.includes('Private title'));
+  assert.equal((await api('/awareness/deliver', 'POST', { id: item.candidate.id })).reason, 'already-delivered');
+  // Quiet hours hold the next one back instead of sending it.
+  await preferences({ enabled: true, mode: 'proactive', quietHours: { start: '00:00', end: '23:59' } });
+  await threeMoves('autoquiet');
+  assert.equal(worker.pushes.length, before + 1);
+});
+
 test('successful delivery acknowledges once and another installation cannot read prior data', async () => {
   await worker.close();
   await initialize();
