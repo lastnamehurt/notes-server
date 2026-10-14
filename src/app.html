@@ -1739,7 +1739,7 @@ const connectButtons = mcpUrl => h`<div class="connect-grid">
     <a class="connect-btn" data-connect="cursor" href="${cursorInstallUrl(mcpUrl)}" target="_blank" rel="noopener"><b>Cursor</b><span>Adds Daybook to Cursor in one step</span></a>
     <button class="connect-btn" data-connect="codex" type="button"><b>Codex</b><span>Copies a setup command for your computer</span></button>
   </div>
-  <p class="muted connect-note">Each assistant then shows a Daybook sign-in page: enter your password and tap Allow.</p>`;
+  <p class="muted connect-note">Claude, ChatGPT, and Cursor may prompt you to authorize Daybook. For Codex, run the copied command first and complete sign-in when prompted.</p>`;
 /** Copy happens in the same tap as opening the page, so phones allow both. */
 function wireConnectButtons(root, mcpUrl) {
   root.querySelectorAll("[data-connect]").forEach(a => a.onclick = () => {
