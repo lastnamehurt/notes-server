@@ -54,8 +54,7 @@ section{margin:0 0 96px}
 .say span:before{content:"“";color:var(--mark)}.say span:after{content:"”";color:var(--mark)}
 
 /* Say it once: one assistant saves it, Daybook keeps it, another assistant uses it later */
-.persist{display:grid;grid-template-columns:minmax(0,1fr) 34px minmax(0,1fr) 34px minmax(0,1fr);align-items:stretch;margin-top:34px}
-.persist .arrow{display:grid;place-items:center;color:var(--mark);font-size:20px}
+.persist{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:stretch;margin-top:34px}
 .pane{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0}
 .pane .where{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12.5px;color:var(--ink2);font-weight:600}
 .pane .where em{font-style:normal;font-weight:500;color:#8f8ea3}
@@ -72,11 +71,27 @@ section{margin:0 0 96px}
 .places li{display:flex;justify-content:space-between;gap:10px;align-items:baseline;background:#14151c;border:1px solid var(--line);border-radius:10px;padding:7px 10px;font-size:14px}
 .places b{font-weight:650;color:var(--ink)}.places span{color:#a9a8ba;font-size:12.5px;white-space:nowrap}
 .pane .foot{margin:auto 0 0;font-size:13px;color:#a9a8ba}
-.persist-cap{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:34px;margin-top:12px}
+.persist-cap{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:12px}
 .persist-cap p{font-size:15px;margin:0}.persist-cap b{color:var(--ink)}
 .pane .cap{display:none;font-size:14px;color:var(--ink2);margin:0}
 .pane .cap b{color:var(--ink)}
-@media(max-width:900px){.persist{grid-template-columns:1fr}.persist .arrow{height:34px;transform:rotate(90deg)}.persist-cap{display:none}.pane .cap{display:block}}
+.pane.code{background:#1b1c24}
+.editor{background:#14151c;border:1px solid var(--line);border-radius:10px;overflow:hidden;opacity:.85}
+.editor .etab{font:11.5px ui-monospace,SFMono-Regular,Menlo,monospace;color:#bcbcca;padding:5px 10px;border-bottom:1px solid var(--line);background:#1f2029}
+.editor pre{margin:0;padding:8px 10px;font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;color:#c9c8d8;white-space:pre-wrap;overflow-wrap:anywhere}
+.editor .k{color:#aaa6ff}.editor .q{color:#9fd8b5}.editor .n{color:#f0c58a}
+.shared{margin-top:40px;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:16px;display:grid;gap:10px;position:relative}
+.shared:before{content:"";position:absolute;left:16.6%;right:16.6%;top:-29px;height:28px;border:2px dashed #5a5878;border-bottom:0;border-radius:14px 14px 0 0}
+.shared:after{content:"";position:absolute;left:50%;top:-29px;height:28px;border-left:2px dashed #5a5878}
+.shared .where{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;color:var(--ink2);font-weight:600}.shared .where em{font-style:normal;font-weight:500;color:#8f8ea3}
+.shared .rows{padding:8px 11px;display:grid;gap:4px}
+.shared .row{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.shared .row code{font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;color:#d9d8e6;overflow-wrap:anywhere}
+.shared .row:first-child{margin-bottom:6px}
+.shared .row code.h{font-weight:700;color:var(--ink)}
+.shared .via{flex:none;font:600 11.5px system-ui,sans-serif;color:var(--mark);border:1px solid #4a4868;border-radius:999px;padding:1px 8px}
+.shared .foot{margin:0;font-size:13.5px;color:#a9a8ba}
+@media(max-width:900px){.persist{grid-template-columns:1fr}.persist-cap{display:none}.pane .cap{display:block}.shared{margin-top:16px}.shared:before,.shared:after{display:none}.shared .row{flex-direction:column;align-items:flex-start;gap:2px;margin-bottom:6px}}
 
 /* Feature grid */
 .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:26px}
@@ -166,39 +181,48 @@ footer a{color:#c7c5ff}
       <span>I want to run a 10k by March</span>
     </div>
 
-    <div class="persist" role="group" aria-label="Example: you tell one assistant something in plain words, Daybook saves it as a note and a reminder, and a week later a different assistant uses it to find pottery studios nearby">
+    <div class="persist" role="group" aria-label="Example: you tell Claude about your mom in plain words, ChatGPT uses it a week later to find pottery studios nearby and saves a booking reminder, and Cursor brings that reminder up on Friday. All three read and write the same Daybook note.">
       <div class="pane">
-        <div class="where">ChatGPT <em>Tuesday</em></div>
-        <div class="msg you">Remind me to call Mom Sunday at 5. Also, she's really into pottery lately.</div>
+        <div class="where">Claude <em>Tuesday</em></div>
+        <div class="msg you">Mom's been really into pottery lately. Remind me to call her Sunday at 5.</div>
         <span class="tool"><i>D</i>Saved to Daybook</span>
-        <div class="msg ai">Done. I'll remind you Sunday at 5pm, and I noted the pottery.</div>
-        <p class="cap"><b>Say it once,</b> in whatever words come naturally.</p>
+        <div class="msg ai">Got it. Reminder set for Sunday at 5pm, and I added the pottery to your notes on Mom.</div>
+        <p class="cap"><b>Tell Claude,</b> in your own words.</p>
       </div>
-      <div class="arrow" aria-hidden="true">→</div>
       <div class="pane">
-        <div class="where">Your Daybook <em>kept, always</em></div>
-        <div class="file"><div class="name">reference/mom.md</div><pre><span class="h"># Mom</span>
-
-- Into pottery lately <span class="d">(Oct 13)</span>
-- [ ] Call Mom <span class="s">@2026-10-18 5pm</span></pre></div>
-        <p class="foot">Plain Markdown in your own private space. The reminder buzzes your phone Sunday.</p>
-        <p class="cap"><b>It's kept for you,</b> as a note you can read, edit or download.</p>
-      </div>
-      <div class="arrow" aria-hidden="true">→</div>
-      <div class="pane">
-        <div class="where">Claude <em>a week later</em></div>
+        <div class="where">ChatGPT <em>next Wednesday</em></div>
         <div class="msg you">Find somewhere near me to take Mom for her birthday.</div>
         <span class="tool"><i>D</i>Checked Daybook</span>
-        <div class="msg ai">She's been into pottery lately, so here are two studios nearby with wheel-throwing classes for two:
-          <ul class="places"><li><b>Riverbend Clay Studio</b><span>0.8 mi · Sat 2pm</span></li><li><b>Kiln &amp; Co.</b><span>1.6 mi · Sun 11am</span></li></ul>
-          Want me to remind you to book one?</div>
-        <p class="cap"><b>Any assistant can use it,</b> even one you didn't tell.</p>
+        <div class="msg ai">She's into pottery lately, so two studios nearby with classes for two:
+          <ul class="places"><li><b>Riverbend Clay Studio</b><span>0.8 mi · Sat 2pm</span></li><li><b>Kiln &amp; Co.</b><span>1.6 mi · Sun 11am</span></li></ul></div>
+        <div class="msg you">Riverbend. Remind me Friday to book it.</div>
+        <span class="tool"><i>D</i>Saved to Daybook</span>
+        <p class="cap"><b>Pick it up in ChatGPT.</b> It already knows.</p>
+      </div>
+      <div class="pane code">
+        <div class="where">Cursor <em>Friday, mid-PR</em></div>
+        <div class="editor" aria-hidden="true"><div class="etab">checkout.test.ts</div><pre><span class="k">it</span>(<span class="q">"applies the coupon"</span>, () =&gt; {
+  <span class="k">expect</span>(total(cart)).toBe(<span class="n">42</span>);</pre></div>
+        <div class="msg you">Anything I need to do today before I dig in?</div>
+        <span class="tool"><i>D</i>Checked Daybook</span>
+        <div class="msg ai">One thing: book Riverbend Clay Studio for Mom's birthday, Saturday's 2pm class. Then back to the coupon tests?</div>
+        <p class="cap"><b>Cursor knows too,</b> even mid-code.</p>
       </div>
     </div>
     <div class="persist-cap" aria-hidden="true">
-      <p><b>Say it once,</b> in whatever words come naturally.</p>
-      <p><b>It's kept for you,</b> as a note you can read, edit or download.</p>
-      <p><b>Any assistant can use it,</b> even one you didn't tell.</p>
+      <p><b>Tell Claude,</b> in your own words.</p>
+      <p><b>Pick it up in ChatGPT.</b> It already knows.</p>
+      <p><b>Cursor knows too,</b> even mid-code.</p>
+    </div>
+    <div class="shared">
+      <div class="where">Your Daybook <em>one note, every tool</em></div>
+      <div class="file"><div class="name">reference/mom.md</div><div class="rows">
+        <div class="row"><code class="h"># Mom</code></div>
+        <div class="row"><code>- Into pottery lately</code><span class="via">from Claude</span></div>
+        <div class="row"><code>- [ ] Call Mom <span class="s">@2026-10-18 5pm</span></code><span class="via">from Claude</span></div>
+        <div class="row"><code>- [ ] Book Riverbend Clay Studio <span class="s">@2026-10-23 9am</span></code><span class="via">from ChatGPT</span></div>
+      </div></div>
+      <p class="foot">Plain Markdown in your own private space. Every assistant you connect reads and adds to the same notes, and the reminders buzz your phone.</p>
     </div>
   </section>
 
