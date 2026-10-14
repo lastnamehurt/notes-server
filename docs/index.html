@@ -68,6 +68,9 @@ section{margin:0 0 96px}
 .file .name{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:#8f8ea3;padding:7px 11px;border-bottom:1px solid var(--line)}
 .file pre{margin:0;padding:10px 11px;font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;color:#d9d8e6;white-space:pre-wrap;overflow-wrap:anywhere}
 .file .h{color:var(--ink);font-weight:700}.file .s{color:var(--mark)}.file .d{color:#8f8ea3}
+.places{list-style:none;margin:8px 0;padding:0;display:grid;gap:6px}
+.places li{display:flex;justify-content:space-between;gap:10px;align-items:baseline;background:#14151c;border:1px solid var(--line);border-radius:10px;padding:7px 10px;font-size:14px}
+.places b{font-weight:650;color:var(--ink)}.places span{color:#a9a8ba;font-size:12.5px;white-space:nowrap}
 .pane .foot{margin:auto 0 0;font-size:13px;color:#a9a8ba}
 .persist-cap{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:34px;margin-top:12px}
 .persist-cap p{font-size:15px;margin:0}.persist-cap b{color:var(--ink)}
@@ -163,7 +166,7 @@ footer a{color:#c7c5ff}
       <span>I want to run a 10k by March</span>
     </div>
 
-    <div class="persist" role="group" aria-label="Example: you tell one assistant something in plain words, Daybook saves it as a note and a reminder, and a week later a different assistant uses it">
+    <div class="persist" role="group" aria-label="Example: you tell one assistant something in plain words, Daybook saves it as a note and a reminder, and a week later a different assistant uses it to find pottery studios nearby">
       <div class="pane">
         <div class="where">ChatGPT <em>Tuesday</em></div>
         <div class="msg you">Remind me to call Mom Sunday at 5. Also, she's really into pottery lately.</div>
@@ -184,9 +187,11 @@ footer a{color:#c7c5ff}
       <div class="arrow" aria-hidden="true">→</div>
       <div class="pane">
         <div class="where">Claude <em>a week later</em></div>
-        <div class="msg you">What should I get Mom for her birthday?</div>
+        <div class="msg you">Find somewhere near me to take Mom for her birthday.</div>
         <span class="tool"><i>D</i>Checked Daybook</span>
-        <div class="msg ai">She's been into pottery lately. A wheel-throwing class you take together, or a set of glazes for her pieces?</div>
+        <div class="msg ai">She's been into pottery lately, so here are two studios nearby with wheel-throwing classes for two:
+          <ul class="places"><li><b>Riverbend Clay Studio</b><span>0.8 mi · Sat 2pm</span></li><li><b>Kiln &amp; Co.</b><span>1.6 mi · Sun 11am</span></li></ul>
+          Want me to remind you to book one?</div>
         <p class="cap"><b>Any assistant can use it,</b> even one you didn't tell.</p>
       </div>
     </div>
