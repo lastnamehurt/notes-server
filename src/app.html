@@ -1737,11 +1737,17 @@ const connectButtons = mcpUrl => h`<div class="connect-grid">
     <a class="connect-btn" data-connect="claude" href="${CONNECT_TARGETS.claude.url}" target="_blank" rel="noopener"><b>Claude</b><span>Copies your address and opens Claude's connectors</span></a>
     <a class="connect-btn" data-connect="chatgpt" href="${CONNECT_TARGETS.chatgpt.url}" target="_blank" rel="noopener"><b>ChatGPT</b><span>Copies your address and opens ChatGPT's plugins</span></a>
     <a class="connect-btn" data-connect="cursor" href="${cursorInstallUrl(mcpUrl)}" target="_blank" rel="noopener"><b>Cursor</b><span>Adds Daybook to Cursor in one step</span></a>
+    <button class="connect-btn" data-connect="codex" type="button"><b>Codex</b><span>Copies a setup command for your computer</span></button>
   </div>
   <p class="muted connect-note">Each assistant then shows a Daybook sign-in page: enter your password and tap Allow.</p>`;
 /** Copy happens in the same tap as opening the page, so phones allow both. */
 function wireConnectButtons(root, mcpUrl) {
   root.querySelectorAll("[data-connect]").forEach(a => a.onclick = () => {
+    if (a.dataset.connect === "codex") {
+      const command = "codex mcp add daybook --url " + mcpUrl;
+      navigator.clipboard.writeText(command).then(() => toast("Codex command copied. Run it in your terminal, then complete sign-in."), () => toast("Copy this command: " + command));
+      return;
+    }
     const target = CONNECT_TARGETS[a.dataset.connect];
     if (!target) return; // Cursor: the link itself does everything
     try { navigator.clipboard.writeText(mcpUrl).then(() => toast(target.toast), () => toast("Copy this address first: " + mcpUrl)); }
@@ -2138,7 +2144,7 @@ function showDone(mcpUrl) {
     <section class="step ok"><h3><span class="n">✓</span>${cfg.storage === "app" ? "Your notes are saved in this app" : "Notes are saving to your private repository"}</h3>
       ${raw(cfg.push ? `<p>Send yourself a test reminder to check your phone gets it.</p><button class="btn quiet" id="test" type="button">Send test notification</button>` : `<p class="muted">Phone notifications are off. You can turn them on in Settings.</p>`)}</section>
     <section class="step"><h3><span class="n">2</span>Connect your AI assistant</h3>
-      <p>Tap the one you use. Claude and ChatGPT open with your address copied, ready to paste; Cursor adds it for you.</p>
+      <p>Tap the one you use. Claude and ChatGPT open with your address copied; Cursor installs it directly; Codex copies a setup command.</p>
       ${raw(connectButtons(mcpUrl))}
       <p><a href="#assistants">See all connected assistants →</a></p>
       <div class="copyrow"><code>${mcpUrl}</code><button class="btn quiet" id="copymcp" type="button">Copy</button></div>
