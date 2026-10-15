@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import { buildBriefing } from "../src/briefing.ts";
 import assert from "node:assert/strict";
 import {
   DEFAULT_SIGNAL_SETTINGS, parseSignalSettings, parsePayment, parseAmount, categoryLabel,
@@ -93,4 +94,14 @@ test("spend targets fire only on the tap that crosses them", () => {
   const crossing = paymentOutcome(c, [a, b, c], settings, zone).suggestions;
   assert.deepEqual(crossing.map(s => s.dedupeKey), ["payment-spend-target:day:2026-10-15", "payment-spend-target:week:2026-10-12"]);
   assert.deepEqual(paymentOutcome(d, [a, b, c, d], settings, zone).suggestions, [], "already over: no repeat");
+});
+
+test("the evening briefing adds a spend line; hidden amounts show only the count", () => {
+  const base = { kind: "evening" as const, notes: [], done: [], now: T, timeZone: zone, preview: "full" as const };
+  assert.equal(buildBriefing(base).message, "Nothing to wrap up today.");
+  assert.match(buildBriefing({ ...base, spend: { today: 24.5, count: 3, week: 112, hidden: false } }).message, /Spent today: \$24\.50 across 3 · week \$112\.00/);
+  assert.match(buildBriefing({ ...base, spend: { today: 24.5, count: 3, week: 112, hidden: true } }).message, /Spent today: 3 taps$/);
+  assert.equal(buildBriefing({ ...base, preview: "counts", spend: { today: 9, count: 1, week: 9, hidden: false } }).message, "1 tap");
+  assert.equal(buildBriefing({ ...base, spend: { today: 0, count: 0, week: 0, hidden: false } }).message, "Nothing to wrap up today.");
+  assert.equal(buildBriefing({ ...base, kind: "morning", spend: { today: 24.5, count: 3, week: 112, hidden: false } }).message, "Nothing due today.");
 });

@@ -326,6 +326,13 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
     const env = applySettings(this.env as unknown as Env, await this.getSettings());
     return spendSummary(await this.payments(), await this.signalSettings(), now, env.NOTES_TIMEZONE || DEFAULT_TIMEZONE);
   }
+  /** The evening briefing's spend line, or null when the payment signal is off. */
+  private async briefingSpend(now: number): Promise<{ today: number; count: number; week: number; hidden: boolean } | null> {
+    const settings = await this.signalSettings();
+    if (!settings.payment.enabled) return null;
+    const s = await this.signalSpend(now);
+    return { today: s.today, count: s.todayCount, week: s.weekTotal, hidden: settings.hideAmounts };
+  }
   /** Erase every stored payment (Settings → Signals → Erase). */
   async signalErase(): Promise<{ deleted: number }> {
     const keys = [...(await this.ctx.storage.list({ prefix: PAYMENT })).keys()];
@@ -642,7 +649,8 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
     const settings = (await this.ctx.storage.get<BriefingSettings>(BRIEFINGS)) ?? DEFAULT_BRIEFINGS;
     const notes = await notesFor(env).all();
     const suggestions = kind === "morning" ? (await this.awarenessDigestPending()).length : 0;
-    return buildBriefing({ kind, notes, done: await this.doneSince(now - 2 * 86_400_000), now, timeZone: this.zone(env), preview: settings.preview, name: env.OWNER_NAME, suggestions });
+    const spend = kind === "evening" ? await this.briefingSpend(now) : null;
+    return buildBriefing({ kind, notes, done: await this.doneSince(now - 2 * 86_400_000), now, timeZone: this.zone(env), preview: settings.preview, name: env.OWNER_NAME, suggestions, spend });
   }
 
   /** Send a briefing right now (Settings' "Send test"). At most once a minute. */
@@ -687,7 +695,8 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
       try {
         notes ??= await notesFor(env).all();
         const digest = kind === "morning" ? await this.awarenessDigestPending() : [];
-        const b = buildBriefing({ kind, notes, done: await this.doneSince(now - 2 * 86_400_000), now, timeZone: zone, preview: settings.preview, name: env!.OWNER_NAME, suggestions: digest.length });
+        const spend = kind === "evening" ? await this.briefingSpend(now) : null;
+        const b = buildBriefing({ kind, notes, done: await this.doneSince(now - 2 * 86_400_000), now, timeZone: zone, preview: settings.preview, name: env!.OWNER_NAME, suggestions: digest.length, spend });
         if (b.empty) {
           await this.ctx.storage.put(briefSent(kind, date), { at: now });
           await advance({ at: now, result: "skipped", detail: "Nothing to report" });
