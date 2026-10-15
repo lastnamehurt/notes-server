@@ -31,7 +31,7 @@ test("tasks collect in one inbox Tasks note, created on first use", async () => 
     assert.equal(files[first.name], "# Tasks\n\n- [ ] Buy stamps\n");
     const second = await addTask(env, { text: "Dentist", schedule: "2099-01-05 14:30", priority: "plan" });
     assert.equal(second.name, first.name, "the second task goes in the same note");
-    assert.equal(files[first.name], "# Tasks\n\n- [ ] Buy stamps\n- [ ] Dentist @2099-01-05 14:30 @priority:plan\n");
+    assert.match(files[first.name], /^# Tasks\n\n- \[ \] Buy stamps\n- \[ \] Dentist @2099-01-05 14:30 @priority:plan \^[a-z0-9]{6}\n$/, "a dated task gets an ID");
     assert.deepEqual((second as any).reminders?.length, 1, "a dated task becomes a reminder");
   } finally { restore(); }
 });
@@ -41,7 +41,7 @@ test("an existing Reminders note is reused, and a named note gets the task", asy
   const restore = fakeGithub(files);
   try {
     await addTask(env, { text: "Pay bill", schedule: "weekdays 09:00" });
-    assert.equal(files["inbox/2026-09-01-reminders.md"], "# Reminders\n\n- [ ] Old one @2099-01-01\n- [ ] Pay bill @weekdays 09:00\n\nNotes below\n", "added after the last task, before other text");
+    assert.match(files["inbox/2026-09-01-reminders.md"], /^# Reminders\n\n- \[ \] Old one @2099-01-01\n- \[ \] Pay bill @weekdays 09:00 \^[a-z0-9]{6}\n\nNotes below\n$/, "added after the last task, before other text");
     await addTask(env, { text: "Book movers", note: "projects/2026-09-02-move.md", priority: "do" });
     assert.equal(files["projects/2026-09-02-move.md"], "# Move\n- [ ] Book movers @priority:do\n");
   } finally { restore(); }

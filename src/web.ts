@@ -24,6 +24,7 @@ import { pushConfigured, parseReminders, nextOccurrence } from "./reminder-parse
 import { runAppleSync, SyncError } from "./apple-sync-run";
 import { notesFor } from "./storage";
 import { taskDeferrals } from "./awareness-deferrals";
+import { ensureTaskIds } from "./task-id-assign";
 import { buildIcs, parseIcs } from "./ics";
 import { b64url } from "./web-push";
 
@@ -545,9 +546,10 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
           if (!reminder) return fail("That occurrence is no longer scheduled; refresh Tasks");
           return json(await completeReminder(env,name,reminder.text,at));
         }
-        const updated = editCalendarTask(current.content,line,{schedule,priority,done},env.NOTES_TIMEZONE || "America/Los_Angeles");
+        const edited = ensureTaskIds(current.content, editCalendarTask(current.content,line,{schedule,priority,done},env.NOTES_TIMEZONE || "America/Los_Angeles"), env.NOTES_TIMEZONE || "America/Los_Angeles", name);
+        const updated = edited.after;
         await notes.update(name,updated,current.sha);
-        await captureTaskDeferrals(env, name, current.content, updated).catch(e => console.error("Awareness capture failed", e));
+        await captureTaskDeferrals(env, name, edited.before, updated).catch(e => console.error("Awareness capture failed", e));
         const result = await scheduleNote(env,name,updated);
         if (done && parsed.length) {
           await appendLog(notes,"✓ " + parsed[0].text + " #done",{timeZone:env.NOTES_TIMEZONE});
@@ -577,15 +579,17 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
         return json({ name, content, sha });
       }
       case "POST /note": {
-        const { content, category } = await request.json<{ content: string; category: string }>();
+        const { content: input, category } = await request.json<{ content: string; category: string }>();
         if (!CATEGORIES.includes(category as Category)) return fail("Pick a folder for the note");
+        const content = ensureTaskIds(null, input, env.NOTES_TIMEZONE || "America/Los_Angeles").after;
         return json(await scheduleNote(env, await notes.save(content, category as Category), content));
       }
       case "PUT /note": {
-        const { name, content, sha } = await request.json<{ name: string; content: string; sha?: string }>();
+        const { name, content: input, sha } = await request.json<{ name: string; content: string; sha?: string }>();
         const current = await notes.get(name);
+        const { before, after: content } = ensureTaskIds(current.content, input, env.NOTES_TIMEZONE || "America/Los_Angeles", name);
         const saved = await notes.update(name, content, sha);
-        await captureTaskDeferrals(env, name, current.content, content).catch(e => console.error("Awareness capture failed", e));
+        await captureTaskDeferrals(env, name, before, content).catch(e => console.error("Awareness capture failed", e));
         return json(await scheduleNote(env, saved, content));
       }
       case "DELETE /note": {
