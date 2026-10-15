@@ -64,6 +64,14 @@ export class AwarenessInbox {
     return { items: page, nextCursor: offset + limit < entries.length ? page[page.length - 1].candidate.id : null };
   }
 
+  /** Retire a suggestion that no longer applies (its task was done or rescheduled): it drops out of the list. */
+  async expire(owner: string, id: string, now = new Date().toISOString()): Promise<boolean> {
+    const entry = await this.get(owner, id);
+    if (!entry || date(entry.candidate.expiresAt) <= date(now)) return false;
+    await this.store.put(key(owner, id), { ...entry, candidate: { ...entry.candidate, expiresAt: now }, updatedAt: now });
+    return true;
+  }
+
   async action(owner: string, id: string, action: "dismiss" | "snooze" | "mute", until?: string, now = new Date().toISOString()) {
     const entry = await this.get(owner, id);
     if (!entry) return null;

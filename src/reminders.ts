@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { AwarenessInbox, type InboxCandidate } from "./awareness-inbox";
 import { threeDeferrals, type DeferralEvidence } from "./awareness-rules";
+import { deadlineSuggestions } from "./awareness-deadlines";
 import { AwarenessHistory } from "./awareness-history";
 import { interruptionDecision } from "./awareness-interruption";
 import { DEFAULT_AWARENESS_PREFERENCES, parseAwarenessPreferences, type AwarenessPreferences } from "./awareness-preferences";
@@ -132,6 +133,8 @@ export interface PushError { at: number; message: string; reminder: string; }
 const KEEP_FIRED_MS = 48 * 3600 * 1000;
 // Briefings (see briefing.ts). The "brief:" prefix must not overlap the reminder ("r:"), done ("d:"), fired ("f:") or "sent:" keys.
 const BRIEFINGS = "briefings";
+/** Digest mode: a suggestion already counted in a morning briefing (keyed by its dedupe key). */
+const DIGESTED = "awareness:digested:local:";
 const briefNext = (kind: BriefingKind) => "brief:next:" + kind;
 const briefSent = (kind: BriefingKind, date: string) => "brief:sent:" + kind + ":" + date;
 const briefTries = (kind: BriefingKind, date: string) => "brief:tries:" + kind + ":" + date;
@@ -220,6 +223,8 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
     if (decision.action !== "send") return { status: decision.action, reason: decision.reason };
     // Recheck evidence consent at delivery time: source revocation also applies
     // to suggestions already in the inbox. Missing provenance fails closed.
+    if (candidate.ruleId === "task-overdue" && !prefs.sources.daybook)
+      return { status: "suppressed", reason: "source-not-authorized" };
     if (candidate.ruleId === "task-three-deferrals") {
       for (const eventId of candidate.evidenceEventIds) {
         const event = await this.ctx.storage.get<{ source: string }>("awareness:event:local:" + eventId);
@@ -293,6 +298,36 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
   }
   async awarenessInboxAdd(candidate: InboxCandidate) {
     return new AwarenessInbox(this.ctx.storage).add("local", candidate);
+  }
+
+  /**
+   * Overdue nudges (#96), from the hourly scan of the notes. `tasks` are the open one-off dated tasks
+   * (key and due time only, never titles). Adds a suggestion for each task overdue two days or more,
+   * retires earlier overdue suggestions whose task was since done or given a new date, and offers new
+   * ones for push in proactive mode. Needs Awareness on with the Daybook tasks source.
+   */
+  async recordOverdueTasks(tasks: { id: string; dueAt: number }[], now = new Date()): Promise<{ created: number; retired: number }> {
+    const prefs = await this.awarenessPreferences();
+    if (!prefs.enabled || prefs.paused || !prefs.sources.daybook) return { created: 0, retired: 0 };
+    const env = applySettings(this.env as unknown as Env, await this.getSettings());
+    const suggestions = deadlineSuggestions(tasks.slice(0, 2000).map(t => ({
+      id: t.id, ownerId: "local", dueAt: new Date(t.dueAt).toISOString(), completed: false
+    })).filter(t => Number.isFinite(Date.parse(t.dueAt))), { now, ownerId: "local", timeZone: env.NOTES_TIMEZONE || DEFAULT_TIMEZONE });
+    const inbox = new AwarenessInbox(this.ctx.storage);
+    let created = 0, retired = 0;
+    for (const suggestion of suggestions) if ((await inbox.add("local", suggestion)).inserted) created++;
+    // Still-current overdue suggestions are exactly the ones just produced; any other open one is stale.
+    const current = new Set(suggestions.map(s => s.dedupeKey));
+    const open = await this.ctx.storage.list<{ candidate: { id: string; ruleId: string; dedupeKey: string } }>({ prefix: "awareness:inbox:local:" });
+    for (const entry of open.values()) {
+      if (entry.candidate.ruleId !== "task-overdue" || current.has(entry.candidate.dedupeKey)) continue;
+      if (await inbox.expire("local", entry.candidate.id, now.toISOString())) retired++;
+    }
+    if (created) {
+      try { await this.awarenessDispatchPending(); }
+      catch (e) { console.warn("Awareness dispatch failed", e instanceof Error ? e.message : "unknown"); }
+    }
+    return { created, retired };
   }
 
   /**
@@ -515,12 +550,33 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
     return this.getBriefings();
   }
 
+  /**
+   * Digest mode (#85): active suggestions not yet counted in a morning briefing. Empty unless
+   * Awareness is on, not paused and set to digest.
+   */
+  async awarenessDigestPending(): Promise<string[]> {
+    const prefs = await this.awarenessPreferences();
+    if (!prefs.enabled || prefs.paused || prefs.mode !== "digest") return [];
+    const { items } = await new AwarenessInbox(this.ctx.storage).list("local", { limit: 100 });
+    const out: string[] = [];
+    for (const entry of items) {
+      if (entry.state !== "active") continue;
+      if (await this.ctx.storage.get(DIGESTED + encodeURIComponent(entry.candidate.dedupeKey))) continue;
+      out.push(entry.candidate.dedupeKey);
+    }
+    return out;
+  }
+  private async markDigested(keys: string[], at: number): Promise<void> {
+    for (const k of keys) await this.ctx.storage.put(DIGESTED + encodeURIComponent(k), { at });
+  }
+
   /** Build a briefing now from the live notes, without sending it. */
   async previewBriefing(kind: BriefingKind, now = Date.now()): Promise<Briefing> {
     const env = await this.briefingEnv();
     const settings = (await this.ctx.storage.get<BriefingSettings>(BRIEFINGS)) ?? DEFAULT_BRIEFINGS;
     const notes = await notesFor(env).all();
-    return buildBriefing({ kind, notes, done: await this.doneSince(now - 2 * 86_400_000), now, timeZone: this.zone(env), preview: settings.preview, name: env.OWNER_NAME });
+    const suggestions = kind === "morning" ? (await this.awarenessDigestPending()).length : 0;
+    return buildBriefing({ kind, notes, done: await this.doneSince(now - 2 * 86_400_000), now, timeZone: this.zone(env), preview: settings.preview, name: env.OWNER_NAME, suggestions });
   }
 
   /** Send a briefing right now (Settings' "Send test"). At most once a minute. */
@@ -564,7 +620,8 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
       if (now - due > BRIEF_STALE_MS) { await advance({ at: now, result: "skipped", detail: "Missed its time by over two hours" }); continue; }
       try {
         notes ??= await notesFor(env).all();
-        const b = buildBriefing({ kind, notes, done: await this.doneSince(now - 2 * 86_400_000), now, timeZone: zone, preview: settings.preview, name: env!.OWNER_NAME });
+        const digest = kind === "morning" ? await this.awarenessDigestPending() : [];
+        const b = buildBriefing({ kind, notes, done: await this.doneSince(now - 2 * 86_400_000), now, timeZone: zone, preview: settings.preview, name: env!.OWNER_NAME, suggestions: digest.length });
         if (b.empty) {
           await this.ctx.storage.put(briefSent(kind, date), { at: now });
           await advance({ at: now, result: "skipped", detail: "Nothing to report" });
@@ -574,6 +631,8 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
         // Record the send only after the provider accepts it; a retry after that never resends.
         await sendOnce(false, () => sendNotice(env!, { title: b.title, message: b.message, url, tags: "sunrise" }, this.pruning),
           () => this.ctx.storage.put(briefSent(kind, date), { at: now }));
+        // Counted once: tomorrow's briefing only mentions suggestions that arrive after this one.
+        await this.markDigested(digest, now);
         await advance({ at: now, result: "sent" });
       } catch (e) {
         const tries = ((await this.ctx.storage.get<number>(briefTries(kind, date))) ?? 0) + 1;

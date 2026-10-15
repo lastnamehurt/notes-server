@@ -2419,8 +2419,9 @@ async function renderAwarenessPreferences() {
     input.style.maxWidth = "100%"; wrap.append(input); form.append(wrap); return input;
   };
   const mode = document.createElement("select"); mode.name = "mode"; mode.setAttribute("aria-label","Awareness mode");
+  const modeLabels = { inbox: "Only in the app", digest: "In my morning briefing", proactive: "Send to my phone" };
   for (const value of ["inbox","digest","proactive"]) {
-    const option = document.createElement("option"); option.value = value; option.textContent = value; mode.append(option);
+    const option = document.createElement("option"); option.value = value; option.textContent = modeLabels[value]; mode.append(option);
   }
   mode.value = prefs.mode; form.append(mode);
   const start = field("quiet-start", "Quiet hours start", "time", prefs.quietHours.start);
@@ -2463,13 +2464,20 @@ async function renderAwareness() {
         const candidate = entry.candidate;
         const card = document.createElement("article");
         card.className = "awareness-card";
-        const heading = document.createElement("h3"); heading.textContent = "Something worth revisiting";
+        const heading = document.createElement("h3"); heading.textContent = entry.task ? entry.task.title : "Something worth revisiting";
         const reason = document.createElement("p"); reason.textContent = candidate.reason;
         const details = document.createElement("details");
         const summary = document.createElement("summary"); summary.textContent = "Why this?";
         const evidence = document.createElement("p");
-        evidence.textContent = "Based on " + candidate.evidenceEventIds.length + " recorded changes to this task. No private note content is sent.";
+        evidence.textContent = (candidate.ruleId === "task-overdue"
+          ? "This task's date passed a couple of days ago and it's still open."
+          : "Based on " + candidate.evidenceEventIds.length + " recorded changes to this task.")
+          + " Notifications never include the task's name.";
         details.append(summary, evidence);
+        if (entry.task) {
+          const open = document.createElement("a"); open.href = "#note/" + entry.task.note; open.textContent = "Open note";
+          details.append(open);
+        }
         const actions = document.createElement("div"); actions.className = "awareness-actions";
         const act = (label, action) => {
           const button = document.createElement("button");

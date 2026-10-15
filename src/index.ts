@@ -89,7 +89,8 @@ function serverFor(env: Env): McpServer {
     const b = await scheduler(env).previewBriefing(kind ?? (hour < 14 ? "morning" : "evening"));
     const item = (i: { text: string; note: string; at: number | null }) => ({ text: i.text, note: i.note, ...(i.at !== null ? { at: clock(i.at, zone) } : {}) });
     return { kind: b.kind, date: b.date, timezone: zone, notification: { title: b.title, message: b.message },
-      overdue: b.overdue.map(item), today: b.today.map(item), doNow: b.doNow.map(item), doneToday: b.doneToday, tomorrow: b.tomorrow.map(item) };
+      overdue: b.overdue.map(item), today: b.today.map(item), doNow: b.doNow.map(item), doneToday: b.doneToday, tomorrow: b.tomorrow.map(item),
+      ...(b.suggestions ? { awarenessSuggestions: b.suggestions } : {}) };
   }));
   server.registerTool("configure_briefings", {
     description: "Turn the owner's morning or evening briefing notifications on or off, set their local times (HH:MM, 24-hour), or choose preview \"counts\" to keep task titles off the lock screen. Only change what the owner asked for. Returns the saved settings and next send times.",

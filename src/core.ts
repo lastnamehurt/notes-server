@@ -5,6 +5,7 @@ import { equalSecret } from "./action";
 import { applySettings, deployConfigured, type Settings } from "./settings";
 import { notesFor } from "./storage";
 import { newTaskId, withTaskId, splitTaskId } from "./task-id";
+import { awarenessTasks } from "./awareness-tasks";
 
 // Shared by the MCP tools and the web app.
 
@@ -35,7 +36,13 @@ export async function scheduleNote(env: Env, name: string, content: string) {
 export async function rescan(env: Env): Promise<number> {
   // Daily logs never hold reminders and grow by one a day; skip them so the scan stays bounded.
   const notes = await notesFor(env).all(LOG_PREFIX);
-  return scheduler(env).replaceAll(notes.flatMap(n => parseReminders(n.name, n.content, env.NOTES_TIMEZONE)));
+  const count = await scheduler(env).replaceAll(notes.flatMap(n => parseReminders(n.name, n.content, env.NOTES_TIMEZONE)));
+  // Overdue nudges reuse this read of the notes; only task keys and due times leave this function.
+  try {
+    const tasks = (await awarenessTasks(notes, tz(env))).filter(t => t.dueAt !== null).map(t => ({ id: t.key, dueAt: t.dueAt! }));
+    await scheduler(env).recordOverdueTasks(tasks);
+  } catch (e) { console.warn("Awareness overdue scan failed", e instanceof Error ? e.message : "unknown"); }
+  return count;
 }
 
 

@@ -25,6 +25,7 @@ import { runAppleSync, SyncError } from "./apple-sync-run";
 import { notesFor } from "./storage";
 import { taskDeferrals } from "./awareness-deferrals";
 import { ensureTaskIds } from "./task-id-assign";
+import { awarenessTasks } from "./awareness-tasks";
 import { buildIcs, parseIcs } from "./ics";
 import { b64url } from "./web-push";
 
@@ -257,7 +258,19 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
       case "GET /awareness/inbox": {
         const limit = Number(url.searchParams.get("limit") ?? "20");
         const cursor = url.searchParams.get("cursor") || undefined;
-        return json(await scheduler(env).awarenessInboxList(limit, cursor));
+        const page = await scheduler(env).awarenessInboxList(limit, cursor);
+        // Name the task each suggestion is about, for the signed-in owner only. The stored suggestion
+        // and its push text never hold the title; it is looked up from the notes for this view.
+        let byKey = new Map<string, { title: string; note: string }>();
+        try {
+          const tasks = await awarenessTasks(await notesFor(env).all(LOG_PREFIX), env.NOTES_TIMEZONE || "America/Los_Angeles");
+          byKey = new Map(tasks.map(t => [t.key, { title: t.title, note: t.note }]));
+        } catch (e) { console.warn("Awareness task lookup failed", e instanceof Error ? e.message : "unknown"); }
+        return json({ ...page, items: page.items.map(entry => {
+          const ref = entry.candidate.subjectRefs.find(r => r.kind === "task");
+          const task = ref ? byKey.get(ref.id) : undefined;
+          return task ? { ...entry, task } : entry;
+        }) });
       }
       case "GET /awareness/item": {
         const id = url.searchParams.get("id") ?? "";
