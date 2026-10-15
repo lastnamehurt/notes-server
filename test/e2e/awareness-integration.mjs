@@ -185,6 +185,40 @@ test('tasks without an Apple Reminders ID are tagged on save and their postponem
   assert.equal((await candidate(id)).candidate.evidenceEventIds.length, 3);
 });
 
+test('the hourly scan nudges a task overdue two days, names it only in the app, and retires it once moved', async () => {
+  await preferences({ enabled: true });
+  const day = offset => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+  const note = date => `# Overdue\n- [ ] Renew overdue passport @${date} 9am\n`;
+  const { name } = await api('/note', 'POST', { content: note(day(-3)), category: 'inbox' });
+  await mcp('sync_notes', {});
+  let inbox = await api('/awareness/inbox');
+  const item = inbox.items.find(i => i.candidate.ruleId === 'task-overdue');
+  assert.ok(item, JSON.stringify(inbox));
+  assert.equal(item.task.title, 'Renew overdue passport');
+  assert.equal(item.task.note, name);
+  assert.ok(!JSON.stringify(item.candidate).includes('passport'), 'the stored suggestion never holds the title');
+  await mcp('sync_notes', {});
+  assert.equal((await api('/awareness/inbox')).items.filter(i => i.candidate.ruleId === 'task-overdue').length, 1, 'no repeat nudge');
+  // Give it a new date: the nudge is retired.
+  const saved = await api('/note?name=' + encodeURIComponent(name));
+  await api('/note', 'PUT', { name, content: saved.content.replace(day(-3), day(3)), sha: saved.sha });
+  await mcp('sync_notes', {});
+  inbox = await api('/awareness/inbox');
+  assert.equal(inbox.items.filter(i => i.candidate.ruleId === 'task-overdue').length, 0);
+});
+
+test('digest mode counts waiting suggestions in the morning briefing', async () => {
+  await preferences({ enabled: true, mode: 'digest' });
+  const day = new Date(Date.now() - 4 * 86_400_000).toISOString().slice(0, 10);
+  await api('/note', 'POST', { content: `# Digest\n- [ ] Digest overdue task @${day} 9am\n`, category: 'inbox' });
+  await mcp('sync_notes', {});
+  const briefing = await mcp('prepare_briefing', { kind: 'morning' });
+  assert.equal(briefing.error, false, JSON.stringify(briefing));
+  assert.match(JSON.stringify(briefing), /new suggestion/);
+  await preferences({ enabled: true, mode: 'inbox' });
+  assert.doesNotMatch(JSON.stringify(await mcp('prepare_briefing', { kind: 'morning' })), /new suggestion/);
+});
+
 test('mobile browser uses real API; consent saves without requesting notification permission', async () => {
   browser = await chromium.launch({ headless: true, ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}) });
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });

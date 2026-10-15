@@ -1,24 +1,28 @@
-/** Deterministic deadline/overdue suggestions; no AI, network calls, or writes. */
+/**
+ * Overdue nudges (#96, slimmed down): a dated task that has sat overdue for two days or more.
+ * Reminders already ping at the due time and briefings list what's due, so there is no "due soon"
+ * rule; this only catches what slipped through. Deterministic: no AI, network calls or writes.
+ */
 export interface DeadlineTask {
   id: string; ownerId: string; dueAt: string; completed: boolean;
   recurring?: boolean; title?: string;
 }
-export interface DeadlineContext {
-  now: Date; ownerId: string; timeZone: string;
-  reminderTaskIds: ReadonlySet<string>;
-  briefingWindow?: { startsAt: string; endsAt: string };
-}
+export interface DeadlineContext { now: Date; ownerId: string; timeZone: string; }
 export interface DeadlineSuggestion {
-  id: string; ownerId: string; ruleId: "task-deadline" | "task-overdue";
+  id: string; ownerId: string; ruleId: "task-overdue";
   evidenceEventIds: string[]; subjectRefs: {kind:"task";id:string}[];
   reason: string; suggestedActions: ("open"|"reschedule"|"dismiss")[];
   urgency: "normal"|"high"; createdAt: string; expiresAt: string; dedupeKey: string;
 }
-const HOUR = 3_600_000, DAY = 24*HOUR;
+const DAY = 86_400_000;
+/** Overdue at least this long before a nudge; older than the window and it's no longer news. */
+export const OVERDUE_AFTER_MS = 2 * DAY;
+export const OVERDUE_WINDOW_MS = 14 * DAY;
 const idPattern = /^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,159}$/;
+
 /**
- * Generate at most one suggestion per task. Reminder collisions and briefing
- * windows suppress prompts, rather than competing for user attention.
+ * At most one suggestion per task per due date: moving the date (or finishing the task) ends it,
+ * and a task left overdue is nudged once, not every day.
  * Never include private task title/content in push-ready reason text.
  */
 export function deadlineSuggestions(tasks: readonly DeadlineTask[], ctx: DeadlineContext): DeadlineSuggestion[] {
@@ -26,41 +30,26 @@ export function deadlineSuggestions(tasks: readonly DeadlineTask[], ctx: Deadlin
   if (!Number.isFinite(now) || !idPattern.test(ctx.ownerId)) throw new Error("Invalid deadline context");
   // Validate timezone up front: an invalid setting must not generate prompts.
   new Intl.DateTimeFormat("en-US",{timeZone:ctx.timeZone}).format(ctx.now);
-  const window = ctx.briefingWindow;
-  if (window) {
-    const start = Date.parse(window.startsAt), end = Date.parse(window.endsAt);
-    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) throw new Error("Invalid briefing window");
-    if (now >= start && now < end) return [];
-  }
   const seen = new Set<string>();
   const out: DeadlineSuggestion[] = [];
   for (const task of tasks) {
     if (task.ownerId !== ctx.ownerId || task.completed || task.recurring ||
-        !idPattern.test(task.id) || seen.has(task.id) || ctx.reminderTaskIds.has(task.id)) continue;
+        !idPattern.test(task.id) || seen.has(task.id)) continue;
     const due = Date.parse(task.dueAt);
     if (!Number.isFinite(due)) continue;
-    const distance = due-now;
-    // Upcoming within 24h, or overdue by 1h-7d. Avoid immediate due-time noise.
-    const overdue = distance <= -HOUR && distance >= -7*DAY;
-    const upcoming = distance > HOUR && distance <= DAY;
-    if (!overdue && !upcoming) continue;
+    const late = now - due;
+    if (late < OVERDUE_AFTER_MS || late > OVERDUE_WINDOW_MS) continue;
     seen.add(task.id);
-    const ruleId = overdue ? "task-overdue" : "task-deadline";
-    const bucket = new Intl.DateTimeFormat("en-CA",{
-      timeZone:ctx.timeZone,year:"numeric",month:"2-digit",day:"2-digit"
-    }).format(ctx.now);
-    const dedupeKey = ruleId+":"+task.id+":"+bucket;
+    const dedupeKey = "task-overdue:" + task.id + ":" + due;
     out.push({
-      id: dedupeKey, ownerId:ctx.ownerId, ruleId,
-      evidenceEventIds:["task-due:"+task.id+":"+encodeURIComponent(task.dueAt)],
-      subjectRefs:[{kind:"task",id:task.id}],
-      reason: overdue
-        ? "A task is overdue. Would you like to reschedule it or mark it done?"
-        : "A task is due within the next day. Would you like to review it?",
-      suggestedActions:["open","reschedule","dismiss"],
-      urgency: overdue?"high":"normal",
-      createdAt:ctx.now.toISOString(),
-      expiresAt:new Date(now+DAY).toISOString(),
+      id: dedupeKey, ownerId: ctx.ownerId, ruleId: "task-overdue",
+      evidenceEventIds: ["task-due:" + task.id + ":" + due],
+      subjectRefs: [{kind:"task",id:task.id}],
+      reason: "A task has been overdue for a couple of days. Do it, give it a new date, or let it go?",
+      suggestedActions: ["open","reschedule","dismiss"],
+      urgency: "high",
+      createdAt: ctx.now.toISOString(),
+      expiresAt: new Date(due + OVERDUE_WINDOW_MS).toISOString(),
       dedupeKey
     });
   }

@@ -81,6 +81,8 @@ export interface Briefing {
   /** Nothing to report: the scheduler skips sending rather than buzz with an empty digest. */
   empty: boolean;
   overdue: BriefingItem[]; today: BriefingItem[]; doNow: BriefingItem[]; doneToday: string[]; tomorrow: BriefingItem[];
+  /** Awareness suggestions counted in (morning, digest mode). */
+  suggestions: number;
 }
 
 /** Occurrences of one reminder in [from, to). */
@@ -120,9 +122,11 @@ export interface BriefingInput {
   now: number; timeZone: string; preview: BriefingSettings["preview"];
   /** The owner's name, for "Good morning, Courtney". */
   name?: string;
+  /** Awareness suggestions waiting in digest mode (morning only). Counted, never named. */
+  suggestions?: number;
 }
 
-export function buildBriefing({ kind, notes, done, now, timeZone, preview, name }: BriefingInput): Briefing {
+export function buildBriefing({ kind, notes, done, now, timeZone, preview, name, suggestions = 0 }: BriefingInput): Briefing {
   const who = name?.trim() ? ", " + name.trim() : "";
   const date = localStamp(now, timeZone).date;
   const today = midnight(now, 0, timeZone), tomorrow = midnight(now, 1, timeZone), dayAfter = midnight(now, 2, timeZone);
@@ -153,9 +157,11 @@ export function buildBriefing({ kind, notes, done, now, timeZone, preview, name 
   let lines: (string | null)[], counts: string[], title: string, empty: boolean;
   if (kind === "morning") {
     title = "Good morning" + who + " · " + day;
-    empty = !overdue.length && !dueToday.length && !doNow.length;
-    lines = [listLine("Overdue", overdue.map(i => clean(i.text))), listLine("Today", dueToday.map(label)), listLine("Do now", doNow.map(i => clean(i.text)))];
-    counts = [overdue.length && `${overdue.length} overdue`, dueToday.length && `${dueToday.length} due today`, doNow.length && `${doNow.length} do now`].filter(Boolean) as string[];
+    empty = !overdue.length && !dueToday.length && !doNow.length && !suggestions;
+    const suggested = suggestions ? `${suggestions} new suggestion${suggestions === 1 ? "" : "s"}` : null;
+    lines = [listLine("Overdue", overdue.map(i => clean(i.text))), listLine("Today", dueToday.map(label)), listLine("Do now", doNow.map(i => clean(i.text))),
+      suggested && `Daybook noticed something: ${suggested} in Suggestions`];
+    counts = [overdue.length && `${overdue.length} overdue`, dueToday.length && `${dueToday.length} due today`, doNow.length && `${doNow.length} do now`, suggested].filter(Boolean) as string[];
   } else {
     title = (who ? "Evening" + who : "Evening wrap-up") + " · " + day;
     empty = !doneToday.length && !dueToday.length && !overdue.length && !dueTomorrow.length;
@@ -167,5 +173,5 @@ export function buildBriefing({ kind, notes, done, now, timeZone, preview, name 
   let message = empty ? (kind === "morning" ? "Nothing due today." : "Nothing to wrap up today.")
     : preview === "counts" ? counts.join(" · ") : lines.filter(Boolean).join("\n");
   if (message.length > MAX_MESSAGE) message = message.slice(0, MAX_MESSAGE - 1).trimEnd() + "…";
-  return { kind, date, title, message, empty, overdue, today: dueToday, doNow, doneToday, tomorrow: dueTomorrow };
+  return { kind, date, title, message, empty, overdue, today: dueToday, doNow, doneToday, tomorrow: dueTomorrow, suggestions: kind === "morning" ? suggestions : 0 };
 }
