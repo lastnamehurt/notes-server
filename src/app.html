@@ -2445,6 +2445,80 @@ async function renderAwarenessPreferences() {
   return section;
 }
 
+/* ---------- Signals: tap to pay (#147) ---------- */
+async function renderSignalSettings() {
+  const [settings, spend] = await Promise.all([api("/signals/settings"), api("/signals/spend")]);
+  const p = settings.payment;
+  const section = document.createElement("section"); section.className = "awareness-card"; section.id = "signals-settings";
+  const heading = document.createElement("h3"); heading.textContent = "Tap-to-pay signal";
+  const description = document.createElement("p");
+  description.textContent = "Off by default. An iPhone Shortcut tells Daybook when you tap Apple Pay: the amount, the card and the kind of place. Never the store's name or where you are.";
+  const totals = document.createElement("p"); totals.className = "awareness-muted"; totals.id = "signals-totals";
+  const money = n => "$" + Number(n).toFixed(2);
+  totals.textContent = `Today ${money(spend.today)} across ${spend.todayCount} · this week ${money(spend.weekTotal)} · bar tabs this week ${spend.drinksThisWeek}`;
+  const form = document.createElement("form");
+  const row = (label, input) => {
+    const wrap = document.createElement("label"); wrap.style.display = "block"; wrap.style.margin = "12px 0"; wrap.style.minHeight = "44px";
+    if (input.type === "checkbox") wrap.append(input, " " + label); else { wrap.textContent = label + " "; input.style.maxWidth = "100%"; wrap.append(input); }
+    form.append(wrap); return input;
+  };
+  const make = (type, name, value) => { const i = document.createElement("input"); i.type = type; i.name = name;
+    if (type === "checkbox") i.checked = value; else i.value = value ?? ""; return i; };
+  const enabled = row("Turn on the tap-to-pay signal", make("checkbox", "signal-enabled", p.enabled));
+  const hide = row("Keep amounts off the lock screen", make("checkbox", "signal-hide", settings.hideAmounts));
+  const amount = (name, label, value) => { const i = row(label, make("number", name, value)); i.min = "0"; i.step = "0.01"; i.placeholder = "Off"; return i; };
+  const big = amount("signal-big", "Ask “Was this planned?” for taps of at least ($)", p.bigPurchase);
+  const daily = amount("signal-daily", "Daily spending target ($, optional)", p.dailyTarget);
+  const weekly = amount("signal-weekly", "Weekly spending target ($, optional)", p.weeklyTarget);
+  const drinks = row("Bar tabs per week goal (optional)", make("number", "signal-drinks", p.drinkGoalPerWeek));
+  drinks.min = "0"; drinks.step = "1"; drinks.placeholder = "Off";
+  const cards = row("Cards to leave out, comma-separated (e.g. a work card)", make("text", "signal-cards", p.ignoredCards.join(", ")));
+  const cats = document.createElement("textarea"); cats.name = "signal-categories"; cats.rows = 4; cats.style.width = "100%";
+  cats.value = Object.entries(p.categories).map(([k, v]) => k + " = " + v).join("\n");
+  const catsWrap = document.createElement("label"); catsWrap.style.display = "block"; catsWrap.style.margin = "12px 0";
+  catsWrap.textContent = "Kinds of place, one per line: name = drink, food or none ";
+  catsWrap.append(cats); form.append(catsWrap);
+  const save = document.createElement("button"); save.className = "btn"; save.type = "submit"; save.textContent = "Save tap-to-pay settings";
+  form.append(save);
+  const num = input => input.value.trim() === "" ? null : Number(input.value);
+  form.onsubmit = async event => {
+    event.preventDefault(); save.disabled = true;
+    try {
+      const categories = {};
+      for (const line of cats.value.split("\n").map(l => l.trim()).filter(Boolean)) {
+        const m = /^([^=]+)=\s*(drink|food|none)\s*$/i.exec(line);
+        if (!m) throw new Error("Couldn't read “" + line + "”. Use: name = drink, food or none");
+        categories[m[1].trim().toLowerCase().replace(/&/g, " ").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")] = m[2].toLowerCase();
+      }
+      const goal = num(drinks);
+      await api("/signals/settings", { method: "PUT", body: { hideAmounts: hide.checked, payment: {
+        enabled: enabled.checked, bigPurchase: num(big), dailyTarget: num(daily), weeklyTarget: num(weekly),
+        drinkGoalPerWeek: goal === null ? null : Math.round(goal),
+        ignoredCards: cards.value.split(",").map(c => c.trim()).filter(Boolean), categories } } });
+      toast("Tap-to-pay settings saved");
+    } catch (error) { toast(error.message); } finally { save.disabled = false; }
+  };
+  const setup = document.createElement("details");
+  const setupSummary = document.createElement("summary"); setupSummary.textContent = "Set up the Shortcut";
+  const steps = document.createElement("p");
+  steps.textContent = "Uses the same Shortcut secret as Apple Reminders sync (Settings → Apple Reminders). The Shortcut posts to this address:";
+  const url = document.createElement("code"); url.textContent = location.origin + "/app/shortcuts/signal";
+  const guide = document.createElement("a"); guide.href = "https://github.com/lastnamehurt/notes-server/blob/main/docs/signals-shortcuts.md";
+  guide.target = "_blank"; guide.rel = "noopener"; guide.textContent = "Step-by-step guide";
+  const copyUrl = document.createElement("button"); copyUrl.type = "button"; copyUrl.className = "btn quiet"; copyUrl.textContent = "Copy";
+  copyUrl.onclick = e => copy(url.textContent, e.target);
+  const urlRow = document.createElement("div"); urlRow.className = "copyrow"; urlRow.append(url, copyUrl);
+  setup.append(setupSummary, steps, urlRow, guide);
+  const erase = document.createElement("button"); erase.type = "button"; erase.className = "btn quiet"; erase.textContent = "Erase stored taps";
+  erase.onclick = async () => {
+    if (!confirm("Erase every stored tap? Totals start again from zero.")) return;
+    try { const r = await api("/signals/erase", { method: "POST", body: {} }); toast(`Erased ${r.deleted} taps`); totals.textContent = "Today $0.00 across 0 · this week $0.00 · bar tabs this week 0"; }
+    catch (error) { toast(error.message); }
+  };
+  section.append(heading, description, totals, form, setup, erase);
+  return section;
+}
+
 /* ---------- Awareness inbox ---------- */
 async function renderAwareness() {
   main.innerHTML = '<h2>Suggestions</h2><p class="awareness-muted">Private suggestions based on your activity. No notifications required.</p><div id="awareness-items" class="awareness-list" aria-live="polite"><p>Loading suggestions…</p></div><button class="awareness-more" id="awareness-more" hidden>Load more</button>';
@@ -2464,15 +2538,18 @@ async function renderAwareness() {
         const candidate = entry.candidate;
         const card = document.createElement("article");
         card.className = "awareness-card";
-        const heading = document.createElement("h3"); heading.textContent = entry.task ? entry.task.title : "Something worth revisiting";
+        const ruleTitles = { "payment-big-purchase": "A bigger purchase", "payment-drink-goal": "Drinks this week", "payment-spend-target": "Spending" };
+        const heading = document.createElement("h3"); heading.textContent = entry.task ? entry.task.title : ruleTitles[candidate.ruleId] || "Something worth revisiting";
         const reason = document.createElement("p"); reason.textContent = candidate.reason;
         const details = document.createElement("details");
         const summary = document.createElement("summary"); summary.textContent = "Why this?";
         const evidence = document.createElement("p");
-        evidence.textContent = (candidate.ruleId === "task-overdue"
-          ? "This task's date passed a couple of days ago and it's still open."
-          : "Based on " + candidate.evidenceEventIds.length + " recorded changes to this task.")
-          + " Notifications never include the task's name.";
+        evidence.textContent = candidate.ruleId.startsWith("payment-")
+          ? "Based on a tap to pay your Shortcut reported. Daybook never receives the store's name."
+          : (candidate.ruleId === "task-overdue"
+            ? "This task's date passed a couple of days ago and it's still open."
+            : "Based on " + candidate.evidenceEventIds.length + " recorded changes to this task.")
+            + " Notifications never include the task's name.";
         details.append(summary, evidence);
         if (entry.task) {
           const open = document.createElement("a"); open.href = "#note/" + entry.task.note; open.textContent = "Open note";
@@ -2512,6 +2589,7 @@ async function renderAwareness() {
   more.onclick = () => load(true);
   await load();
   main.append(await renderAwarenessPreferences());
+  try { main.append(await renderSignalSettings()); } catch (error) { console.warn("Signal settings unavailable", error); }
 }
 
 /* ---------- Router ---------- */

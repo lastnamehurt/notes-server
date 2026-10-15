@@ -250,6 +250,8 @@ test('tap-to-pay signal: off by default, logs a bar tab, asks about big purchase
   const log = await api('/note?name=' + encodeURIComponent(logName));
   assert.match(log.content, /Tap to pay: bar #drink #spend/);
   assert.doesNotMatch(JSON.stringify(log.content), /Hidden Bar Name/);
+  const evening = await mcp('prepare_briefing', { kind: 'evening' });
+  assert.match(JSON.stringify(evening), /Spent today: 2 taps/, 'hidden amounts: count only');
   assert.equal((await api('/signals/erase', 'POST', {})).deleted, 3);
   assert.equal((await api('/signals/spend')).todayCount, 0);
   await api('/signals/settings', 'PUT', settings);

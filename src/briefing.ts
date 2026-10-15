@@ -124,9 +124,11 @@ export interface BriefingInput {
   name?: string;
   /** Awareness suggestions waiting in digest mode (morning only). Counted, never named. */
   suggestions?: number;
+  /** Tap-to-pay totals (evening only), when the payment signal is on. `hidden` keeps amounts off the lock screen. */
+  spend?: { today: number; count: number; week: number; hidden: boolean } | null;
 }
 
-export function buildBriefing({ kind, notes, done, now, timeZone, preview, name, suggestions = 0 }: BriefingInput): Briefing {
+export function buildBriefing({ kind, notes, done, now, timeZone, preview, name, suggestions = 0, spend = null }: BriefingInput): Briefing {
   const who = name?.trim() ? ", " + name.trim() : "";
   const date = localStamp(now, timeZone).date;
   const today = midnight(now, 0, timeZone), tomorrow = midnight(now, 1, timeZone), dayAfter = midnight(now, 2, timeZone);
@@ -164,11 +166,15 @@ export function buildBriefing({ kind, notes, done, now, timeZone, preview, name,
     counts = [overdue.length && `${overdue.length} overdue`, dueToday.length && `${dueToday.length} due today`, doNow.length && `${doNow.length} do now`, suggested].filter(Boolean) as string[];
   } else {
     title = (who ? "Evening" + who : "Evening wrap-up") + " · " + day;
-    empty = !doneToday.length && !dueToday.length && !overdue.length && !dueTomorrow.length;
+    empty = !doneToday.length && !dueToday.length && !overdue.length && !dueTomorrow.length && !spend?.count;
+    const usd = (n: number) => "$" + n.toFixed(2);
+    const spent = spend && spend.count ? (spend.hidden ? `Spent today: ${spend.count} tap${spend.count === 1 ? "" : "s"}`
+      : `Spent today: ${usd(spend.today)} across ${spend.count} · week ${usd(spend.week)}`) : null;
     lines = [doneToday.length ? `Done today: ${doneToday.length}` : null, listLine("Still open", dueToday.map(label)),
-      listLine("Overdue", overdue.map(i => clean(i.text))), listLine("Tomorrow", dueTomorrow.map(label))];
+      listLine("Overdue", overdue.map(i => clean(i.text))), listLine("Tomorrow", dueTomorrow.map(label)), spent];
     counts = [doneToday.length && `${doneToday.length} done`, dueToday.length && `${dueToday.length} still open`,
-      overdue.length && `${overdue.length} overdue`, dueTomorrow.length && `${dueTomorrow.length} tomorrow`].filter(Boolean) as string[];
+      overdue.length && `${overdue.length} overdue`, dueTomorrow.length && `${dueTomorrow.length} tomorrow`,
+      spend?.count && `${spend.count} tap${spend.count === 1 ? "" : "s"}`].filter(Boolean) as string[];
   }
   let message = empty ? (kind === "morning" ? "Nothing due today." : "Nothing to wrap up today.")
     : preview === "counts" ? counts.join(" · ") : lines.filter(Boolean).join("\n");
