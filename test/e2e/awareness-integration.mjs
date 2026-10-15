@@ -167,6 +167,24 @@ test('concurrent web/MCP writes accept one version and only the committed change
   assert.equal((await candidate('race1')).candidate.evidenceEventIds.length, 3);
 });
 
+test('tasks without an Apple Reminders ID are tagged on save and their postponements count', async () => {
+  await preferences({ enabled: true });
+  const plain = day => `# Untagged task\n- [ ] Untagged title @2099-02-${String(day).padStart(2, '0')} 9am\n`;
+  const { name } = await api('/note', 'POST', { content: plain(1), category: 'inbox' });
+  let saved = await api('/note?name=' + encodeURIComponent(name));
+  const id = /\^([a-z0-9]{6})$/m.exec(saved.content)?.[1];
+  assert.ok(id, 'a new scheduled task gets an ID: ' + saved.content);
+  // An editor that drops the ID, an MCP rewrite that drops it, then an edit that keeps it.
+  await api('/note', 'PUT', { name, content: plain(2), sha: saved.sha });
+  saved = await api('/note?name=' + encodeURIComponent(name));
+  assert.match(saved.content, new RegExp('\\^' + id + '$', 'm'), 'the dropped ID comes back');
+  const result = await mcp('update_note', { name, content: plain(3), expected_sha: saved.sha });
+  assert.equal(result.error, false, JSON.stringify(result));
+  saved = await api('/note?name=' + encodeURIComponent(name));
+  await api('/note', 'PUT', { name, content: plain(4).trimEnd() + ' ^' + id + '\n', sha: saved.sha });
+  assert.equal((await candidate(id)).candidate.evidenceEventIds.length, 3);
+});
+
 test('mobile browser uses real API; consent saves without requesting notification permission', async () => {
   browser = await chromium.launch({ headless: true, ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}) });
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });

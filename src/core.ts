@@ -4,6 +4,7 @@ import { LOG_PREFIX, appendLog } from "./log";
 import { equalSecret } from "./action";
 import { applySettings, deployConfigured, type Settings } from "./settings";
 import { notesFor } from "./storage";
+import { newTaskId, withTaskId, splitTaskId } from "./task-id";
 
 // Shared by the MCP tools and the web app.
 
@@ -144,13 +145,18 @@ export async function addTask(env: Env, input: { text: string; schedule?: string
   const notes = notesFor(env);
   const name = input.note || (await notes.list()).find(n => TASKS_NOTE.test(n));
   if (!name) {
-    const content = "# Tasks\n\n" + line + "\n";
+    // A scheduled task gets a persistent ID so Awareness can recognise later postponements.
+    const tagged = schedule ? withTaskId(line, newTaskId()) : line;
+    const content = "# Tasks\n\n" + tagged + "\n";
     return { ...(await scheduleNote(env, await notes.save(content, "inbox"), content)), line };
   }
   const lines = (await notes.get(name)).content.trimEnd().split("\n");
+  const tagged = schedule
+    ? withTaskId(line, newTaskId(new Set(lines.map(l => splitTaskId(l).id).filter((id): id is string => !!id))))
+    : line;
   let at = lines.length;
   for (let i = lines.length - 1; i >= 0; i--) if (TASK.test(lines[i])) { at = i + 1; break; }
-  lines.splice(at, 0, line);
+  lines.splice(at, 0, tagged);
   const content = lines.join("\n") + "\n";
   await notes.update(name, content);
   return { ...(await scheduleNote(env, name, content)), line };

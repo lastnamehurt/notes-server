@@ -16,6 +16,7 @@ import { verifyAction } from "./action";
 import { runWeeklyReview } from "./weekly-review";
 import { notesFor } from "./storage";
 import { taskDeferrals } from "./awareness-deferrals";
+import { ensureTaskIds } from "./task-id-assign";
 export { ReminderScheduler } from "./reminders";
 export { NotesStore } from "./app-notes";
 
@@ -107,7 +108,10 @@ function serverFor(env: Env): McpServer {
   }));
   server.registerTool("list_priorities", { description: "List open tasks grouped by GTD inbox and Eisenhower priority; tasks without an explicit priority stay in inbox", inputSchema: {} }, () => result(async () => tasksFromNotes(await notes.all())));
   server.registerTool("save_note", { description: "Create a Markdown note and commit it to GitHub. Lines like '- [ ] task @2026-10-14 9am' become phone reminders.", inputSchema: { content: z.string(), category: z.enum(CATEGORIES).default("inbox") } },
-    ({ content, category }) => result(async () => scheduleNote(env, await notes.save(content, category), content)));
+    ({ content, category }) => result(async () => {
+      const withIds = ensureTaskIds(null, content, env.NOTES_TIMEZONE || DEFAULT_TIMEZONE).after;
+      return scheduleNote(env, await notes.save(withIds, category), withIds);
+    }));
   server.registerTool("search_notes", { description: "Find notes containing all search words", inputSchema: { query: z.string() } },
     ({ query }) => result(() => notes.search(query)));
   server.registerTool("list_notes", { description: "List Markdown note paths", inputSchema: {} },
@@ -115,15 +119,18 @@ function serverFor(env: Env): McpServer {
   server.registerTool("get_note", { description: "Read a Markdown note", inputSchema: { name: z.string() } },
     ({ name }) => result(async () => (await notes.get(name)).content));
   server.registerTool("update_note", { description: "Replace note contents and commit", inputSchema: { name: z.string(), content: z.string(), expected_sha: z.string().optional() } },
-    ({ name, content, expected_sha }) => result(async () => {
+    ({ name, content: input, expected_sha }) => result(async () => {
       // Fetch before mutation, then capture only after the note commit succeeds.
-      const before = (await notes.get(name)).content;
+      const zone = env.NOTES_TIMEZONE || DEFAULT_TIMEZONE;
+      const original = (await notes.get(name)).content;
+      // Scheduled tasks get a persistent ID so a later postponement can be recognised as the same task.
+      const { before, after: content } = ensureTaskIds(original, input, zone, name);
       const saved = await notes.update(name, content, expected_sha);
       const scheduled = await scheduleNote(env, saved, content);
       try {
-        const changes = taskDeferrals(before, content, env.NOTES_TIMEZONE || DEFAULT_TIMEZONE);
+        const changes = taskDeferrals(before, content, zone);
         if (changes.length) {
-          const bytes = new TextEncoder().encode(name + "\u0000" + before + "\u0000" + content);
+          const bytes = new TextEncoder().encode(name + "\u0000" + original + "\u0000" + content);
           const hash = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))]
             .map(b => b.toString(16).padStart(2, "0")).join("");
           await scheduler(env).recordTaskDeferrals(changes.map((change, i) => ({
