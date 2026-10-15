@@ -1,14 +1,15 @@
 import { test } from "node:test";
 import { buildBriefing } from "../src/briefing.ts";
+import { parseReminders } from "../src/reminder-parse.ts";
 import assert from "node:assert/strict";
 import {
-  DEFAULT_SIGNAL_SETTINGS, parseSignalSettings, parsePayment, parseAmount, categoryLabel,
+  DEFAULT_SIGNAL_SETTINGS, parseSignalSettings, parsePlaces, tasksForPlaces, parkedMessage, parsePayment, parseAmount, categoryLabel,
   dayAndWeek, spendSummary, paymentOutcome, type Payment, type SignalSettings
 } from "../src/signals.ts";
 
 const zone = "America/Los_Angeles";
 const on = (patch: Partial<SignalSettings["payment"]> = {}, hideAmounts = false): SignalSettings =>
-  ({ payment: { ...DEFAULT_SIGNAL_SETTINGS.payment, enabled: true, ...patch }, hideAmounts });
+  ({ payment: { ...DEFAULT_SIGNAL_SETTINGS.payment, enabled: true, ...patch }, parked: { enabled: false }, hideAmounts });
 // Thursday 2026-10-15, 18:00 Pacific.
 const T = Date.parse("2026-10-16T01:00:00Z");
 const pay = (id: string, amount: number, category = "groceries", at = T, card = "Personal"): Payment =>
@@ -104,4 +105,36 @@ test("the evening briefing adds a spend line; hidden amounts show only the count
   assert.equal(buildBriefing({ ...base, preview: "counts", spend: { today: 9, count: 1, week: 9, hidden: false } }).message, "1 tap");
   assert.equal(buildBriefing({ ...base, spend: { today: 0, count: 0, week: 0, hidden: false } }).message, "Nothing to wrap up today.");
   assert.equal(buildBriefing({ ...base, kind: "morning", spend: { today: 24.5, count: 3, week: 112, hidden: false } }).message, "Nothing due today.");
+});
+
+test("settings saved before the parked signal existed read it as off", () => {
+  const { parked, ...old } = DEFAULT_SIGNAL_SETTINGS;
+  assert.deepEqual(parseSignalSettings(old).parked, { enabled: false });
+  assert.equal(parseSignalSettings({ ...DEFAULT_SIGNAL_SETTINGS, parked: { enabled: true } }).parked.enabled, true);
+  assert.throws(() => parseSignalSettings({ ...DEFAULT_SIGNAL_SETTINGS, parked: { enabled: "yes" } }));
+});
+
+test("places arrive as a list, comma text or one place, and are normalised", () => {
+  assert.deepEqual(parsePlaces({ places: ["Grocery", "Post Office", "grocery"] }), ["grocery", "post-office"]);
+  assert.deepEqual(parsePlaces({ places: "grocery, pharmacy" }), ["grocery", "pharmacy"]);
+  assert.deepEqual(parsePlaces({ place: "Hardware" }), ["hardware"]);
+  assert.throws(() => parsePlaces({ places: [] }), /kinds of place/);
+});
+
+test("@at: tags match open tasks, leave titles clean, and don't disturb reminders", () => {
+  const notes = [
+    { name: "inbox/errands.md", content: [
+      "- [ ] Buy batteries @at:grocery",
+      "- [ ] Pick up prescription @at:pharmacy @2026-10-20 9am ^rx0001",
+      "- [ ] Coffee filters @at:grocery @priority:do",
+      "- [x] Milk @at:grocery",
+      "- [ ] Return library book @at:library",
+      "Shopping list @at:grocery"].join("\n") },
+    { name: "journal/log/2026-10-15.md", content: "- [ ] Log task @at:grocery" }];
+  const tasks = tasksForPlaces(notes, ["grocery", "pharmacy"], zone);
+  assert.deepEqual(tasks.map(t => [t.place, t.title]), [["grocery", "Buy batteries"], ["pharmacy", "Pick up prescription"], ["grocery", "Coffee filters"]]);
+  assert.equal(parkedMessage(tasks), "Near grocery: Buy batteries, Coffee filters\nNear pharmacy: Pick up prescription");
+  assert.equal(parkedMessage([]), "");
+  const reminders = parseReminders("inbox/errands.md", notes[0].content, zone);
+  assert.deepEqual(reminders.map(r => r.text), ["Pick up prescription"]);
 });

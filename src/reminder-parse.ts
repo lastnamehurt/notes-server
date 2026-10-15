@@ -124,8 +124,8 @@ function parseDays(spec: string): number[] | null {
 export function parseReminders(note: string, content: string, timeZone = DEFAULT_TIMEZONE, now = Date.now()): Reminder[] {
   const out: Reminder[] = [];
   for (const line of content.split("\n")) {
-    // Priority and the task ID are metadata, not part of the schedule or reminder title.
-    const cleanLine = stripTaskId(line).replace(/(?:^|\s)@priority:(?:do|plan|delegate|someday)\b/gi, "");
+    // Priority, place tags (@at:grocery) and the task ID are metadata, not part of the schedule or reminder title.
+    const cleanLine = stripTaskId(line).replace(/(?:^|\s)@priority:(?:do|plan|delegate|someday)\b/gi, "").replace(/(?:^|\s)@at:[a-z0-9-]+/gi, "");
     const m = LINE.exec(cleanLine);
     if (!m) continue;
     const [, rawText, spec, rawTimes] = m;

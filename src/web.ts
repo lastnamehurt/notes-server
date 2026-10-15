@@ -26,7 +26,7 @@ import { notesFor } from "./storage";
 import { taskDeferrals } from "./awareness-deferrals";
 import { ensureTaskIds } from "./task-id-assign";
 import { awarenessTasks } from "./awareness-tasks";
-import { parsePayment } from "./signals";
+import { parsePayment, parsePlaces, tasksForPlaces, parkedMessage } from "./signals";
 import { buildIcs, parseIcs } from "./ics";
 import { b64url } from "./web-push";
 
@@ -164,7 +164,17 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
     let body: Record<string, unknown>;
     try { body = await request.json(); } catch { return fail("Send the signal as JSON", 400); }
     const kind = body && typeof body === "object" ? body.kind ?? "payment" : undefined;
-    if (kind !== "payment") return fail('Unknown signal kind; send "payment"', 400);
+    if (kind === "parked") {
+      // Stateless: nothing about where you are is stored. The Shortcut shows the message itself.
+      let places: string[];
+      try { places = parsePlaces(body); } catch (e) { return fail(e instanceof Error ? e.message : String(e), 400); }
+      if (!(await scheduler(configured).signalSettings()).parked.enabled)
+        return json({ matched: 0, reason: "off", message: "", places });
+      if (!notesConfigured(configured)) return fail("Notes not configured", 409);
+      const tasks = tasksForPlaces(await notesFor(configured).all(LOG_PREFIX), places, configured.NOTES_TIMEZONE || "America/Los_Angeles");
+      return json({ matched: tasks.length, message: parkedMessage(tasks), tasks: tasks.map(t => ({ place: t.place, title: t.title })) });
+    }
+    if (kind !== "payment") return fail('Unknown signal kind; send "payment" or "parked"', 400);
     let payment;
     try { payment = parsePayment(body, Date.now()); } catch (e) { return fail(e instanceof Error ? e.message : String(e), 400); }
     const result = await scheduler(configured).recordPayment(payment);
