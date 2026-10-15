@@ -2450,7 +2450,7 @@ async function renderSignalSettings() {
   const [settings, spend] = await Promise.all([api("/signals/settings"), api("/signals/spend")]);
   const p = settings.payment;
   const section = document.createElement("section"); section.className = "awareness-card"; section.id = "signals-settings";
-  const heading = document.createElement("h3"); heading.textContent = "Tap-to-pay signal";
+  const heading = document.createElement("h3"); heading.textContent = "Signals: tap to pay and parked";
   const description = document.createElement("p");
   description.textContent = "Off by default. An iPhone Shortcut tells Daybook when you tap Apple Pay: the amount, the card and the kind of place. Never the store's name or where you are.";
   const totals = document.createElement("p"); totals.className = "awareness-muted"; totals.id = "signals-totals";
@@ -2466,6 +2466,7 @@ async function renderSignalSettings() {
     if (type === "checkbox") i.checked = value; else i.value = value ?? ""; return i; };
   const enabled = row("Turn on the tap-to-pay signal", make("checkbox", "signal-enabled", p.enabled));
   const hide = row("Keep amounts off the lock screen", make("checkbox", "signal-hide", settings.hideAmounts));
+  const parked = row("Turn on the parked signal (errands tagged @at:grocery and so on)", make("checkbox", "signal-parked", settings.parked.enabled));
   const amount = (name, label, value) => { const i = row(label, make("number", name, value)); i.min = "0"; i.step = "0.01"; i.placeholder = "Off"; return i; };
   const big = amount("signal-big", "Ask “Was this planned?” for taps of at least ($)", p.bigPurchase);
   const daily = amount("signal-daily", "Daily spending target ($, optional)", p.dailyTarget);
@@ -2491,7 +2492,7 @@ async function renderSignalSettings() {
         categories[m[1].trim().toLowerCase().replace(/&/g, " ").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")] = m[2].toLowerCase();
       }
       const goal = num(drinks);
-      await api("/signals/settings", { method: "PUT", body: { hideAmounts: hide.checked, payment: {
+      await api("/signals/settings", { method: "PUT", body: { hideAmounts: hide.checked, parked: { enabled: parked.checked }, payment: {
         enabled: enabled.checked, bigPurchase: num(big), dailyTarget: num(daily), weeklyTarget: num(weekly),
         drinkGoalPerWeek: goal === null ? null : Math.round(goal),
         ignoredCards: cards.value.split(",").map(c => c.trim()).filter(Boolean), categories } } });

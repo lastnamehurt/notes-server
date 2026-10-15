@@ -257,6 +257,20 @@ test('tap-to-pay signal: off by default, logs a bar tab, asks about big purchase
   await api('/signals/settings', 'PUT', settings);
 });
 
+test('parked signal: off by default, then answers with tasks tagged for the places nearby', async () => {
+  const signal = body => fetch(worker.base + '/app/shortcuts/signal', { method: 'POST',
+    headers: { Authorization: 'Bearer ' + shortcutToken, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
+  await api('/note', 'POST', { content: '# Errands\n- [ ] Buy batteries @at:grocery\n- [ ] Stamps @at:post-office\n', category: 'inbox' });
+  assert.equal((await signal({ kind: 'parked', places: ['grocery'] })).reason, 'off');
+  const settings = await api('/signals/settings');
+  await api('/signals/settings', 'PUT', { ...settings, parked: { enabled: true } });
+  const r = await signal({ kind: 'parked', places: 'Grocery, pharmacy' });
+  assert.equal(r.matched, 1, JSON.stringify(r));
+  assert.equal(r.message, 'Near grocery: Buy batteries');
+  assert.equal((await signal({ kind: 'parked', places: ['library'] })).message, '');
+  await api('/signals/settings', 'PUT', settings);
+});
+
 test('mobile browser uses real API; consent saves without requesting notification permission', async () => {
   browser = await chromium.launch({ headless: true, ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}) });
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });

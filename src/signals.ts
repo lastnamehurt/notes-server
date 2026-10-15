@@ -3,6 +3,8 @@
 // names or coordinates: a payment is an amount, a currency, a card label and a category label.
 
 import { localStamp } from "./reminder-parse";
+import { parseTaskLine } from "./apple-sync";
+import { LOG_PREFIX } from "./log";
 
 export type CategoryAction = "drink" | "food" | "none";
 export interface SignalSettings {
@@ -18,6 +20,8 @@ export interface SignalSettings {
     /** Category label → what a tap there means. Unlisted categories only count toward spend. */
     categories: Record<string, CategoryAction>;
   };
+  /** Parked: a Shortcut reports kinds of place nearby; Daybook answers with tasks tagged @at:<place>. */
+  parked: { enabled: boolean };
   /** Keep amounts off the lock screen (suggestion text that may be pushed). */
   hideAmounts: boolean;
 }
@@ -27,6 +31,7 @@ export const DEFAULT_SIGNAL_SETTINGS: SignalSettings = {
     enabled: false, ignoredCards: [], dailyTarget: null, weeklyTarget: null, bigPurchase: 150, drinkGoalPerWeek: null,
     categories: { bar: "drink", nightlife: "drink", brewery: "drink", "liquor-store": "drink", restaurant: "food", coffee: "food", "fast-food": "food" }
   },
+  parked: { enabled: false },
   hideAmounts: true
 };
 
@@ -39,6 +44,9 @@ export function parseSignalSettings(input: unknown): SignalSettings {
   const x = input as Record<string, unknown>;
   const p = x.payment as Record<string, unknown> | undefined;
   if (!p || typeof p !== "object" || typeof p.enabled !== "boolean" || typeof x.hideAmounts !== "boolean") bad();
+  // Settings saved before the parked signal existed have no "parked": treat it as off.
+  const parked = x.parked === undefined ? { enabled: false } : x.parked as Record<string, unknown>;
+  if (!parked || typeof parked !== "object" || typeof parked.enabled !== "boolean") bad();
   if (!Array.isArray(p!.ignoredCards) || p!.ignoredCards.length > 50 ||
       p!.ignoredCards.some(c => typeof c !== "string" || !c.trim() || c.length > 60)) bad();
   for (const k of ["dailyTarget", "weeklyTarget", "bigPurchase"]) if (!money(p![k])) bad();
@@ -54,6 +62,7 @@ export function parseSignalSettings(input: unknown): SignalSettings {
       bigPurchase: p!.bigPurchase as number | null, drinkGoalPerWeek: goal as number | null,
       categories: cats as Record<string, CategoryAction>
     },
+    parked: { enabled: parked.enabled as boolean },
     hideAmounts: x.hideAmounts as boolean
   };
 }
@@ -161,4 +170,49 @@ export function paymentOutcome(payment: Payment, stored: readonly Payment[], set
     out.push(suggestion("payment-spend-target", "payment-spend-target:week:" + summary.week,
       hide ? "You've gone over this week's spending target." : `This week's spending is ${dollars(summary.weekTotal)}, over your ${dollars(weekly)} target.`, 7));
   return { counted, log, suggestions: out, summary };
+}
+
+/* ---------- Parked (#153): tasks tagged with a kind of place ---------- */
+
+const PLACE_TAG = /(?:^|\s)@at:([a-z0-9-]+)/gi;
+
+/** The kinds of place a Shortcut found nearby ("Grocery Store" → "grocery-store"), at most 10. */
+export function parsePlaces(body: unknown): string[] {
+  const b = body && typeof body === "object" ? body as Record<string, unknown> : {};
+  const raw = Array.isArray(b.places) ? b.places : typeof b.places === "string" ? b.places.split(",") : b.place !== undefined ? [b.place] : [];
+  const places = [...new Set(raw.slice(0, 10).map(categoryLabel).filter(p => p !== "other"))];
+  if (!places.length) throw new Error('Send the kinds of place nearby, like "places": ["grocery"]');
+  return places;
+}
+
+export interface PlaceTask { place: string; title: string; note: string; }
+
+/** Open tasks tagged @at:<place> for any of `places`, with the tags taken out of the title. */
+export function tasksForPlaces(notes: readonly { name: string; content: string }[], places: readonly string[], timeZone: string): PlaceTask[] {
+  const wanted = new Set(places);
+  const out: PlaceTask[] = [];
+  for (const n of notes) {
+    if (n.name.startsWith(LOG_PREFIX)) continue;
+    for (const raw of n.content.split("\n")) {
+      if (!raw.includes("@at:")) continue;
+      const t = parseTaskLine(raw, timeZone);
+      if (!t || t.checked) continue;
+      const tags = [...t.title.matchAll(PLACE_TAG)].map(m => m[1].toLowerCase());
+      const place = tags.find(tag => wanted.has(tag));
+      if (!place) continue;
+      const title = t.title.replace(PLACE_TAG, "").replace(/\s+/g, " ").trim();
+      if (title) out.push({ place, title, note: n.name });
+    }
+  }
+  return out;
+}
+
+/** The notification text a Shortcut shows, or "" when nothing matched. */
+export function parkedMessage(tasks: readonly PlaceTask[]): string {
+  const byPlace = new Map<string, string[]>();
+  for (const t of tasks) byPlace.set(t.place, [...(byPlace.get(t.place) ?? []), t.title]);
+  return [...byPlace].map(([place, titles]) => {
+    const shown = titles.slice(0, 5).join(", ") + (titles.length > 5 ? ` and ${titles.length - 5} more` : "");
+    return `Near ${place.replace(/-/g, " ")}: ${shown}`;
+  }).join("\n");
 }
