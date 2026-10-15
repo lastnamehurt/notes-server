@@ -2,6 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import { AwarenessInbox, type InboxCandidate } from "./awareness-inbox";
 import { threeDeferrals, type DeferralEvidence } from "./awareness-rules";
 import { deadlineSuggestions } from "./awareness-deadlines";
+import { DEFAULT_SIGNAL_SETTINGS, parseSignalSettings, paymentOutcome, spendSummary, type Payment, type SignalSettings, type SpendSummary } from "./signals";
 import { AwarenessHistory } from "./awareness-history";
 import { interruptionDecision } from "./awareness-interruption";
 import { DEFAULT_AWARENESS_PREFERENCES, parseAwarenessPreferences, type AwarenessPreferences } from "./awareness-preferences";
@@ -133,6 +134,9 @@ export interface PushError { at: number; message: string; reminder: string; }
 const KEEP_FIRED_MS = 48 * 3600 * 1000;
 // Briefings (see briefing.ts). The "brief:" prefix must not overlap the reminder ("r:"), done ("d:"), fired ("f:") or "sent:" keys.
 const BRIEFINGS = "briefings";
+/** Signals: stored taps to pay, by payment id. Kept 90 days. */
+const PAYMENT = "signal:payment:";
+const PAYMENT_RETENTION_MS = 90 * 86_400_000;
 /** Digest mode: a suggestion already counted in a morning briefing (keyed by its dedupe key). */
 const DIGESTED = "awareness:digested:local:";
 const briefNext = (kind: BriefingKind) => "brief:next:" + kind;
@@ -223,6 +227,8 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
     if (decision.action !== "send") return { status: decision.action, reason: decision.reason };
     // Recheck evidence consent at delivery time: source revocation also applies
     // to suggestions already in the inbox. Missing provenance fails closed.
+    if (candidate.ruleId.startsWith("payment-") && !(await this.signalSettings()).payment.enabled)
+      return { status: "suppressed", reason: "source-not-authorized" };
     if (candidate.ruleId === "task-overdue" && !prefs.sources.daybook)
       return { status: "suppressed", reason: "source-not-authorized" };
     if (candidate.ruleId === "task-three-deferrals") {
@@ -298,6 +304,66 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
   }
   async awarenessInboxAdd(candidate: InboxCandidate) {
     return new AwarenessInbox(this.ctx.storage).add("local", candidate);
+  }
+
+  /* ---------- Signals (#147): tap to pay ---------- */
+
+  async signalSettings(): Promise<SignalSettings> {
+    const saved = await this.ctx.storage.get<SignalSettings>("signals:settings");
+    if (!saved) return DEFAULT_SIGNAL_SETTINGS;
+    try { return parseSignalSettings(saved); } catch { return DEFAULT_SIGNAL_SETTINGS; }
+  }
+  async setSignalSettings(input: unknown): Promise<SignalSettings> {
+    const settings = parseSignalSettings(input);
+    await this.ctx.storage.put("signals:settings", settings);
+    return settings;
+  }
+  private async payments(): Promise<Payment[]> {
+    return [...(await this.ctx.storage.list<Payment>({ prefix: PAYMENT })).values()];
+  }
+  /** Today's and this week's totals from taps (for the app and briefings). */
+  async signalSpend(now = Date.now()): Promise<SpendSummary> {
+    const env = applySettings(this.env as unknown as Env, await this.getSettings());
+    return spendSummary(await this.payments(), await this.signalSettings(), now, env.NOTES_TIMEZONE || DEFAULT_TIMEZONE);
+  }
+  /** Erase every stored payment (Settings → Signals → Erase). */
+  async signalErase(): Promise<{ deleted: number }> {
+    const keys = [...(await this.ctx.storage.list({ prefix: PAYMENT })).keys()];
+    for (let i = 0; i < keys.length; i += 128) await this.ctx.storage.delete(keys.slice(i, i + 128));
+    return { deleted: keys.length };
+  }
+
+  /**
+   * A tap to pay from the Shortcut. Off unless the owner turned the payment signal on. Idempotent by
+   * payment id. Stores amount, currency, card label and category only, kept for 90 days. Suggestions
+   * (big purchase, drink goal, spend target) go to the Awareness inbox when Awareness is on and not
+   * paused, then through the usual delivery gates. Returns the log line the caller should append.
+   */
+  async recordPayment(payment: Payment): Promise<{ recorded: boolean; reason?: string; log: string | null; summary?: SpendSummary; suggestions: number }> {
+    const settings = await this.signalSettings();
+    if (!settings.payment.enabled) return { recorded: false, reason: "off", log: null, suggestions: 0 };
+    const env = applySettings(this.env as unknown as Env, await this.getSettings());
+    const zone = env.NOTES_TIMEZONE || DEFAULT_TIMEZONE;
+    const key = PAYMENT + payment.id;
+    if (await this.ctx.storage.get(key)) {
+      return { recorded: false, reason: "duplicate", log: null, summary: spendSummary(await this.payments(), settings, payment.at, zone), suggestions: 0 };
+    }
+    await this.ctx.storage.put(key, payment);
+    const all = await this.payments();
+    const stale = all.filter(p => p.at < payment.at - PAYMENT_RETENTION_MS).map(p => PAYMENT + p.id);
+    if (stale.length) await this.ctx.storage.delete(stale.slice(0, 128));
+    const outcome = paymentOutcome(payment, all.filter(p => p.at >= payment.at - PAYMENT_RETENTION_MS), settings, zone);
+    let created = 0;
+    const prefs = await this.awarenessPreferences();
+    if (prefs.enabled && !prefs.paused && outcome.suggestions.length) {
+      const inbox = new AwarenessInbox(this.ctx.storage);
+      for (const suggestion of outcome.suggestions) if ((await inbox.add("local", suggestion)).inserted) created++;
+      if (created) {
+        try { await this.awarenessDispatchPending(); }
+        catch (e) { console.warn("Awareness dispatch failed", e instanceof Error ? e.message : "unknown"); }
+      }
+    }
+    return { recorded: true, log: outcome.log, summary: outcome.summary, suggestions: created };
   }
 
   /**

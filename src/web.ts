@@ -26,6 +26,7 @@ import { notesFor } from "./storage";
 import { taskDeferrals } from "./awareness-deferrals";
 import { ensureTaskIds } from "./task-id-assign";
 import { awarenessTasks } from "./awareness-tasks";
+import { parsePayment } from "./signals";
 import { buildIcs, parseIcs } from "./ics";
 import { b64url } from "./web-push";
 
@@ -153,6 +154,32 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
     }
   }
 
+  // Daybook Signals (#147): a Shortcuts automation reports a moment, e.g. a tap to pay. Same secret as
+  // Apple Reminders sync. Only amount, currency, card label and category arrive; never the merchant.
+  if (path === "/app/shortcuts/signal" && request.method === "POST") {
+    const denied = await shortcutAuth(request, env);
+    if (denied) return denied;
+    const configured = await effectiveEnv(env);
+    if (Number(request.headers.get("Content-Length") || 0) > 10_000) return fail("Request too large", 413);
+    let body: Record<string, unknown>;
+    try { body = await request.json(); } catch { return fail("Send the signal as JSON", 400); }
+    const kind = body && typeof body === "object" ? body.kind ?? "payment" : undefined;
+    if (kind !== "payment") return fail('Unknown signal kind; send "payment"', 400);
+    let payment;
+    try { payment = parsePayment(body, Date.now()); } catch (e) { return fail(e instanceof Error ? e.message : String(e), 400); }
+    const result = await scheduler(configured).recordPayment(payment);
+    if (result.log && notesConfigured(configured)) {
+      await appendLog(notesFor(configured), result.log, { timeZone: configured.NOTES_TIMEZONE })
+        .catch(e => console.error("Signal log failed", e instanceof Error ? e.message : "unknown"));
+    }
+    const s = result.summary;
+    const money = (n: number) => "$" + n.toFixed(2);
+    const message = !result.recorded && result.reason === "off" ? "Tap-to-pay signal is off in Daybook settings."
+      : s ? `Today ${money(s.today)} across ${s.todayCount} · this week ${money(s.weekTotal)}` : "Recorded";
+    return json({ recorded: result.recorded, ...(result.reason ? { reason: result.reason } : {}), message,
+      ...(s ? { today: s.today, week: s.weekTotal } : {}) });
+  }
+
   // Calendar feed (iCalendar) of tasks with a due time. The secret in the address is the only way in.
   if (path === "/app/calendar.ics" && request.method === "GET") {
     const settings = await loadSettings(env, true);
@@ -240,6 +267,13 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
         const body: unknown = await request.json();
         return json(await scheduler(env).setAwarenessPreferences(body));
       }
+      case "GET /signals/settings": return json(await scheduler(env).signalSettings());
+      case "PUT /signals/settings": {
+        try { return json(await scheduler(env).setSignalSettings(await request.json())); }
+        catch (e) { return fail(e instanceof Error ? e.message : String(e)); }
+      }
+      case "GET /signals/spend": return json(await scheduler(env).signalSpend());
+      case "POST /signals/erase": return json(await scheduler(env).signalErase());
       case "POST /awareness/deliver": {
         const body = await request.json<{ id?: string }>();
         if (!body.id || !/^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,159}$/.test(body.id)) return fail("Invalid Awareness candidate");

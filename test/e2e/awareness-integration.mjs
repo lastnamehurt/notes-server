@@ -219,6 +219,42 @@ test('digest mode counts waiting suggestions in the morning briefing', async () 
   assert.doesNotMatch(JSON.stringify(await mcp('prepare_briefing', { kind: 'morning' })), /new suggestion/);
 });
 
+test('tap-to-pay signal: off by default, logs a bar tab, asks about big purchases, idempotent, ignores chosen cards', async () => {
+  const signal = (body, token = shortcutToken) => fetch(worker.base + '/app/shortcuts/signal', { method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  assert.equal((await signal({ amount: 5 }, 'wrong-token-wrong-token-wrong-token')).status, 401);
+  let r = await (await signal({ kind: 'payment', amount: 5, id: 'sig-off-0001' })).json();
+  assert.equal(r.recorded, false);
+  assert.equal(r.reason, 'off');
+  const settings = await api('/signals/settings');
+  assert.equal(settings.payment.enabled, false);
+  await api('/signals/settings', 'PUT', { ...settings, payment: { ...settings.payment, enabled: true, ignoredCards: ['Work Card'] }, hideAmounts: true });
+  await preferences({ enabled: true });
+  r = await (await signal({ kind: 'payment', amount: '$9.50', category: 'Bar', card: 'Personal', merchant: 'Hidden Bar Name', id: 'sig-bar-0001' })).json();
+  assert.equal(r.recorded, true, JSON.stringify(r));
+  assert.match(r.message, /Today \$9\.50 across 1/);
+  // A retry of the same tap changes nothing.
+  r = await (await signal({ kind: 'payment', amount: '$9.50', category: 'Bar', card: 'Personal', id: 'sig-bar-0001' })).json();
+  assert.equal(r.reason, 'duplicate');
+  await (await signal({ kind: 'payment', amount: 400, card: 'Work Card', id: 'sig-work-0001' })).json();
+  await (await signal({ kind: 'payment', amount: 210, category: 'Electronics', card: 'Personal', id: 'sig-big-0001' })).json();
+  const spend = await api('/signals/spend');
+  assert.equal(spend.today, 219.5);
+  assert.equal(spend.todayCount, 2);
+  assert.equal(spend.drinksThisWeek, 1);
+  const big = (await api('/awareness/inbox')).items.find(i => i.candidate.ruleId === 'payment-big-purchase');
+  assert.ok(big, 'big purchase suggestion');
+  assert.doesNotMatch(big.candidate.reason, /\$/, 'hidden amounts');
+  const notes = await api('/notes');
+  const logName = notes.find(n => n.startsWith('journal/log/'));
+  const log = await api('/note?name=' + encodeURIComponent(logName));
+  assert.match(log.content, /Tap to pay: bar #drink #spend/);
+  assert.doesNotMatch(JSON.stringify(log.content), /Hidden Bar Name/);
+  assert.equal((await api('/signals/erase', 'POST', {})).deleted, 3);
+  assert.equal((await api('/signals/spend')).todayCount, 0);
+  await api('/signals/settings', 'PUT', settings);
+});
+
 test('mobile browser uses real API; consent saves without requesting notification permission', async () => {
   browser = await chromium.launch({ headless: true, ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}) });
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
