@@ -326,6 +326,26 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
     const env = applySettings(this.env as unknown as Env, await this.getSettings());
     return spendSummary(await this.payments(), await this.signalSettings(), now, env.NOTES_TIMEZONE || DEFAULT_TIMEZONE);
   }
+  /** The last request a Shortcut made to the signal endpoint, whatever happened to it. */
+  async noteSignalAttempt(attempt: { at: number; outcome: string; detail: string; fields: string[] }): Promise<void> {
+    await this.ctx.storage.put("signal:last", {
+      at: attempt.at, outcome: String(attempt.outcome).slice(0, 30), detail: String(attempt.detail).slice(0, 200),
+      fields: attempt.fields.slice(0, 20).map(f => String(f).slice(0, 40))
+    });
+  }
+  /** The Spending page: totals, today's taps (newest first) and the last Shortcut attempt. */
+  async signalToday(now = Date.now()) {
+    const env = applySettings(this.env as unknown as Env, await this.getSettings());
+    const zone = env.NOTES_TIMEZONE || DEFAULT_TIMEZONE;
+    const settings = await this.signalSettings();
+    const all = await this.payments();
+    const day = localStamp(now, zone).date;
+    const ignored = new Set(settings.payment.ignoredCards.map(c => c.toLowerCase()));
+    const taps = all.filter(p => localStamp(p.at, zone).date === day).sort((a, b) => b.at - a.at).slice(0, 50)
+      .map(p => ({ at: p.at, amount: p.amount, currency: p.currency, card: p.card, category: p.category, counted: !ignored.has(p.card.toLowerCase()) }));
+    return { enabled: settings.payment.enabled, summary: spendSummary(all, settings, now, zone), taps,
+      last: (await this.ctx.storage.get("signal:last")) ?? null, timeZone: zone };
+  }
   /** The evening briefing's spend line, or null when the payment signal is off. */
   private async briefingSpend(now: number): Promise<{ today: number; count: number; week: number; hidden: boolean } | null> {
     const settings = await this.signalSettings();

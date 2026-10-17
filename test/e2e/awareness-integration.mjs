@@ -223,6 +223,7 @@ test('tap-to-pay signal: off by default, logs a bar tab, asks about big purchase
   const signal = (body, token = shortcutToken) => fetch(worker.base + '/app/shortcuts/signal', { method: 'POST',
     headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   assert.equal((await signal({ amount: 5 }, 'wrong-token-wrong-token-wrong-token')).status, 401);
+  assert.equal((await api('/signals/today')).last.outcome, 'wrong-secret', 'a rejected attempt is explained on the Spending page');
   let r = await (await signal({ kind: 'payment', amount: 5, id: 'sig-off-0001' })).json();
   assert.equal(r.recorded, false);
   assert.equal(r.reason, 'off');
@@ -238,6 +239,10 @@ test('tap-to-pay signal: off by default, logs a bar tab, asks about big purchase
   assert.equal(r.reason, 'duplicate');
   await (await signal({ kind: 'payment', amount: 400, card: 'Work Card', id: 'sig-work-0001' })).json();
   await (await signal({ kind: 'payment', amount: 210, category: 'Electronics', card: 'Personal', id: 'sig-big-0001' })).json();
+  const today = await api('/signals/today');
+  assert.equal(today.taps.length, 3);
+  assert.equal(today.taps.find(t => t.card === 'Work Card').counted, false);
+  assert.ok(!JSON.stringify(today).includes('Hidden Bar Name'));
   const spend = await api('/signals/spend');
   assert.equal(spend.today, 219.5);
   assert.equal(spend.todayCount, 2);
