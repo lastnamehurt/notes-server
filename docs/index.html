@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#191a23">
-<meta name="description" content="Daybook: your memory across ChatGPT, Claude, Cursor, Codex, and other compatible AI tools. Reminders that buzz your phone, logs for meals, meds and moods, a daily briefing and weekly review, all kept in your own private space. Free, open source, about 10 minutes to set up.">
+<meta name="description" content="Daybook: your memory across ChatGPT, Claude, Cursor, Codex, and other compatible AI tools. Reminders that buzz your phone, gentle nudges when things slip, Apple Pay spending at a glance, logs for meals, meds and moods, and a daily briefing, all kept in your own private space. Free, open source, about 10 minutes to set up.">
 <title>Daybook: your day, remembered</title>
 <style>
 :root{--bg:#191a23;--card:#242630;--card2:#1f2029;--line:#393b49;--ink:#eeedf7;--ink2:#bcbcca;--mark:#aaa6ff;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink);background:var(--bg);line-height:1.55}
@@ -93,6 +93,17 @@ section{margin:0 0 96px}
 .shared .foot{margin:0;font-size:13.5px;color:#a9a8ba}
 @media(max-width:900px){.persist{grid-template-columns:1fr}.persist-cap{display:none}.pane .cap{display:block}.shared{margin-top:16px}.shared:before,.shared:after{display:none}.shared .row{flex-direction:column;align-items:flex-start;gap:2px;margin-bottom:6px}}
 
+/* It speaks up: Daybook nudges first */
+.nudges{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:26px}
+.nudge{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:18px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.nudge .notif{margin:0;box-shadow:none;border:1px solid var(--line)}
+.nudge h3{margin:4px 0 0;font-size:18px}.nudge p{font-size:15.5px;margin:0}
+.nudge .why{font-size:13px;color:#a9a8ba;margin-top:auto}
+.newtag{display:inline-block;margin-left:8px;vertical-align:middle;font:700 11px system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--bg);background:var(--mark);border-radius:999px;padding:2px 8px}
+.screen .spend{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;background:#fff;border:1px solid #e6e4dd;border-radius:14px;padding:9px 12px;margin-bottom:10px}
+.screen .spend b{font-size:16px}.screen .spend span{color:#6b6c7a;font-size:11.5px}
+@media(max-width:900px){.nudges{grid-template-columns:1fr}}
+
 /* Feature grid */
 .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:26px}
 .f{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:24px}
@@ -127,7 +138,7 @@ footer a{color:#c7c5ff}
 <body>
 <header>
   <div class="brand"><span class="mark">D</span> DAYBOOK</div>
-  <nav class="nav"><a class="hide-sm" href="#what">What it does</a><a class="hide-sm" href="#privacy">Privacy</a><a href="https://github.com/lastnamehurt/notes-server">Source ↗</a></nav>
+  <nav class="nav"><a class="hide-sm" href="#nudges">What's new</a><a class="hide-sm" href="#what">What it does</a><a class="hide-sm" href="#privacy">Privacy</a><a href="https://github.com/lastnamehurt/notes-server">Source ↗</a></nav>
 </header>
 
 <main>
@@ -135,7 +146,7 @@ footer a{color:#c7c5ff}
     <div>
       <div class="eyebrow">Free · Private · Open source</div>
       <h1>Your memory.<br>Any AI.</h1>
-      <p class="lede">Give your AI tools a shared memory for notes, ideas, tasks, and reminders. Use Daybook with ChatGPT, Claude, Cursor, or Codex while keeping your information private, organized, and yours.</p>
+      <p class="lede">Give your AI tools a shared memory for notes, ideas, tasks, and reminders. Use Daybook with ChatGPT, Claude, Cursor, or Codex, and let it speak up when something slips, while your information stays private, organized, and yours.</p>
       <p class="fine"><strong>One memory. Multiple AI assistants. Always yours.</strong><br>Works with ChatGPT · Claude · Cursor · Codex</p>
       <div class="actions">
         <a class="button" href="https://daybook-installer.clhurt1.workers.dev">Get your Daybook →</a>
@@ -145,13 +156,14 @@ footer a{color:#c7c5ff}
       <p class="fine">Your own copy on a free Cloudflare account. About 10 minutes, no coding, no credit card.</p>
     </div>
 
-    <div class="phone" role="img" aria-label="Daybook's Today screen on a phone: a reminder notification, the Today, Tasks and Notes tabs, three focus priorities and a timeline of today's activity">
-      <div class="notif"><span class="ic">D</span><div><b>Reminder</b>Drink water</div><span class="btn">Done</span></div>
+    <div class="phone" role="img" aria-label="Daybook's Today screen on a phone: a Daybook suggestion notification, the Today, Tasks and Notes tabs, today's spending, three focus priorities and a timeline of today's activity">
+      <div class="notif"><span class="ic">D</span><div><b>Daybook</b>A task has been overdue for a couple of days. Do it, give it a new date, or let it go?</div></div>
       <div class="screen">
         <div class="top"><div><div class="dow">Tuesday</div><span class="day">13</span><span class="mon">Oct</span></div>
           <div class="acts" aria-hidden="true"><span class="ib"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/></svg></span><span class="ib"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg></span></div></div>
         <div class="tabs"><span class="on">Today</span><span>Tasks</span><span>Notes</span></div>
         <div class="hi"><b>Good morning, Sam</b><span>Suggestions</span></div>
+        <div class="spend"><span>Spent today</span><b>$18.40</b><span>3 taps · week $112.00</span></div>
         <div class="card">
           <h4>Focus <small>3 priorities</small></h4>
           <div class="todo"><i></i><div><b>Call the dentist</b><em>Today · 10am</em></div><span class="due">Do now</span></div>
@@ -226,6 +238,32 @@ footer a{color:#c7c5ff}
     </div>
   </section>
 
+  <section id="nudges" aria-labelledby="nudges-h">
+    <div class="eyebrow">It speaks up <span class="newtag">New</span></div>
+    <h2 id="nudges-h">Daybook notices things, so you don't have to.</h2>
+    <p>Turn on Suggestions and Daybook gently flags what's slipping. You choose how: in the app only, in your morning briefing, or as a notification. Quiet hours and a limit of two a day keep it from nagging.</p>
+    <div class="nudges">
+      <article class="nudge">
+        <div class="notif"><span class="ic">D</span><div><b>Daybook</b>You've moved this task's due date three times. Break it into a smaller step?</div></div>
+        <h3>Keeps putting it off?</h3>
+        <p>Push a task back three times and Daybook asks whether it needs a smaller first step or a more realistic date.</p>
+        <span class="why">Any dated task, from the app, your assistant or Apple Reminders.</span>
+      </article>
+      <article class="nudge">
+        <div class="notif"><span class="ic">D</span><div><b>Daybook</b>A task has been overdue for a couple of days. Do it, give it a new date, or let it go?</div></div>
+        <h3>Slipped through?</h3>
+        <p>Your reminder fires once. If a task is still open two days later, Daybook brings it back up, once, and lets it go when you reschedule or finish it.</p>
+        <span class="why">Notifications never include the task's name; the app shows it.</span>
+      </article>
+      <article class="nudge">
+        <div class="notif"><span class="ic">D</span><div><b>Daybook</b>A bigger purchase just went through. Was it planned?</div></div>
+        <h3>Spending, as it happens</h3>
+        <p>An iPhone Shortcut tells Daybook each time you tap Apple Pay. See today's total on Today, get asked about big purchases, and have bar tabs counted against a weekly goal if you set one.</p>
+        <span class="why">Only the amount, card and kind of place are sent. Never the store's name or where you are.</span>
+      </article>
+    </div>
+  </section>
+
   <section id="what" aria-labelledby="what-h">
     <div class="eyebrow">What it does</div>
     <h2 id="what-h">One place for the small stuff that runs your life.</h2>
@@ -238,6 +276,9 @@ footer a{color:#c7c5ff}
       <article class="f"><div class="k">🧠</div><h3>Memory that's yours</h3><p>Notes, projects, decisions and reference, searchable by you and your assistant. Download everything as Markdown any time.</p></article>
       <article class="f"><div class="k">📅</div><h3>Works with your calendar</h3><p>Your dated tasks show up in Apple, Google or Outlook calendar, and your calendar's events can show up in Daybook.</p></article>
       <article class="f"><div class="k">✅</div><h3>Apple Reminders sync</h3><p>Two-way sync through an iPhone Shortcut, set up from Settings. Reminders handles the alerts, so you never get two, and you can check things off from your Watch, Siri or lock screen.</p></article>
+      <article class="f"><div class="k">💳</div><h3>Spending at a glance</h3><p>Apple Pay taps add up on a Spending page: today, this week, and each tap. Optional daily or weekly targets, and your evening briefing says what you spent.</p></article>
+      <article class="f"><div class="k">🛒</div><h3>Errands where you are</h3><p>Tag a task <b>@at:grocery</b>, and when you park near a grocery store your phone shows the list. Your location never leaves your phone.</p></article>
+      <article class="f"><div class="k">💬</div><h3>Suggestions, your way</h3><p>Nudges about postponed and overdue tasks, in the app, in your morning briefing, or on your phone. Each one says why, and you can snooze, dismiss or mute it.</p></article>
       <article class="f"><div class="k">📱</div><h3>An app on your home screen</h3><p>Add it to your iPhone or Android home screen. When there's an update, tap <b>Update now</b> and it updates itself.</p></article>
     </div>
   </section>
@@ -248,8 +289,8 @@ footer a{color:#c7c5ff}
     <div class="day-flow">
       <article><time>7:30 am</time><h3>A morning briefing</h3><p>What's due, what's overdue and what to do first, on your phone before coffee.</p></article>
       <article><time>8:00 am</time><h3>A nudge, then done</h3><p>"Take vitamins" buzzes. Tap Done and it's in today's log.</p></article>
-      <article><time>1:15 pm</time><h3>Just say it</h3><p>"Log a burrito and an iced tea." Your assistant saves it with the right tags.</p></article>
-      <article><time>9:00 pm</time><h3>Look back</h3><p>An evening wrap-up of what you did, and a weekly review on Sunday.</p></article>
+      <article><time>1:15 pm</time><h3>Just say it</h3><p>"Log a burrito and an iced tea." Your assistant saves it with the right tags. Tap Apple Pay and lunch is in today's spending.</p></article>
+      <article><time>9:00 pm</time><h3>Look back</h3><p>An evening wrap-up of what you did and what you spent, and a weekly review on Sunday.</p></article>
     </div>
   </section>
 
@@ -267,6 +308,7 @@ footer a{color:#c7c5ff}
         <li><b>Leave any time</b>Download every note as plain Markdown files.</li>
         <li><b>Open source</b>Read every line of code on GitHub.</li>
         <li><b>Updates when you say so</b>Nothing changes until you tap Update now.</li>
+        <li><b>Extras are off until you turn them on</b>Suggestions, spending and errand reminders each have their own switch. Spending keeps amounts and kinds of place, never store names, and can be erased any time.</li>
       </ul>
     </div>
   </section>
@@ -293,7 +335,7 @@ footer a{color:#c7c5ff}
 
 <footer>
   <span>Daybook · Open-source, private life notes</span>
-  <span><a href="https://github.com/lastnamehurt/notes-server">GitHub</a> · <a href="https://github.com/lastnamehurt/notes-server/blob/main/docs/ai-assistants.md">AI setup</a> · <a href="https://github.com/lastnamehurt/notes-server/blob/main/QUICKSTART-MOBILE.md">Mobile guide</a> · <a href="https://github.com/lastnamehurt/notes-server/blob/main/docs/apple-reminders-shortcuts.md">Apple Reminders</a></span>
+  <span><a href="https://github.com/lastnamehurt/notes-server">GitHub</a> · <a href="https://github.com/lastnamehurt/notes-server/blob/main/docs/ai-assistants.md">AI setup</a> · <a href="https://github.com/lastnamehurt/notes-server/blob/main/QUICKSTART-MOBILE.md">Mobile guide</a> · <a href="https://github.com/lastnamehurt/notes-server/blob/main/docs/apple-reminders-shortcuts.md">Apple Reminders</a> · <a href="https://github.com/lastnamehurt/notes-server/blob/main/docs/signals-shortcuts.md">Spending &amp; errands</a></span>
 </footer>
 </body>
 </html>
