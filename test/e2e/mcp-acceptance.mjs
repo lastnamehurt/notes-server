@@ -123,7 +123,7 @@ try {
   };
 
   const init = await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "acceptance", version: "1" } });
-  check(init.serverInfo?.name === "personal-notes", "initialize: server identifies as personal-notes");
+  check(init.serverInfo?.name === "notes", "initialize: server identifies as notes");
   check(/REMINDERS/.test(init.instructions || ""), "initialize: server sends its usage instructions");
   await rpc("notifications/initialized", {}, true);
 

@@ -19,12 +19,22 @@
 #   note show <id or part of name>   print one note
 #   note edit <id or part of name>   open it in $VISUAL/$EDITOR; a change is committed and pushed
 #   note rm [-y] <id or part>        delete one note (asks first); the result names the undo
+#   note edit|rm --no-push ...       commit only, for edit and rm too
 #
 # The commands above are words, so quote text that starts with one ("find the keys") or use
 # note -- sync. Also accepted: list, search, view/open/cat, remove/delete/del, browse. A name that
 # matches several notes opens a picker on a terminal. `notes` is the same command.
 #
 # Text that includes the path of an existing note is refused as a mistyped command; use note -- <text>.
+#
+# Environment:
+#   NOTES_DIR                        your notes clone (default ~/notes)
+#   VISUAL, EDITOR                   editor for note edit (default vi on a terminal)
+#
+# Other commands in this repo (not part of note):
+#   npm run setup                    deploy your own Worker, store its secrets, print the Claude connector URL
+#   scripts/install-cli.sh [--prefix DIR] [--force]   link note and notes into DIR/bin (default ~/.local)
+#   python3 mcp/note-mcp             local stdio MCP server over NOTES_DIR; add it to your MCP client by hand
 #
 # Provenance (repo@branch of the directory you ran it from) goes in frontmatter.
 set -euo pipefail

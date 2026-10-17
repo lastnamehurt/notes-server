@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Deploys your own copy of the notes server to your Cloudflare account and stores your settings as secrets.
-// Usage (from the cloudflare/ folder): npm install && npm run setup
+// Usage (from the repository root): npm install && npm run setup
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { createInterface } from "node:readline/promises";
@@ -11,7 +11,7 @@ const ask = async (q, fallback = "") => (await rl.question(fallback ? `${q} [${f
 const wrangler = (args, opts = {}) => spawnSync("npx", ["wrangler", ...args], { stdio: "inherit", shell: process.platform === "win32", ...opts });
 const fail = (msg) => { console.error("\n✗ " + msg); process.exit(1); };
 
-console.log("\nPersonal Notes MCP setup\n");
+console.log("\nNotes MCP setup\n");
 console.log("Before you start you need:");
 console.log("  1. A PRIVATE GitHub repo for your notes (created with 'Add a README' ticked).");
 console.log("  2. A fine-grained GitHub token for only that repo, with Contents: Read and write.");
