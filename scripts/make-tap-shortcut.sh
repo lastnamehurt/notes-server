@@ -17,17 +17,24 @@ SECRET=${DAYBOOK_SECRET:-}
 [[ "$URL" == https://*"/app/shortcuts/signal" ]] || { echo "That address should start with https:// and end with /app/shortcuts/signal"; exit 1; }
 [[ ${#SECRET} -ge 32 ]] || { echo "That secret looks too short (it's at least 32 characters)."; exit 1; }
 
-# Words that mark a bar in a merchant's name. Matching happens on the iPhone; only "bar" or "other" is sent.
-BAR_WORDS='(?i)\b(bar|pub|tavern|taproom|brewing|brewery|saloon|lounge|cantina|beer|wine|cocktail|spirits)'
+# Kinds of place, checked in this order against the merchant's name ON THE IPHONE; only the label is sent.
+# First match wins, so "TeKu Tavern + Cafe" is a bar. Edit or add lines to suit your usual spots
+# (label|regular expression); add a label to Daybook's "Kinds of place" if it should log drinks or food.
+RULES=(
+  'bar|(?i)\b(bar|pub|tavern|tap ?room|brewing|brewery|brewhouse|saloon|lounge|cantina|beer|wine|cocktails?|spirits|distillery|cidery)\b'
+  'coffee|(?i)\b(espresso|coffee|cafe|café|caffe|roasters?|roastery|starbucks|peet|dutch bros|tea)\b'
+  'food|(?i)\b(taqueria|tacos?|restaurant|kitchen|grill|pizza|pizzeria|burgers?|ramen|pho|sushi|deli|bakery|bagels?|diner|bbq|thai|noodles?|bistro|eatery|chipotle|mcdonald|subway|teriyaki|dumplings?)\b'
+  'gas|(?i)\b(shell|chevron|arco|76|exxon|mobil|bp|texaco|valero|fuel|gas station)\b'
+  'grocery|(?i)\b(qfc|safeway|trader joe|whole foods|fred meyer|grocery|groceries|uwajimaya|pcc|albertsons|kroger|h mart|metropolitan market|town & country)\b'
+  'parking|(?i)\b(parking|paybyphone|impark|diamond parking|spothero|park ?mobile)\b'
+)
 
 xml() { printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e 's/"/\&quot;/g'; }
 uuid() { uuidgen; }
 OUT_DIR=${OUT_DIR:-$PWD}
 RAW="$OUT_DIR/Daybook Tap (unsigned).shortcut"
 SIGNED="$OUT_DIR/Daybook Tap.shortcut"
-IF_GROUP=$(uuid); MATCH_UUID=$(uuid); ENDIF_UUID=$(uuid)
-# The unsigned file holds the secret in plain text: remove it however the script ends.
-trap 'rm -f "$RAW"' EXIT
+# The unsigned file holds the secret in plain text: it is removed however the script ends (trap below).
 
 # A text field holding one Shortcut Input property (Amount, Merchant, Card or Pass).
 input_property() { cat <<EOF
@@ -39,6 +46,49 @@ EOF
 }
 plain_text() { printf '<dict><key>Value</key><dict><key>string</key><string>%s</string></dict><key>WFSerializationType</key><string>WFTextTokenString</string></dict>' "$(xml "$1")"; }
 field() { printf '<dict><key>WFItemType</key><integer>0</integer><key>WFKey</key>%s<key>WFValue</key>%s</dict>' "$(plain_text "$1")" "$2"; }
+
+# Nested "Match Text → If it matched → label, Otherwise → next rule", ending in "other". The outermost
+# End If's result is the label of the first rule that matched.
+OUTER_END=""
+kind_actions() {
+  local groups=() ends=() rule label pattern match group
+  for rule in "${RULES[@]}"; do
+    label=${rule%%|*}; pattern=${rule#*|}
+    match=$(uuid); group=$(uuid); groups+=("$group"); ends+=("$(uuid)")
+    cat <<A
+<dict><key>WFWorkflowActionIdentifier</key><string>is.workflow.actions.text.match</string>
+<key>WFWorkflowActionParameters</key><dict><key>UUID</key><string>$match</string>
+<key>WFMatchTextPattern</key><string>$(xml "$pattern")</string><key>WFMatchTextCaseSensitive</key><false/>
+<key>text</key>$(input_property Merchant)</dict></dict>
+<dict><key>WFWorkflowActionIdentifier</key><string>is.workflow.actions.conditional</string>
+<key>WFWorkflowActionParameters</key><dict><key>GroupingIdentifier</key><string>$group</string><key>WFControlFlowMode</key><integer>0</integer>
+<key>WFCondition</key><integer>100</integer>
+<key>WFInput</key><dict><key>Type</key><string>Variable</string><key>Variable</key><dict><key>Value</key><dict>
+<key>OutputName</key><string>Matches</string><key>OutputUUID</key><string>$match</string><key>Type</key><string>ActionOutput</string></dict>
+<key>WFSerializationType</key><string>WFTextTokenAttachment</string></dict></dict></dict></dict>
+<dict><key>WFWorkflowActionIdentifier</key><string>is.workflow.actions.gettext</string>
+<key>WFWorkflowActionParameters</key><dict><key>UUID</key><string>$(uuid)</string><key>WFTextActionText</key>$(plain_text "$label")</dict></dict>
+<dict><key>WFWorkflowActionIdentifier</key><string>is.workflow.actions.conditional</string>
+<key>WFWorkflowActionParameters</key><dict><key>GroupingIdentifier</key><string>$group</string><key>WFControlFlowMode</key><integer>1</integer></dict></dict>
+A
+  done
+  cat <<A
+<dict><key>WFWorkflowActionIdentifier</key><string>is.workflow.actions.gettext</string>
+<key>WFWorkflowActionParameters</key><dict><key>UUID</key><string>$(uuid)</string><key>WFTextActionText</key>$(plain_text other)</dict></dict>
+A
+  local i
+  for (( i=${#groups[@]}-1; i>=0; i-- )); do
+    cat <<A
+<dict><key>WFWorkflowActionIdentifier</key><string>is.workflow.actions.conditional</string>
+<key>WFWorkflowActionParameters</key><dict><key>GroupingIdentifier</key><string>${groups[$i]}</string><key>WFControlFlowMode</key><integer>2</integer><key>UUID</key><string>${ends[$i]}</string></dict></dict>
+A
+  done
+  printf '%s' "${ends[0]}" > "$OUTER_FILE"
+}
+OUTER_FILE=$(mktemp)
+trap 'rm -f "$RAW" "$OUTER_FILE"' EXIT
+KIND_XML=$(kind_actions)
+OUTER_END=$(cat "$OUTER_FILE")
 
 cat > "$RAW" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -56,31 +106,8 @@ cat > "$RAW" <<EOF
 </array>
 <key>WFWorkflowActions</key><array>
 
-<!-- Does the merchant's name look like a bar? (on the phone only) -->
-<dict><key>WFWorkflowActionIdentifier</key><string>is.workflow.actions.text.match</string>
-<key>WFWorkflowActionParameters</key><dict>
-<key>UUID</key><string>$MATCH_UUID</string>
-<key>WFMatchTextPattern</key><string>$(xml "$BAR_WORDS")</string>
-<key>WFMatchTextCaseSensitive</key><false/>
-<key>text</key>$(input_property Merchant)
-</dict></dict>
-
-<dict><key>WFWorkflowActionIdentifier</key><string>is.workflow.actions.conditional</string>
-<key>WFWorkflowActionParameters</key><dict>
-<key>GroupingIdentifier</key><string>$IF_GROUP</string><key>WFControlFlowMode</key><integer>0</integer>
-<key>WFCondition</key><integer>100</integer>
-<key>WFInput</key><dict><key>Type</key><string>Variable</string><key>Variable</key><dict><key>Value</key><dict>
-<key>OutputName</key><string>Matches</string><key>OutputUUID</key><string>$MATCH_UUID</string><key>Type</key><string>ActionOutput</string></dict>
-<key>WFSerializationType</key><string>WFTextTokenAttachment</string></dict></dict>
-</dict></dict>
-<dict><key>WFWorkflowActionIdentifier</key><string>is.workflow.actions.gettext</string>
-<key>WFWorkflowActionParameters</key><dict><key>UUID</key><string>$(uuid)</string><key>WFTextActionText</key>$(plain_text bar)</dict></dict>
-<dict><key>WFWorkflowActionIdentifier</key><string>is.workflow.actions.conditional</string>
-<key>WFWorkflowActionParameters</key><dict><key>GroupingIdentifier</key><string>$IF_GROUP</string><key>WFControlFlowMode</key><integer>1</integer></dict></dict>
-<dict><key>WFWorkflowActionIdentifier</key><string>is.workflow.actions.gettext</string>
-<key>WFWorkflowActionParameters</key><dict><key>UUID</key><string>$(uuid)</string><key>WFTextActionText</key>$(plain_text other)</dict></dict>
-<dict><key>WFWorkflowActionIdentifier</key><string>is.workflow.actions.conditional</string>
-<key>WFWorkflowActionParameters</key><dict><key>GroupingIdentifier</key><string>$IF_GROUP</string><key>WFControlFlowMode</key><integer>2</integer><key>UUID</key><string>$ENDIF_UUID</string></dict></dict>
+<!-- Which kind of place is this? Nested Match → If, one per rule; the merchant's name stays on the phone. -->
+$KIND_XML
 
 <!-- Send the tap to Daybook -->
 <dict><key>WFWorkflowActionIdentifier</key><string>is.workflow.actions.downloadurl</string>
@@ -97,7 +124,7 @@ $(field Authorization "$(plain_text "Bearer $SECRET")")
 $(field kind "$(plain_text payment)")
 $(field amount "$(input_property Amount)")
 $(field card "$(input_property "Card or Pass")")
-$(field category "<dict><key>Value</key><dict><key>attachmentsByRange</key><dict><key>{0, 1}</key><dict><key>OutputName</key><string>If Result</string><key>OutputUUID</key><string>$ENDIF_UUID</string><key>Type</key><string>ActionOutput</string></dict></dict><key>string</key><string>&#xFFFC;</string></dict><key>WFSerializationType</key><string>WFTextTokenString</string></dict>")
+$(field category "<dict><key>Value</key><dict><key>attachmentsByRange</key><dict><key>{0, 1}</key><dict><key>OutputName</key><string>If Result</string><key>OutputUUID</key><string>$OUTER_END</string><key>Type</key><string>ActionOutput</string></dict></dict><key>string</key><string>&#xFFFC;</string></dict><key>WFSerializationType</key><string>WFTextTokenString</string></dict>")
 </array></dict><key>WFSerializationType</key><string>WFDictionaryFieldValue</string></dict>
 </dict></dict>
 
