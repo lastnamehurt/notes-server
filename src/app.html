@@ -2502,14 +2502,43 @@ async function renderSignalSettings() {
   const setup = document.createElement("details");
   const setupSummary = document.createElement("summary"); setupSummary.textContent = "Set up the Shortcut";
   const steps = document.createElement("p");
-  steps.textContent = "Uses the same Shortcut secret as Apple Reminders sync (Settings → Apple Reminders). The Shortcut posts to this address:";
-  const url = document.createElement("code"); url.textContent = location.origin + "/app/shortcuts/signal";
+  steps.textContent = "Your Shortcut needs two things to talk to Daybook: where to send each tap, and a secret so only your phone can. You'll paste both into the Shortcut's \u201cGet Contents of URL\u201d step.";
+  const copyRow = (label, value) => {
+    const wrap = document.createElement("div");
+    const name = document.createElement("p"); name.className = "muted"; name.style.margin = "10px 0 4px"; name.textContent = label;
+    const code = document.createElement("code"); code.textContent = value;
+    const button = document.createElement("button"); button.type = "button"; button.className = "btn quiet"; button.textContent = "Copy";
+    button.onclick = e => copy(value, e.target);
+    const row = document.createElement("div"); row.className = "copyrow"; row.append(code, button);
+    wrap.append(name, row); return wrap;
+  };
+  const secretBox = document.createElement("div");
+  const showSecret = async () => {
+    let st;
+    try { st = await api("/apple-sync"); } catch (error) { secretBox.textContent = error.message; return; }
+    secretBox.replaceChildren();
+    if (st.fromDeploy) {
+      const note = document.createElement("p"); note.className = "muted";
+      note.textContent = "2. Secret: set on this copy's deployment (SHORTCUTS_TOKEN in Cloudflare). Use that value.";
+      secretBox.append(note);
+    } else if (st.token) {
+      secretBox.append(copyRow("2. Secret (the same one Apple Reminders sync uses)", st.token));
+    } else {
+      const make = document.createElement("button"); make.type = "button"; make.className = "btn"; make.textContent = "Make my Shortcut secret";
+      make.onclick = async () => {
+        make.disabled = true;
+        try { await api("/apple-sync/token", { method: "POST", body: {} }); await showSecret(); }
+        catch (error) { toast(error.message); make.disabled = false; }
+      };
+      const label = document.createElement("p"); label.className = "muted"; label.style.margin = "10px 0 4px"; label.textContent = "2. Secret";
+      secretBox.append(label, make);
+    }
+  };
+  setup.addEventListener("toggle", () => { if (setup.open && !secretBox.childNodes.length) showSecret(); });
   const guide = document.createElement("a"); guide.href = "https://github.com/lastnamehurt/notes-server/blob/main/docs/signals-shortcuts.md";
   guide.target = "_blank"; guide.rel = "noopener"; guide.textContent = "Step-by-step guide";
-  const copyUrl = document.createElement("button"); copyUrl.type = "button"; copyUrl.className = "btn quiet"; copyUrl.textContent = "Copy";
-  copyUrl.onclick = e => copy(url.textContent, e.target);
-  const urlRow = document.createElement("div"); urlRow.className = "copyrow"; urlRow.append(url, copyUrl);
-  setup.append(setupSummary, steps, urlRow, guide);
+  guide.style.display = "inline-block"; guide.style.marginTop = "12px";
+  setup.append(setupSummary, steps, copyRow("1. Address", location.origin + "/app/shortcuts/signal"), secretBox, guide);
   const erase = document.createElement("button"); erase.type = "button"; erase.className = "btn quiet"; erase.textContent = "Erase stored taps";
   erase.onclick = async () => {
     if (!confirm("Erase every stored tap? Totals start again from zero.")) return;
