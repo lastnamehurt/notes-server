@@ -18,7 +18,9 @@ Suggestions (big purchase, drink goal, spending targets) also need **Awareness**
 
 ## 2. Build the Shortcut
 
-Written for iOS 26. Build the simple version first, check that it works, then add the extras.
+**Faster, with a Mac:** run `bash scripts/make-tap-shortcut.sh` (or download it from this repo first). It asks for the Address and Secret, builds the full version below (bar detection included), and signs it. Open the file it makes to add **Daybook Tap** to Shortcuts; it syncs to your iPhone. Then on the iPhone make only the trigger: **Automation → + → Wallet →** your payment cards **→ Run Immediately → Next →** pick **Daybook Tap**. Your secret stays in the file on your Mac and is never uploaded.
+
+**By hand on the iPhone:** written for iOS 26. Build the simple version first, check that it works, then add the extras.
 
 ### The trigger
 
