@@ -16,7 +16,7 @@ Suggestions (big purchase, drink goal, spending targets) also need **Awareness**
 
 ## 2. Build the Shortcut
 
-**Faster, with a Mac:** run `bash scripts/make-tap-shortcut.sh` (or download it from this repo first). It asks for the Address and Secret, builds the full version below (bar detection included), and signs it. Open the file it makes to add **Daybook Tap** to Shortcuts; it syncs to your iPhone. Then on the iPhone make only the trigger: **Automation → + → Wallet →** your payment cards **→ Run Immediately → Next →** pick **Daybook Tap**. Your secret stays in the file on your Mac and is never uploaded.
+**Faster, with a Mac:** run `bash scripts/make-tap-shortcut.sh` (or download it from this repo first). It asks for the Address and Secret, builds the full version (it labels each tap `bar`, `coffee`, `food`, `gas`, `grocery`, `parking` or `other` from words in the store's name, on the phone), and signs it. To change the words, edit the `RULES` list at the top of the script; the first rule that matches wins, so "TeKu Tavern + Cafe" is a bar. Open the file it makes to add **Daybook Tap** to Shortcuts; it syncs to your iPhone. Then on the iPhone make only the trigger: **Automation → + → Wallet →** your payment cards **→ Run Immediately → Next →** pick **Daybook Tap**. Your secret stays in the file on your Mac and is never uploaded.
 
 **By hand on the iPhone:** written for iOS 26. Build the simple version first, check that it works, then add the extras.
 
@@ -74,7 +74,7 @@ Then tap Apple Pay in a store and open **Today → Spending**: today's total upd
 
 ## What each kind of place does
 
-In the settings card, **Kinds of place** maps each `category` your Shortcut sends:
+Spending shows this week **by kind** (for example "gas $38.10 · food $16.40 · coffee $9.75"). In the settings card, **Kinds of place** maps each `category` your Shortcut sends:
 
 - `drink`: logs `#drink` and counts toward your weekly bar-tab goal
 - `food`: logs `#food`

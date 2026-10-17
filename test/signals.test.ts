@@ -4,7 +4,7 @@ import { parseReminders } from "../src/reminder-parse.ts";
 import assert from "node:assert/strict";
 import {
   DEFAULT_SIGNAL_SETTINGS, parseSignalSettings, parsePlaces, tasksForPlaces, parkedMessage, parsePayment, parseAmount, categoryLabel,
-  dayAndWeek, spendSummary, paymentOutcome, type Payment, type SignalSettings
+  dayAndWeek, spendSummary, spendByKind, paymentOutcome, type Payment, type SignalSettings
 } from "../src/signals.ts";
 
 const zone = "America/Los_Angeles";
@@ -137,4 +137,17 @@ test("@at: tags match open tasks, leave titles clean, and don't disturb reminder
   assert.equal(parkedMessage([]), "");
   const reminders = parseReminders("inbox/errands.md", notes[0].content, zone);
   assert.deepEqual(reminders.map(r => r.text), ["Pick up prescription"]);
+});
+
+test("this week by kind: biggest first, ignored cards and last week left out", () => {
+  const stored = [pay("1", 4.5, "coffee"), pay("2", 5.25, "coffee"), pay("3", 38, "gas"), pay("4", 12, "bar"),
+    pay("5", 99, "gas", T, "Work"), pay("6", 50, "grocery", T - 7 * 86_400_000)];
+  assert.deepEqual(spendByKind(stored, on({ ignoredCards: ["work"] }), T, zone), [
+    { kind: "gas", total: 38, count: 1 }, { kind: "bar", total: 12, count: 1 }, { kind: "coffee", total: 9.75, count: 2 }]);
+});
+
+test("the new kinds count as spending only by default", () => {
+  for (const kind of ["gas", "grocery", "parking"]) assert.equal(DEFAULT_SIGNAL_SETTINGS.payment.categories[kind], "none");
+  assert.equal(DEFAULT_SIGNAL_SETTINGS.payment.categories.food, "food");
+  assert.equal(paymentOutcome(pay("1", 40, "gas"), [pay("1", 40, "gas")], on({ bigPurchase: null }), zone).log, null);
 });

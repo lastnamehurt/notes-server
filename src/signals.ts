@@ -29,7 +29,8 @@ export interface SignalSettings {
 export const DEFAULT_SIGNAL_SETTINGS: SignalSettings = {
   payment: {
     enabled: false, ignoredCards: [], dailyTarget: null, weeklyTarget: null, bigPurchase: 150, drinkGoalPerWeek: null,
-    categories: { bar: "drink", nightlife: "drink", brewery: "drink", "liquor-store": "drink", restaurant: "food", coffee: "food", "fast-food": "food" }
+    categories: { bar: "drink", nightlife: "drink", brewery: "drink", "liquor-store": "drink", restaurant: "food", coffee: "food", "fast-food": "food",
+      food: "food", gas: "none", grocery: "none", parking: "none" }
   },
   parked: { enabled: false },
   hideAmounts: true
@@ -215,4 +216,18 @@ export function parkedMessage(tasks: readonly PlaceTask[]): string {
     const shown = titles.slice(0, 5).join(", ") + (titles.length > 5 ? ` and ${titles.length - 5} more` : "");
     return `Near ${place.replace(/-/g, " ")}: ${shown}`;
   }).join("\n");
+}
+
+/** This week's counted taps by kind of place, biggest first (ignored cards and other currencies left out). */
+export function spendByKind(payments: readonly Payment[], settings: SignalSettings, now: number, timeZone: string): { kind: string; total: number; count: number }[] {
+  const { week } = dayAndWeek(now, timeZone);
+  const ignored = new Set(settings.payment.ignoredCards.map(c => c.toLowerCase()));
+  const kinds = new Map<string, { total: number; count: number }>();
+  for (const p of payments) {
+    if (ignored.has(p.card.toLowerCase()) || p.currency !== "USD" || dayAndWeek(p.at, timeZone).week !== week) continue;
+    const k = kinds.get(p.category) ?? { total: 0, count: 0 };
+    k.total += p.amount; k.count++; kinds.set(p.category, k);
+  }
+  return [...kinds].map(([kind, k]) => ({ kind, total: Math.round(k.total * 100) / 100, count: k.count }))
+    .sort((a, b) => b.total - a.total || a.kind.localeCompare(b.kind));
 }
