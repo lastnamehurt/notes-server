@@ -22,3 +22,8 @@ test("Awareness works without enabling push and supports loading and errors", ()
   assert.match(html, /Could not load Awareness:/);
   assert.match(html, /more\.onclick = \(\) => load\(true\)/);
 });
+test("an app left open reloads after a deploy instead of redrawing with old code", () => {
+  const web = readFileSync(new URL("../src/web.ts", import.meta.url), "utf8");
+  assert.match(web, /case "GET \/config": return json\(\{[\s\S]{0,200}version: VERSION/);
+  assert.match(html, /latest\.version !== cfg\.version\) \{ location\.reload\(\)/);
+});

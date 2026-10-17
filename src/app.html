@@ -2812,10 +2812,17 @@ $("#lockbtn").onclick = async () => {
 
 // Coming back to the app (it stays open in the background on a phone): refresh the date and the page.
 let hiddenAt = 0;
-document.addEventListener("visibilitychange", () => {
+document.addEventListener("visibilitychange", async () => {
   if (document.hidden) { hiddenAt = Date.now(); return; }
   drawDate();
-  if (hiddenAt && Date.now() - hiddenAt > 60_000 && !isDirty() && !sheet.open && !$("#tabs").hidden) route();
+  if (!(hiddenAt && Date.now() - hiddenAt > 60_000 && !isDirty() && !sheet.open && !$("#tabs").hidden)) return;
+  // A phone keeps the app open for days. If Daybook was updated meanwhile, load the new version
+  // rather than redrawing with the old code (new features would otherwise appear only after a reload).
+  try {
+    const latest = await api("/config");
+    if (cfg && latest.version && cfg.version && latest.version !== cfg.version) { location.reload(); return; }
+  } catch { /* offline or locked: the normal redraw below handles it */ }
+  route();
 });
 
 drawDate();

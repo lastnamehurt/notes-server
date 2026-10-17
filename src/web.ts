@@ -26,6 +26,7 @@ import { notesFor } from "./storage";
 import { taskDeferrals } from "./awareness-deferrals";
 import { ensureTaskIds } from "./task-id-assign";
 import { awarenessTasks } from "./awareness-tasks";
+import { VERSION } from "./version";
 import { parsePayment, parsePlaces, tasksForPlaces, parkedMessage } from "./signals";
 import { buildIcs, parseIcs } from "./ics";
 import { b64url } from "./web-push";
@@ -365,6 +366,8 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
         return json({ repo: name });
       }
       case "GET /config": return json({
+        // The page compares this with the version it loaded, so an app left open picks up a new deploy.
+        version: VERSION,
         timeZone: env.NOTES_TIMEZONE || "America/Los_Angeles", categories: CATEGORIES, push: pushConfigured(env),
         configured: notesConfigured(env), canSetup: !env.DEPLOY_CONFIGURED, githubConnect: Boolean(githubClientId(env)),
         storage: env.DEPLOY_CONFIGURED ? "github" : (env.NOTES_STORAGE ?? null), appStorage: Boolean(env.NOTES),
