@@ -52,7 +52,7 @@ How to help:
 function serverFor(env: Env): McpServer {
   const owner = cleanName(env.OWNER_NAME);
   const instructions = owner ? `The owner's name is ${owner}. Use it naturally when greeting them or summarizing their day; don't overdo it.\n\n` + INSTRUCTIONS : INSTRUCTIONS;
-  const server = new McpServer({ name: "personal-notes", version: "0.4.0" }, { instructions });
+  const server = new McpServer({ name: "notes", version: "0.4.0" }, { instructions });
   const notes = notesFor(env);
   const result = async (fn: () => Promise<unknown>) => {
     try { return { content: [{ type: "text" as const, text: JSON.stringify(await fn()) }] }; }
