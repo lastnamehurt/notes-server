@@ -18,30 +18,48 @@ Suggestions (big purchase, drink goal, spending targets) also need **Awareness**
 
 ## 2. Build the Shortcut
 
-In the **Shortcuts** app → **Automation** → **+** → **Wallet** ("When I tap a Wallet Card or Pass"). It was called **Transaction** in iOS 17.
+Written for iOS 26. Build the simple version first, check that it works, then add the extras.
 
-- **Cards:** choose the cards you want counted.
-- Leave categories and merchants as *Any*.
-- Choose **Run Immediately** (so it doesn't ask each time), then **Next** → **New Blank Automation**.
+### The trigger
 
-When an action below says *Shortcut Input → Amount* (or *Merchant*, or the card's name), tap the field, choose **Shortcut Input**, then tap the inserted variable and pick that property from its list.
+1. **Shortcuts** app → **Automation** tab → **+**.
+2. Tap **Wallet** ("When I tap a Wallet Card or Pass"). In iOS 17 this was called **Transaction**.
+3. Select **only your payment cards**. Leave boarding passes, store cards and other passes off: they have no amount, and Daybook rejects those taps. The screen title shows how many you picked ("When I tap any of 2 Wallet passes or payment cards").
+4. Leave categories and merchants on *Any*.
+5. Choose **Run Immediately** (so it doesn't ask each time) and tap **Next**.
+6. On the next screen, tap the first tile, **Create New Shortcut**. (Ignore the suggestions like "Add Row to Top or Bottom of Table".)
 
-Then add these actions:
+**Picking a property of Shortcut Input:** where a step says *Shortcut Input → Amount* (or *Merchant*, or *Name*), tap the field, choose **Shortcut Input**, then tap the blue *Shortcut Input* bubble that appears and pick the property from its list.
 
-1. **Text** → type `other`. Rename the variable **Kind**.
-2. **If** *Shortcut Input → Merchant* **contains** `bar` → **Set Variable** *Kind* to `bar`. Add more **Otherwise If** checks for the words your usual spots use (`pub`, `tavern`, `brewing`, `taproom` → `bar`; `coffee`, `cafe` → `coffee`; …). Matching happens on your phone; the merchant's name is not sent.
-3. **Format Date** → *Current Date*, custom format `yyyyMMdd-HHmmss`. Rename it **TapId**.
-4. **Get Contents of URL**
-   - URL: the **Address** from step 1.3
-   - Method: **POST**
-   - Headers: `Authorization` = `Bearer ` (with the space) followed by the **Secret** from step 1.3
-   - Request Body: **JSON**
-     - `kind` (Text): `payment`
-     - `amount` (Text): *Shortcut Input → Amount*
-     - `card` (Text): *Shortcut Input → Name* (the card's name)
-     - `category` (Text): *Kind*
-     - `id` (Text): *TapId*
-5. Optional: **Show Notification** with *Get Dictionary Value* `message` from the result. It reads like "Today $24.50 across 3 · this week $112.00".
+### Simple version: one action
+
+1. **Add Action** → search **Get Contents of URL** → add it.
+2. Tap the blue URL placeholder and paste the **Address** from step 1.3.
+3. Tap the **›** on the action to show its options:
+   - **Method:** **POST**
+   - **Headers:** **Add new header**. Key `Authorization`, value `Bearer ` (with the space) followed by the **Secret** from step 1.3.
+   - **Request Body:** **JSON**. Add two **Text** fields:
+     - `kind`: type `payment`
+     - `amount`: *Shortcut Input → Amount*
+4. Tap **Done**.
+
+Now go to **3. Try it** below. Come back here once a tap shows up in Daybook.
+
+### Full version: card name, bar detection, no double counting
+
+Open the automation again and add these **above** Get Contents of URL (drag to reorder):
+
+1. **Text**: type `other`. Then **Set Variable**, named **Kind**, set to that Text.
+2. **If** *Shortcut Input → Merchant* **contains** `bar` → inside it, **Set Variable** *Kind* to a new **Text** `bar`. Add **Otherwise If** branches for the words your usual spots use: `pub`, `tavern`, `brewing`, `taproom` → `bar`; `coffee`, `cafe` → `coffee`. The matching happens on your phone; the merchant's name is never sent.
+3. **Format Date**: *Current Date*, **Custom** format `yyyyMMdd-HHmmss`. Then **Set Variable** **TapId** to it.
+
+Then add three more **Text** fields to the JSON body of Get Contents of URL:
+
+- `card`: *Shortcut Input → Name* (the card's name, so you can leave a work card out)
+- `category`: the **Kind** variable
+- `id`: the **TapId** variable (so a retried tap is counted once)
+
+Optional, at the end: **Get Dictionary Value** `message` from *Contents of URL* → **Show Notification** with it. It reads like "Today $24.50 across 3 · this week $112.00".
 
 ## 3. Try it
 
@@ -72,7 +90,7 @@ Any kind not listed only counts toward spending.
 | `404 Shortcut sync is not configured` | Make a Shortcut secret first (step 1.3). |
 | `reason: "off"` | Turn on the tap-to-pay signal in Daybook. |
 | `reason: "duplicate"` | The same tap was sent twice; it was counted once. |
-| `Send the amount, like 12.50` | The `amount` field was empty. Pick *Amount* from Shortcut Input. |
+| `Send the amount, like 12.50` | The `amount` field was empty: pick *Amount* from Shortcut Input. Also happens when a non-payment pass (boarding pass, store card) is selected in the trigger. |
 
 ---
 
