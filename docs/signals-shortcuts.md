@@ -18,11 +18,13 @@ Suggestions (big purchase, drink goal, spending targets) also need **Awareness**
 
 ## 2. Build the Shortcut
 
-In the **Shortcuts** app → **Automation** → **+** → **Transaction** (iOS 17 or later).
+In the **Shortcuts** app → **Automation** → **+** → **Wallet** ("When I tap a Wallet Card or Pass"). It was called **Transaction** in iOS 17.
 
 - **Cards:** choose the cards you want counted.
 - Leave categories and merchants as *Any*.
-- Choose **Run Immediately** (so it doesn't ask each time).
+- Choose **Run Immediately** (so it doesn't ask each time), then **Next** → **New Blank Automation**.
+
+When an action below says *Shortcut Input → Amount* (or *Merchant*, or the card's name), tap the field, choose **Shortcut Input**, then tap the inserted variable and pick that property from its list.
 
 Then add these actions:
 
