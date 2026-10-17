@@ -8,8 +8,11 @@ It covers taps with Apple Pay only. Physical-card swipes, online purchases, cash
 
 1. Open Daybook → **Today → Suggestions**, scroll to **Signals: tap to pay and parked**.
 2. Check **Turn on the tap-to-pay signal**. Set any targets you want (all optional) and save.
-3. Open **Set up the Shortcut** and copy the address. It looks like `https://<your-daybook>/app/shortcuts/signal`.
-4. You also need your **Shortcut secret**: Settings → Apple Reminders → *Make my Shortcut secret* (skip if you already made one for Apple Reminders sync; it's the same secret).
+3. Open **Set up the Shortcut** on the same card. It shows the two things your Shortcut needs to talk to Daybook:
+   - **Address**: where the Shortcut sends each tap (ends in `/app/shortcuts/signal`).
+   - **Secret**: a password so only your phone can send taps. If you already set up Apple Reminders sync, it's the same secret and is shown here. Otherwise tap **Make my Shortcut secret**.
+
+   You'll paste both into the Shortcut in step 2.4, so keep this card open or copy them into a note.
 
 Suggestions (big purchase, drink goal, spending targets) also need **Awareness** on and not paused.
 
@@ -27,9 +30,9 @@ Then add these actions:
 2. **If** *Shortcut Input → Merchant* **contains** `bar` → **Set Variable** *Kind* to `bar`. Add more **Otherwise If** checks for the words your usual spots use (`pub`, `tavern`, `brewing`, `taproom` → `bar`; `coffee`, `cafe` → `coffee`; …). Matching happens on your phone; the merchant's name is not sent.
 3. **Format Date** → *Current Date*, custom format `yyyyMMdd-HHmmss`. Rename it **TapId**.
 4. **Get Contents of URL**
-   - URL: the address from step 1.3
+   - URL: the **Address** from step 1.3
    - Method: **POST**
-   - Headers: `Authorization` = `Bearer ` followed by your Shortcut secret
+   - Headers: `Authorization` = `Bearer ` (with the space) followed by the **Secret** from step 1.3
    - Request Body: **JSON**
      - `kind` (Text): `payment`
      - `amount` (Text): *Shortcut Input → Amount*
@@ -64,7 +67,7 @@ Any kind not listed only counts toward spending.
 | Result | Meaning |
 | --- | --- |
 | `401 Unauthorized` | The `Authorization` header doesn't match your Shortcut secret. |
-| `404 Shortcut sync is not configured` | Make a Shortcut secret first (step 1.4). |
+| `404 Shortcut sync is not configured` | Make a Shortcut secret first (step 1.3). |
 | `reason: "off"` | Turn on the tap-to-pay signal in Daybook. |
 | `reason: "duplicate"` | The same tap was sent twice; it was counted once. |
 | `Send the amount, like 12.50` | The `amount` field was empty. Pick *Amount* from Shortcut Input. |
