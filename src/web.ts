@@ -489,8 +489,9 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
         const [secret, settings, mirror] = await Promise.all([shortcutSecret(env), loadSettings(env, true), scheduler(env).syncMirror() as Promise<SyncMirror | undefined>]);
         return json({
           configured: Boolean(secret), fromDeploy: Boolean(secret?.fromDeploy),
-          // The owner's own session may see the secret it made, to paste into the Shortcut.
-          token: secret && !secret.fromDeploy ? secret.token : null,
+          // The signed-in owner may see the secret to paste into the Shortcut, including one set on the
+          // deployment: Cloudflare can't show a saved secret again, so this is the only place to read it.
+          token: secret ? secret.token : null,
           syncUrl: new URL(request.url).origin + "/app/shortcuts/sync",
           lastSyncAt: mirror?.at ?? null, mirrored: mirror?.keys.length ?? 0, summary: mirror?.summary ?? null,
           freshForMs: MIRROR_FRESH_MS, taskAlerts: settings?.taskAlerts ?? "reminders"
