@@ -29,7 +29,7 @@ Written for iOS 26. Build the simple version first, check that it works, then ad
 5. Choose **Run Immediately** (so it doesn't ask each time) and tap **Next**.
 6. On the next screen, tap the first tile, **Create New Shortcut**. (Ignore the suggestions like "Add Row to Top or Bottom of Table".)
 
-**Picking a property of Shortcut Input:** where a step says *Shortcut Input → Amount* (or *Merchant*, or *Name*), tap the field, choose **Shortcut Input**, then tap the blue *Shortcut Input* bubble that appears and pick the property from its list.
+**Picking a property of Shortcut Input:** where a step says *Shortcut Input → Amount* (or *Merchant*, or *Card or Pass*), tap the field, choose **Shortcut Input**, then tap the blue *Shortcut Input* bubble that appears and pick the property from its list.
 
 ### Simple version: one action
 
@@ -55,7 +55,7 @@ Open the automation again and add these **above** Get Contents of URL (drag to r
 
 Then add three more **Text** fields to the JSON body of Get Contents of URL:
 
-- `card`: *Shortcut Input → Name* (the card's name, so you can leave a work card out)
+- `card`: *Shortcut Input → Card or Pass* (the card's name, so you can leave a work card out)
 - `category`: the **Kind** variable
 - `id`: the **TapId** variable (so a retried tap is counted once)
 
