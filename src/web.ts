@@ -157,12 +157,22 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
   // Daybook Signals (#147): a Shortcuts automation reports a moment, e.g. a tap to pay. Same secret as
   // Apple Reminders sync. Only amount, currency, card label and category arrive; never the merchant.
   if (path === "/app/shortcuts/signal" && request.method === "POST") {
-    const denied = await shortcutAuth(request, env);
-    if (denied) return denied;
     const configured = await effectiveEnv(env);
-    if (Number(request.headers.get("Content-Length") || 0) > 10_000) return fail("Request too large", 413);
+    // Shortcuts never shows an error for a rejected request, so every attempt is noted (outcome and the
+    // field names sent, never values) for the Spending page to explain what happened.
+    let fields: string[] = [];
+    const note = (outcome: string, detail: string) => scheduler(configured).noteSignalAttempt({ at: Date.now(), outcome, detail, fields })
+      .catch(e => console.warn("Signal status failed", e instanceof Error ? e.message : "unknown"));
+    const denied = await shortcutAuth(request, env);
+    if (denied) {
+      await note(denied.status === 401 ? "wrong-secret" : "not-set-up",
+        denied.status === 401 ? "The Authorization header didn't match your Shortcut secret." : "No Shortcut secret has been made yet.");
+      return denied;
+    }
+    if (Number(request.headers.get("Content-Length") || 0) > 10_000) { await note("invalid", "The request was too large."); return fail("Request too large", 413); }
     let body: Record<string, unknown>;
-    try { body = await request.json(); } catch { return fail("Send the signal as JSON", 400); }
+    try { body = await request.json(); } catch { await note("invalid", "The request body wasn't JSON. Set Request Body to JSON."); return fail("Send the signal as JSON", 400); }
+    if (body && typeof body === "object" && !Array.isArray(body)) fields = Object.keys(body).slice(0, 20).map(k => k.slice(0, 40));
     const kind = body && typeof body === "object" ? body.kind ?? "payment" : undefined;
     if (kind === "parked") {
       // Stateless: nothing about where you are is stored. The Shortcut shows the message itself.
@@ -174,14 +184,22 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
       const tasks = tasksForPlaces(await notesFor(configured).all(LOG_PREFIX), places, configured.NOTES_TIMEZONE || "America/Los_Angeles");
       return json({ matched: tasks.length, message: parkedMessage(tasks), tasks: tasks.map(t => ({ place: t.place, title: t.title })) });
     }
-    if (kind !== "payment") return fail('Unknown signal kind; send "payment" or "parked"', 400);
+    if (kind !== "payment") { await note("invalid", `"kind" was "${String(kind).slice(0, 20)}"; it should be "payment".`); return fail('Unknown signal kind; send "payment" or "parked"', 400); }
     let payment;
-    try { payment = parsePayment(body, Date.now()); } catch (e) { return fail(e instanceof Error ? e.message : String(e), 400); }
+    try { payment = parsePayment(body, Date.now()); }
+    catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      await note("invalid", /amount/.test(message) ? "No amount arrived. Check the \"amount\" field is set to Shortcut Input → Amount." : message);
+      return fail(message, 400);
+    }
     const result = await scheduler(configured).recordPayment(payment);
     if (result.log && notesConfigured(configured)) {
       await appendLog(notesFor(configured), result.log, { timeZone: configured.NOTES_TIMEZONE })
         .catch(e => console.error("Signal log failed", e instanceof Error ? e.message : "unknown"));
     }
+    if (result.recorded) await note("recorded", "Counted.");
+    else if (result.reason === "off") await note("off", "Arrived, but the tap-to-pay signal is turned off.");
+    else await note("duplicate", "Arrived twice; counted once.");
     const s = result.summary;
     const money = (n: number) => "$" + n.toFixed(2);
     const message = !result.recorded && result.reason === "off" ? "Tap-to-pay signal is off in Daybook settings."
@@ -283,6 +301,7 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
         catch (e) { return fail(e instanceof Error ? e.message : String(e)); }
       }
       case "GET /signals/spend": return json(await scheduler(env).signalSpend());
+      case "GET /signals/today": return json(await scheduler(env).signalToday());
       case "POST /signals/erase": return json(await scheduler(env).signalErase());
       case "POST /awareness/deliver": {
         const body = await request.json<{ id?: string }>();

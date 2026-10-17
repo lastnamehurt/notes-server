@@ -430,6 +430,8 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
 .promised-today .today-date-label{text-transform:uppercase;color:var(--ink-2);font-size:12px;letter-spacing:.07em;font-weight:650}
 .promised-today .today-top-heading{display:flex;justify-content:space-between;align-items:center;margin:8px 0 16px}
 .promised-today .today-top-heading h2{font-size:26px;margin:0}
+.promised-today .today-spend{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;min-height:44px;padding:12px 16px;margin:0 0 16px;border:1px solid var(--rule);border-radius:14px;background:var(--sheet);color:inherit;text-decoration:none}
+.promised-today .today-spend b{font-size:20px}
 .promised-today .today-top-heading a{flex:none;display:inline-flex;align-items:center;min-height:44px;color:var(--mark);font-size:14px;font-weight:600;text-decoration:none}
 .promised-today .today-focus-card{background:var(--sheet);border-radius:20px;padding:16px;border:1px solid var(--rule)}
 .promised-today .today-focus-heading{display:flex;justify-content:space-between;align-items:center;margin:0 0 10px}
@@ -625,7 +627,7 @@ appearance.addEventListener("keydown", e => {
 // Each top-level section and the pages inside it. A page's section decides which tab is highlighted and
 // which switcher (if any) is shown under the tabs. Routes not listed here (note, new, setup…) map below.
 const SECTIONS = {
-  today: [["today", "Today"], ["awareness", "Suggestions"]],
+  today: [["today", "Today"], ["spending", "Spending"], ["awareness", "Suggestions"]],
   reminders: [["reminders", "Tasks"], ["goals", "Goals"]],
   notes: [["notes", "Notes"], ["journal", "Journal"], ["logs", "Logs"]]
 };
@@ -1251,10 +1253,13 @@ views.today = async () => {
     }
     activeTasks.sort((a,b) => (a.due?.date.getTime() ?? Infinity)-(b.due?.date.getTime() ?? Infinity));
     const topTasks = activeTasks.slice(0,4).map(t => h`<li class="today-focus-row"><button type="button" class="today-focus-dot" data-note="${t.note}" data-line="${t.line ?? ""}" data-text="${t.reminder ? t.reminder.text : ""}" data-at="${t.reminder ? t.reminder.at : ""}" aria-label="Mark ${t.due ? t.due.title : t.text} done">○</button><div class="today-focus-content"><a href="#note/${t.note}">${t.due ? t.due.title : t.text}</a>${t.due ? raw(h`<span class="muted today-focus-due">${displayTaskDate(t.due.date)}</span>`) : t.repeat ? raw(h`<span class="muted today-focus-due">${repeatLabel(t.repeat)}</span>`) : ""}</div><span class="today-focus-priority">${t.due && t.due.date < Date.now() ? "Overdue" : t.priority === "do" ? "Do now" : "Due today"}</span></li>`).join("");
+    let spend = null;
+    try { spend = await api("/signals/today"); } catch { spend = null; }
     const dateLabel = new Intl.DateTimeFormat(undefined,{timeZone:cfg.timeZone,weekday:"long",month:"long",day:"numeric"}).format(new Date());
     html = h`<section class="today-dashboard promised-today">
       <div class="today-date-label">${dateLabel}</div>
       <div class="today-top-heading"><h2>${greeting()}</h2><a class="today-suggestions" href="#awareness">Suggestions</a></div>
+      ${spend && spend.enabled ? raw(h`<a class="today-spend" href="#spending"><span>Spent today</span><b>$${spend.summary.today.toFixed(2)}</b><span class="muted">${spend.summary.todayCount} ${spend.summary.todayCount === 1 ? "tap" : "taps"} · week $${spend.summary.weekTotal.toFixed(2)}</span></a>`) : ""}
       <div class="today-focus-card">
         <div class="today-focus-heading"><h3>Focus</h3><span class="muted">${activeTasks.length} priorities</span></div>
         ${activeTasks.length ? raw('<ul class="today-focus-list">'+topTasks+'</ul>') : raw('<p class="muted">Nothing urgent right now.</p>')}
@@ -2616,6 +2621,44 @@ async function renderAwareness() {
   more.onclick = () => load(true);
   await load();
   main.append(await renderAwarenessPreferences());
+  const moved = document.createElement("p"); moved.className = "awareness-muted";
+  moved.innerHTML = 'Spending totals and tap-to-pay settings are on <a href="#spending">Spending</a>.';
+  main.append(moved);
+}
+
+/* ---------- Spending (#147): taps from the Wallet Shortcut ---------- */
+const SIGNAL_HELP = {
+  "wrong-secret": "Fix: in the Shortcut's Get Contents of URL, the Authorization header must be Bearer, a space, then the secret below.",
+  "not-set-up": "Fix: open Set up the Shortcut below and make your Shortcut secret.",
+  "invalid": "Fix: check the Shortcut's Request Body is JSON with kind = payment and amount = Shortcut Input → Amount.",
+  "off": "Fix: check Turn on the tap-to-pay signal below and save."
+};
+async function renderSpending() {
+  const data = await api("/signals/today");
+  const money = n => "$" + Number(n).toFixed(2);
+  const fmtTime = at => new Intl.DateTimeFormat(undefined, { timeZone: data.timeZone, hour: "numeric", minute: "2-digit" }).format(new Date(at));
+  const fmtWhen = at => new Intl.DateTimeFormat(undefined, { timeZone: data.timeZone, weekday: "short", hour: "numeric", minute: "2-digit" }).format(new Date(at));
+  const s = data.summary;
+  const last = data.last;
+  const lastLine = !last ? h`<p class="muted">No tap has reached Daybook yet. After your next Apple Pay tap, this shows whether it arrived.</p>`
+    : last.outcome === "recorded" || last.outcome === "duplicate"
+      ? h`<p class="apple-state ok"><b>Last tap arrived ${fmtWhen(last.at)}.</b> ${last.detail}</p>`
+      : h`<p class="apple-state warn"><b>Last attempt ${fmtWhen(last.at)} didn't count.</b> ${last.detail}</p>
+         <p class="muted">${SIGNAL_HELP[last.outcome] || ""}${last.fields && last.fields.length ? " Fields received: " + last.fields.join(", ") + "." : ""}</p>`;
+  const taps = data.taps.length
+    ? '<ul class="today-focus-list">' + data.taps.map(t => h`<li class="today-focus-row"><div class="today-focus-content"><b>${money(t.amount)}</b> <span class="muted">${t.category === "other" ? "" : t.category.replace(/-/g, " ") + " · "}${t.card}${t.counted ? "" : " · left out"}</span></div><span class="today-focus-priority">${fmtTime(t.at)}</span></li>`).join("") + "</ul>"
+    : h`<p class="muted">No taps today yet.</p>`;
+  main.innerHTML = h`<section class="today-dashboard promised-today">
+      <div class="today-top-heading"><h2>Spending</h2></div>
+      ${data.enabled ? "" : raw(h`<p class="apple-state warn"><b>Tap-to-pay signal is off.</b> Turn it on in the settings below.</p>`)}
+      <div class="today-focus-card">
+        <div class="today-focus-heading"><h3>${money(s.today)} today</h3><span class="muted">${s.todayCount} ${s.todayCount === 1 ? "tap" : "taps"}</span></div>
+        <p class="muted" style="margin:0 0 12px">This week ${money(s.weekTotal)} · ${s.weekCount} ${s.weekCount === 1 ? "tap" : "taps"} · bar tabs ${s.drinksThisWeek}</p>
+        ${raw(taps)}
+      </div>
+      <div class="today-focus-card"><div class="today-focus-heading"><h3>Shortcut status</h3></div>${raw(lastLine)}</div>
+      <p class="muted">Counts Apple Pay taps only: not card swipes, online purchases, cash or scheduled bills.</p>
+    </section>`;
   try { main.append(await renderSignalSettings()); } catch (error) { console.warn("Signal settings unavailable", error); }
 }
 
@@ -2637,6 +2680,7 @@ async function route() {
   try {
     if (!cfg.configured) { $("#tabs").hidden = true; $("#subtabs").hidden = true; $("#composer").hidden = true; await views.setup(); }
     else if (view === "awareness") await renderAwareness();
+    else if (view === "spending") await renderSpending();
     else if (view === "note") await editor(arg);
     else if (view === "new") await editor(null, arg || "inbox");
     else await (views[view] || views.today)();
