@@ -523,6 +523,9 @@ button.today-focus-dot:disabled{color:var(--mark)}
 .awareness-card details { margin: 12px 0; }
 .awareness-card summary { cursor: pointer; min-height: 44px; padding: 9px 0; color: var(--mark); }
 .awareness-muted { color: var(--ink-2); }
+.sc-row { margin: 14px 0; }
+.sc-row h4 { margin: 0 0 6px; font-size: 15px; }
+.sc-row code { overflow-wrap: anywhere; }
 </style>
 </head>
 <body>
@@ -1258,7 +1261,7 @@ views.today = async () => {
     const dateLabel = new Intl.DateTimeFormat(undefined,{timeZone:cfg.timeZone,weekday:"long",month:"long",day:"numeric"}).format(new Date());
     html = h`<section class="today-dashboard promised-today">
       <div class="today-date-label">${dateLabel}</div>
-      <div class="today-top-heading"><h2>${greeting()}</h2><a class="today-suggestions" href="#awareness">Suggestions</a></div>
+      <div class="today-top-heading"><h2>${greeting()}</h2></div>
       ${spend && spend.enabled ? raw(h`<a class="today-spend" href="#spending"><span>Spent today</span><b>$${spend.summary.today.toFixed(2)}</b><span class="muted">${spend.summary.todayCount} ${spend.summary.todayCount === 1 ? "tap" : "taps"} · week $${spend.summary.weekTotal.toFixed(2)}</span></a>`) : ""}
       <div class="today-focus-card">
         <div class="today-focus-heading"><h3>Focus</h3><span class="muted">${activeTasks.length} priorities</span></div>
@@ -1854,7 +1857,63 @@ const ago = ms => { const m = Math.round((Date.now() - ms) / 60000); return m < 
 const SHORTCUT_GUIDE = "https://github.com/lastnamehurt/notes-server/blob/main/docs/apple-reminders-shortcuts.md";
 const RUN_SHORTCUT = "shortcuts://run-shortcut?name=" + encodeURIComponent("Sync Daybook");
 
-/** Settings → Apple Reminders: sync status, the Shortcut's address and secret, setup steps and who alerts. */
+const TAP_GUIDE = "https://github.com/lastnamehurt/notes-server/blob/main/docs/signals-shortcuts.md";
+const TAP_SCRIPT = "https://github.com/lastnamehurt/notes-server/blob/main/scripts/make-tap-shortcut.sh";
+
+/** Links inside Settings that scroll to another section (the router would otherwise jump to the top). */
+function wireJumps(root) {
+  root.querySelectorAll("[data-jump]").forEach(a => a.onclick = e => {
+    e.preventDefault(); document.getElementById(a.dataset.jump)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
+/**
+ * Settings → Shortcuts: the one place for the iPhone Shortcuts' addresses and their shared secret.
+ * The secret stays hidden until Show or Copy asks the server for it.
+ */
+async function wireShortcuts() {
+  const box = $("#shortcuts-body");
+  if (!box) return;
+  let st;
+  try { st = await api("/shortcuts"); } catch (e) { if (box.isConnected) box.innerHTML = h`<p class="err">${e.message}</p>`; return; }
+  if (!box.isConnected) return;
+  let secret = null;
+  const reveal = async () => secret ??= (await api("/shortcuts/secret")).token;
+  const secretBlock = !st.hasSecret
+    ? h`<p class="muted">Make a secret first. Every Daybook Shortcut uses the same one.</p><button class="btn" type="button" id="sc-new">Make my Shortcut secret</button>`
+    : h`<div class="copyrow"><code id="sc-secret" aria-label="Shortcut secret, hidden">••••••••••</code>
+          <button class="btn quiet" type="button" id="sc-show">Show</button><button class="btn quiet" type="button" id="sc-copy">Copy</button></div>
+        ${raw(st.fromDeploy
+          ? '<p class="muted">Set on your server (SHORTCUTS_TOKEN in Cloudflare). Change it there; Daybook can\'t replace it.</p>'
+          : '<details class="more"><summary>Make a new secret</summary><p class="muted">The old one stops working at once, so every Daybook Shortcut needs the new one pasted in.</p><button class="btn quiet" type="button" id="sc-new">Make a new secret</button></details>')}`;
+  const row = (id, title, url, extra) => h`<div class="sc-row"><h4>${title}</h4>
+      <div class="copyrow"><code>${url}</code><button class="btn quiet" type="button" id="${id}">Copy</button></div>${raw(extra)}</div>`;
+  box.innerHTML = h`<div class="sc-row"><h4>Secret</h4>${raw(secretBlock)}</div>`
+    + row("sc-sync-copy", "Reminders sync", st.syncUrl,
+        h`<p class="muted">For the <b>Sync Daybook</b> Shortcut. <a href="#apple-reminders" data-jump="apple-reminders">Setup steps</a> · <a href="${SHORTCUT_GUIDE}" target="_blank" rel="noopener">Guide ↗</a></p>`)
+    + row("sc-signal-copy", "Tap to pay", st.signalUrl,
+        h`<p class="muted">For the <b>Daybook Tap</b> Shortcut, which counts your Apple Pay taps. On a Mac, <a href="${TAP_SCRIPT}" target="_blank" rel="noopener">make-tap-shortcut.sh</a> builds it for you. <a href="${TAP_GUIDE}" target="_blank" rel="noopener">Guide ↗</a></p>
+        <p class="muted">The optional errand reminder when you park uses this same address.</p>`)
+    + h`<p class="muted">Spending targets, cards to leave out and kinds of place live on <a href="#spending">Today → Spending</a>.</p>`;
+  const $b = sel => box.querySelector(sel);
+  $b("#sc-sync-copy").onclick = e => copy(st.syncUrl, e.target);
+  $b("#sc-signal-copy").onclick = e => copy(st.signalUrl, e.target);
+  if ($b("#sc-show")) $b("#sc-show").onclick = async e => {
+    const code = $b("#sc-secret");
+    if (e.target.textContent === "Hide") { code.textContent = "••••••••••"; code.setAttribute("aria-label", "Shortcut secret, hidden"); e.target.textContent = "Show"; return; }
+    try { code.textContent = await reveal(); code.removeAttribute("aria-label"); e.target.textContent = "Hide"; } catch (err) { handle(err); }
+  };
+  if ($b("#sc-copy")) $b("#sc-copy").onclick = async e => { try { copy(await reveal(), e.target); } catch (err) { handle(err); } };
+  if ($b("#sc-new")) $b("#sc-new").onclick = async e => {
+    if (st.hasSecret && !confirm("Make a new secret? Every Daybook Shortcut stops working until you paste the new one in.")) return;
+    e.target.disabled = true;
+    try { await api("/apple-sync/token", { method: "POST", body: {} }); toast("Secret ready. Tap Show or Copy to paste it into your Shortcuts."); await wireShortcuts(); }
+    catch (err) { handle(err); e.target.disabled = false; }
+  };
+  wireJumps(box);
+}
+
+/** Settings → Apple Reminders: sync status, setup steps and who alerts. The address and secret live in Shortcuts. */
 async function wireAppleReminders() {
   const box = $("#apple-status");
   if (!box) return;
@@ -1870,18 +1929,9 @@ async function wireAppleReminders() {
     : fresh
       ? h`<p class="apple-state ok"><b>Synced ${ago(st.lastSyncAt)}</b> · ${st.mirrored} ${st.mirrored === 1 ? "task" : "tasks"} in Reminders</p>`
       : h`<p class="apple-state warn"><b>Last synced ${ago(st.lastSyncAt)}.</b> Daybook is sending its own notifications until the Shortcut runs again.</p>`;
-  const secretRow = st.fromDeploy && st.token
-    ? h`<div class="copyrow"><code id="apple-token">${st.token}</code><button class="btn quiet" type="button" id="apple-token-copy">Copy</button></div>
-       <p class="muted">Set on this copy's deployment (SHORTCUTS_TOKEN in Cloudflare); change it there.</p>`
-    : st.token
-      ? h`<div class="copyrow"><code id="apple-token">${st.token}</code><button class="btn quiet" type="button" id="apple-token-copy">Copy</button></div>
-         <details class="more"><summary>Make a new secret</summary><p class="muted">The old one stops working, so the Shortcut needs the new one pasted in.</p><button class="btn quiet" type="button" id="apple-token-new">Make a new secret</button></details>`
-      : h`<button class="btn" type="button" id="apple-token-new">Make my Shortcut secret</button>`;
   const steps = h`<ol class="apple-steps">
       <li>In <b>Reminders</b>, make a list named exactly <b>Daybook</b>.</li>
-      <li>Copy the sync address and secret:
-        <div class="copyrow"><code>${st.syncUrl}</code><button class="btn quiet" type="button" id="apple-url-copy">Copy</button></div>
-        ${raw(secretRow)}</li>
+      <li>Copy the <b>Reminders sync</b> address and the secret from <a href="#shortcuts" data-jump="shortcuts">Shortcuts</a> above.</li>
       <li>In <b>Shortcuts</b>, build <b>Sync Daybook</b> using those two values. <a href="${SHORTCUT_GUIDE}" target="_blank" rel="noopener">Step-by-step guide ↗</a></li>
       <li>In Shortcuts → <b>Automation</b>, run it when the Reminders app is closed, and at a few times a day (say 7am, noon, 6pm), set to <b>Run Immediately</b>.</li>
     </ol>`;
@@ -1893,14 +1943,7 @@ async function wireAppleReminders() {
         <label><input type="radio" name="task-alerts" value="both" ${st.taskAlerts === "both" ? "checked" : ""}> <span><b>Reminders and Daybook notifications</b></span></label>
         <p class="muted">If the Shortcut hasn't synced in a day and a half, Daybook sends its own notifications again so nothing goes quiet. Tasks without a date or priority stay in Daybook only.</p>
       </fieldset>`;
-  $b("#apple-url-copy").onclick = e => copy(st.syncUrl, e.target);
-  if ($b("#apple-token-copy")) $b("#apple-token-copy").onclick = e => copy(st.token, e.target);
-  if ($b("#apple-token-new")) $b("#apple-token-new").onclick = async e => {
-    if (st.token && !confirm("Make a new secret? The Shortcut stops syncing until you paste the new one in.")) return;
-    e.target.disabled = true;
-    try { await api("/apple-sync/token", { method: "POST", body: {} }); toast("Secret ready. Copy it into the Shortcut."); await wireAppleReminders(); }
-    catch (err) { handle(err); e.target.disabled = false; }
-  };
+  wireJumps(box);
   box.querySelectorAll('input[name="task-alerts"]').forEach(input => input.onchange = async () => {
     try { await api("/apple-sync/alerts", { method: "POST", body: { taskAlerts: input.value } }); toast(input.value === "reminders" ? "Reminders will alert for synced tasks" : "You'll get both alerts"); }
     catch (err) { handle(err); }
@@ -2073,6 +2116,11 @@ views.setup = async () => {
       <p class="muted" id="assistants-summary">Checking which assistants are connected…</p>
       <a class="btn quiet" href="#assistants">Connect or manage assistants →</a></section>`)}
 
+    ${raw(first ? "" : `<section class="step" id="shortcuts"><h3>Shortcuts</h3>
+      <p class="muted">The iPhone Shortcuts that talk to Daybook, like Reminders sync and tap to pay. They share one secret, a password so only your phone can send to Daybook.</p>
+      <div id="shortcuts-body" aria-live="polite"><p class="muted">Loading…</p></div>
+      </section>`)}
+
     ${raw(first ? "" : `<section class="step" id="apple-reminders"><h3>Apple Reminders</h3>
       <p class="muted">Your dated and prioritized tasks appear in a <b>Daybook</b> list in Reminders. Check them off on your phone, Watch or with Siri, and Daybook follows. Reminders handles the alerts, so they stay on your lock screen until you deal with them.</p>
       <div id="apple-status" aria-live="polite"><p class="muted">Checking…</p></div>
@@ -2193,7 +2241,13 @@ views.setup = async () => {
     $("#tok").addEventListener("paste", () => setTimeout(check, 50));
     if (prev.hasToken) check();
   }
-  if (!first) { fillAssistantRow(); wireCalendar(); wireAppleReminders(); }
+  if (!first) {
+    fillAssistantRow(); wireCalendar(); wireAppleReminders(); wireShortcuts();
+    // Settings is one list, so its section numbers only make sense during first-time setup.
+    main.querySelectorAll(".setup h3 .n").forEach(n => n.remove());
+    const target = decodeURIComponent(location.hash.slice(1)).split("/")[1];
+    if (target) setTimeout(() => document.getElementById(target)?.scrollIntoView({ block: "start" }), 50);
+  }
   if (!first) loadUpdate().then(u => {
     const box = $("#update-status"); if (!box) return;
     box.innerHTML = u.available
@@ -2505,42 +2559,8 @@ async function renderSignalSettings() {
       toast("Tap-to-pay settings saved");
     } catch (error) { toast(error.message); } finally { save.disabled = false; }
   };
-  const setup = document.createElement("details");
-  const setupSummary = document.createElement("summary"); setupSummary.textContent = "Set up the Shortcut";
-  const steps = document.createElement("p");
-  steps.textContent = "Your Shortcut needs two things to talk to Daybook: where to send each tap, and a secret so only your phone can. You'll paste both into the Shortcut's \u201cGet Contents of URL\u201d step.";
-  const copyRow = (label, value) => {
-    const wrap = document.createElement("div");
-    const name = document.createElement("p"); name.className = "muted"; name.style.margin = "10px 0 4px"; name.textContent = label;
-    const code = document.createElement("code"); code.textContent = value;
-    const button = document.createElement("button"); button.type = "button"; button.className = "btn quiet"; button.textContent = "Copy";
-    button.onclick = e => copy(value, e.target);
-    const row = document.createElement("div"); row.className = "copyrow"; row.append(code, button);
-    wrap.append(name, row); return wrap;
-  };
-  const secretBox = document.createElement("div");
-  const showSecret = async () => {
-    let st;
-    try { st = await api("/apple-sync"); } catch (error) { secretBox.textContent = error.message; return; }
-    secretBox.replaceChildren();
-    if (st.token) {
-      secretBox.append(copyRow("2. Secret (the same one Apple Reminders sync uses)", st.token));
-    } else {
-      const make = document.createElement("button"); make.type = "button"; make.className = "btn"; make.textContent = "Make my Shortcut secret";
-      make.onclick = async () => {
-        make.disabled = true;
-        try { await api("/apple-sync/token", { method: "POST", body: {} }); await showSecret(); }
-        catch (error) { toast(error.message); make.disabled = false; }
-      };
-      const label = document.createElement("p"); label.className = "muted"; label.style.margin = "10px 0 4px"; label.textContent = "2. Secret";
-      secretBox.append(label, make);
-    }
-  };
-  setup.addEventListener("toggle", () => { if (setup.open && !secretBox.childNodes.length) showSecret(); });
-  const guide = document.createElement("a"); guide.href = "https://github.com/lastnamehurt/notes-server/blob/main/docs/signals-shortcuts.md";
-  guide.target = "_blank"; guide.rel = "noopener"; guide.textContent = "Step-by-step guide";
-  guide.style.display = "inline-block"; guide.style.marginTop = "12px";
-  setup.append(setupSummary, steps, copyRow("1. Address", location.origin + "/app/shortcuts/signal"), secretBox, guide);
+  const setup = document.createElement("p"); setup.className = "muted";
+  setup.innerHTML = 'Setting up the Shortcut? Its address and secret are in <a href="#settings/shortcuts">Settings → Shortcuts</a>.';
   const erase = document.createElement("button"); erase.type = "button"; erase.className = "btn quiet"; erase.textContent = "Erase stored taps";
   erase.onclick = async () => {
     if (!confirm("Erase every stored tap? Totals start again from zero.")) return;
@@ -2628,8 +2648,8 @@ async function renderAwareness() {
 
 /* ---------- Spending (#147): taps from the Wallet Shortcut ---------- */
 const SIGNAL_HELP = {
-  "wrong-secret": "Fix: in the Shortcut's Get Contents of URL, the Authorization header must be Bearer, a space, then the secret below.",
-  "not-set-up": "Fix: open Set up the Shortcut below and make your Shortcut secret.",
+  "wrong-secret": "Fix: in the Shortcut's Get Contents of URL, the Authorization header must be Bearer, a space, then the secret from Settings → Shortcuts.",
+  "not-set-up": "Fix: make your Shortcut secret in Settings → Shortcuts.",
   "invalid": "Fix: check the Shortcut's Request Body is JSON with kind = payment and amount = Shortcut Input → Amount.",
   "off": "Fix: check Turn on the tap-to-pay signal below and save."
 };

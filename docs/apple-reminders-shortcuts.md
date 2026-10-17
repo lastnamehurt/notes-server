@@ -78,7 +78,7 @@ You can also add **Sync Daybook** to your Home Screen, or tap **Sync now** in Da
 
 ## Who sends the alert
 
-Once a task is in the Daybook list, Apple Reminders alerts you for it and Daybook skips its own notification, so you don't get two. Daybook counts a task as "in Reminders" only after the Shortcut has reported it back, so a reminder is never silenced before it exists on your phone. If the Shortcut hasn't synced for 36 hours, Daybook sends its own notifications again for everything. To get both alerts anyway, choose **Reminders and Daybook notifications** in Settings → Apple Reminders.
+Once a task is in the Daybook list, Apple Reminders alerts you for it and Daybook skips its own notification, so you don't get two. Daybook counts a task as "in Reminders" only after the Shortcut has reported it back, so a reminder is never silenced before it exists on your phone. If the Shortcut hasn't synced for 36 hours, Daybook sends its own notifications again for everything. To get both alerts anyway, choose **Reminders and Daybook notifications** in Settings → Apple Reminders. The Shortcut's address and secret are in Settings → Shortcuts.
 
 ## How changes are resolved
 

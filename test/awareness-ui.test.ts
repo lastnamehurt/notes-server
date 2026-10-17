@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 const html = readFileSync(new URL("../src/app.html", import.meta.url), "utf8");
 test("Awareness is reachable through a mobile-friendly navigation route", () => {
-  // Reached from Today's "Suggestions" link and the Today section's page switcher.
-  assert.match(html, /<a class="today-suggestions" href="#awareness">Suggestions<\/a>/);
+  // Reached from the Today section's page switcher (one link only: no duplicate on the greeting card).
+  assert.doesNotMatch(html, /class="today-suggestions"/);
   assert.match(html, /\["awareness", "Suggestions"\]/);
   assert.match(html, /view === "awareness"\) await renderAwareness\(\)/);
   assert.match(html, /\.awareness-actions button[^}]*min-height: 44px/);

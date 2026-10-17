@@ -18,7 +18,8 @@ const listen = async server => {
   await once(server, 'listening');
   return server.address().port;
 };
-export async function startAwarenessWorker() {
+/** `deployToken: false` leaves SHORTCUTS_TOKEN unset, so the Shortcut secret is made in Settings. */
+export async function startAwarenessWorker({ deployToken = true } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'daybook-awareness-'));
   const pushes = [];
   let providerFails = false, child, log = '';
@@ -44,7 +45,7 @@ export async function startAwarenessWorker() {
       { name: 'NOTES', class_name: 'NotesStore' }
     ] },
     migrations: [{ tag: 'test-only', new_sqlite_classes: ['ReminderScheduler', 'NotesStore'] }],
-    vars: { PASSWORD: password, SHORTCUTS_TOKEN: shortcutToken, ALLOW_CLIENT_REGISTRATION: 'true',
+    vars: { PASSWORD: password, ...(deployToken ? { SHORTCUTS_TOKEN: shortcutToken } : {}), ALLOW_CLIENT_REGISTRATION: 'true',
       NTFY_SERVER: `http://127.0.0.1:${pushPort}`, PUBLIC_URL: base }
   }));
   async function stop() {

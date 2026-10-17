@@ -507,14 +507,25 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
       case "GET /apple-sync": {
         const [secret, settings, mirror] = await Promise.all([shortcutSecret(env), loadSettings(env, true), scheduler(env).syncMirror() as Promise<SyncMirror | undefined>]);
         return json({
-          configured: Boolean(secret), fromDeploy: Boolean(secret?.fromDeploy),
-          // The signed-in owner may see the secret to paste into the Shortcut, including one set on the
-          // deployment: Cloudflare can't show a saved secret again, so this is the only place to read it.
-          token: secret ? secret.token : null,
+          // The secret itself is only sent by GET /shortcuts/secret, when the owner taps Show or Copy.
+          configured: Boolean(secret), fromDeploy: Boolean(secret?.fromDeploy), hasToken: Boolean(secret),
           syncUrl: new URL(request.url).origin + "/app/shortcuts/sync",
           lastSyncAt: mirror?.at ?? null, mirrored: mirror?.keys.length ?? 0, summary: mirror?.summary ?? null,
           freshForMs: MIRROR_FRESH_MS, taskAlerts: settings?.taskAlerts ?? "reminders"
         });
+      }
+      // Settings → Shortcuts: every Daybook Shortcut shares one secret. Addresses and whether a secret
+      // exists come here; the secret only from /shortcuts/secret, so it never sits in page text unasked.
+      case "GET /shortcuts": {
+        const secret = await shortcutSecret(env);
+        const origin = new URL(request.url).origin;
+        return json({ hasSecret: Boolean(secret), fromDeploy: Boolean(secret?.fromDeploy),
+          syncUrl: origin + "/app/shortcuts/sync", signalUrl: origin + "/app/shortcuts/signal" });
+      }
+      case "GET /shortcuts/secret": {
+        // Shown to the signed-in owner, including a deployment secret: Cloudflare can't show it again.
+        const secret = await shortcutSecret(env);
+        return secret ? json({ token: secret.token, fromDeploy: secret.fromDeploy }) : fail("No Shortcut secret yet", 404);
       }
       case "POST /apple-sync/token": {
         if (env.SHORTCUTS_TOKEN) return fail("This copy's Shortcut secret is set on the deployment (SHORTCUTS_TOKEN); change it in Cloudflare.", 409);

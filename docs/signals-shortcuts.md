@@ -6,19 +6,19 @@ It covers taps with Apple Pay only. Physical-card swipes, online purchases, cash
 
 ## 1. Turn it on in Daybook
 
-1. Open Daybook → **Today → Suggestions**, scroll to **Signals: tap to pay and parked**.
+1. Open Daybook → **Today → Spending**, scroll to **Signals: tap to pay and parked**.
 2. Check **Turn on the tap-to-pay signal**. Set any targets you want (all optional) and save.
-3. Open **Set up the Shortcut** on the same card. It shows the two things your Shortcut needs to talk to Daybook:
-   - **Address**: where the Shortcut sends each tap (ends in `/app/shortcuts/signal`).
-   - **Secret**: a password so only your phone can send taps. If you already set up Apple Reminders sync, it's the same secret and is shown here. Otherwise tap **Make my Shortcut secret**.
-
-   You'll paste both into the Shortcut in step 2.4, so keep this card open or copy them into a note.
+3. Open **Settings → Shortcuts**. It has the two things your Shortcut needs to talk to Daybook:
+   - **Address**: the **Tap to pay** address (ends in `/app/shortcuts/signal`).
+   - **Secret**: a password so only your phone can send taps. Every Daybook Shortcut shares it, so if you set up Apple Reminders sync it's the same one. It's hidden until you tap **Show** or **Copy**; if there isn't one yet, tap **Make my Shortcut secret**.
 
 Suggestions (big purchase, drink goal, spending targets) also need **Awareness** on and not paused.
 
 ## 2. Build the Shortcut
 
-Written for iOS 26. Build the simple version first, check that it works, then add the extras.
+**Faster, with a Mac:** run `bash scripts/make-tap-shortcut.sh` (or download it from this repo first). It asks for the Address and Secret, builds the full version below (bar detection included), and signs it. Open the file it makes to add **Daybook Tap** to Shortcuts; it syncs to your iPhone. Then on the iPhone make only the trigger: **Automation → + → Wallet →** your payment cards **→ Run Immediately → Next →** pick **Daybook Tap**. Your secret stays in the file on your Mac and is never uploaded.
+
+**By hand on the iPhone:** written for iOS 26. Build the simple version first, check that it works, then add the extras.
 
 ### The trigger
 
@@ -63,7 +63,14 @@ Optional, at the end: **Get Dictionary Value** `message` from *Contents of URL* 
 
 ## 3. Try it
 
-Tap Apple Pay anywhere. In Daybook, the **Signals: tap to pay and parked** card shows today's total. A tap whose kind is mapped to `drink` adds a `#drink` line to today's log.
+Only in-person payments count: tapping your iPhone or Watch at a register. Apple Pay inside apps and on websites doesn't run the automation.
+
+If you used the Mac script, first check the imported **Daybook Tap** in Shortcuts:
+
+- The **Match** action's input reads **Merchant** (not the whole *Shortcut Input*).
+- **Get Contents of URL** is **POST**, has an `Authorization` header starting `Bearer `, and a JSON body with `kind`, `amount`, `card` and `category`.
+
+Then tap Apple Pay in a store and open **Today → Spending**: today's total updates, and **Shortcut status** says whether the tap arrived and, if not, what to fix. A tap whose kind is mapped to `drink` adds a `#drink` line to today's log.
 
 ## What each kind of place does
 
@@ -87,7 +94,7 @@ Any kind not listed only counts toward spending.
 | Result | Meaning |
 | --- | --- |
 | `401 Unauthorized` | The `Authorization` header doesn't match your Shortcut secret. |
-| `404 Shortcut sync is not configured` | Make a Shortcut secret first (step 1.3). |
+| `404 Shortcut sync is not configured` | Make a Shortcut secret first: Settings → Shortcuts. |
 | `reason: "off"` | Turn on the tap-to-pay signal in Daybook. |
 | `reason: "duplicate"` | The same tap was sent twice; it was counted once. |
 | `Send the amount, like 12.50` | The `amount` field was empty: pick *Amount* from Shortcut Input. Also happens when a non-payment pass (boarding pass, store card) is selected in the trigger. |
@@ -109,7 +116,7 @@ The tag can sit anywhere in the task and works with dates and priorities. Use on
 
 ## 1. Turn it on
 
-Daybook → **Today → Suggestions** → **Signals: tap to pay and parked** → check **Turn on the parked signal** and save. It uses the same address and Shortcut secret as tap to pay.
+Daybook → **Today → Spending** → **Signals: tap to pay and parked** → check **Turn on the parked signal** and save. It uses the same address and secret as tap to pay (Settings → Shortcuts).
 
 ## 2. Build the Shortcut
 
