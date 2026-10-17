@@ -1865,8 +1865,9 @@ async function wireAppleReminders() {
     : fresh
       ? h`<p class="apple-state ok"><b>Synced ${ago(st.lastSyncAt)}</b> · ${st.mirrored} ${st.mirrored === 1 ? "task" : "tasks"} in Reminders</p>`
       : h`<p class="apple-state warn"><b>Last synced ${ago(st.lastSyncAt)}.</b> Daybook is sending its own notifications until the Shortcut runs again.</p>`;
-  const secretRow = st.fromDeploy
-    ? h`<p class="muted">The secret is set on this copy's deployment (SHORTCUTS_TOKEN). Use that value.</p>`
+  const secretRow = st.fromDeploy && st.token
+    ? h`<div class="copyrow"><code id="apple-token">${st.token}</code><button class="btn quiet" type="button" id="apple-token-copy">Copy</button></div>
+       <p class="muted">Set on this copy's deployment (SHORTCUTS_TOKEN in Cloudflare); change it there.</p>`
     : st.token
       ? h`<div class="copyrow"><code id="apple-token">${st.token}</code><button class="btn quiet" type="button" id="apple-token-copy">Copy</button></div>
          <details class="more"><summary>Make a new secret</summary><p class="muted">The old one stops working, so the Shortcut needs the new one pasted in.</p><button class="btn quiet" type="button" id="apple-token-new">Make a new secret</button></details>`
@@ -2517,11 +2518,7 @@ async function renderSignalSettings() {
     let st;
     try { st = await api("/apple-sync"); } catch (error) { secretBox.textContent = error.message; return; }
     secretBox.replaceChildren();
-    if (st.fromDeploy) {
-      const note = document.createElement("p"); note.className = "muted";
-      note.textContent = "2. Secret: set on this copy's deployment (SHORTCUTS_TOKEN in Cloudflare). Use that value.";
-      secretBox.append(note);
-    } else if (st.token) {
+    if (st.token) {
       secretBox.append(copyRow("2. Secret (the same one Apple Reminders sync uses)", st.token));
     } else {
       const make = document.createElement("button"); make.type = "button"; make.className = "btn"; make.textContent = "Make my Shortcut secret";
