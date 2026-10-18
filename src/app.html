@@ -1930,6 +1930,7 @@ const RUN_SHORTCUT = "shortcuts://run-shortcut?name=" + encodeURIComponent("Sync
 
 const TAP_GUIDE = "https://github.com/lastnamehurt/notes-server/blob/main/docs/signals-shortcuts.md";
 const TAP_SCRIPT = "https://github.com/lastnamehurt/notes-server/blob/main/scripts/make-tap-shortcut.sh";
+const WIDGET_GUIDE = "https://github.com/lastnamehurt/notes-server/blob/main/docs/lock-screen-widget.md";
 
 /** Links inside Settings that scroll to another section (the router would otherwise jump to the top). */
 function wireJumps(root) {
@@ -1998,10 +1999,13 @@ async function wireShortcuts() {
     + row("sc-signal-copy", "Tap to pay", st.signalUrl,
         h`<p class="muted">Use this address in the <b>Daybook Tap</b> Shortcut. It counts your Apple Pay payments in stores. If you have a Mac, <a href="${TAP_SCRIPT}" target="_blank" rel="noopener">make-tap-shortcut.sh</a> makes this Shortcut for you. <a href="${TAP_GUIDE}" target="_blank" rel="noopener">Guide ↗</a></p>
         <p class="muted">The errand reminder for when you park (optional) uses the same address.</p>`)
+    + row("sc-glance-copy", "Lock screen widget", st.glanceUrl,
+        h`<p class="muted">Shows today's spending, your inbox and the last thing you logged on your lock screen. It uses the free Scriptable app. <a href="${WIDGET_GUIDE}" target="_blank" rel="noopener">Guide ↗</a></p>`)
     + h`<p class="muted">To set spending targets, cards to leave out and kinds of place, go to <a href="#spending">Today → Spending</a>.</p>`;
   const $b = sel => box.querySelector(sel);
   $b("#sc-sync-copy").onclick = e => copy(st.syncUrl, e.target);
   $b("#sc-signal-copy").onclick = e => copy(st.signalUrl, e.target);
+  $b("#sc-glance-copy").onclick = e => copy(st.glanceUrl, e.target);
   if ($b("#sc-show")) $b("#sc-show").onclick = async e => {
     const code = $b("#sc-secret");
     if (e.target.textContent === "Hide") { code.textContent = "••••••••••"; code.setAttribute("aria-label", "Shortcut secret, hidden"); e.target.textContent = "Show"; return; }
