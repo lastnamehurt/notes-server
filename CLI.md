@@ -6,22 +6,24 @@ This repository ships `note` and its alias `notes`. They capture, browse, edit, 
 
 Requires Bash, Git, and Python 3. There are no Python packages to install. Optional `fzf` enables the interactive picker; optional `bat` improves previews.
 
-From this repository's checkout:
+From this repository's checkout, one command does the whole setup:
 
 ```sh
 bash scripts/install-cli.sh
-export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Keep the checkout: installation links the commands to its `bin/` directory. Add the PATH setting to your shell configuration. To use a different location, pass `--prefix /path/to/prefix` (commands go in its `bin/`). Existing commands are preserved unless you explicitly pass `--force`.
+It links `note` and `notes` into `~/.local/bin`, offers to add that folder to `PATH` in your shell profile, and clones your private notes repository (the one chosen in Daybook's Setup) into `~/notes` if it isn't there yet, asking for it as `owner/repo`. It clones with the GitHub CLI if you're signed in (`gh auth login`), otherwise over SSH, then HTTPS. Run it again any time: anything already set up is left alone, and a folder that isn't a Git clone is reported, never overwritten.
 
-Clone your app's private notes repository separately, using your own GitHub user and the repository selected in Setup:
+Skip the question by naming the repository, or skip parts:
 
 ```sh
-git clone git@github.com:YOUR-USER/notes.git "$HOME/notes"
+bash scripts/install-cli.sh --notes-repo you/notes-data   # or a full Git URL
+bash scripts/install-cli.sh --no-notes --no-shell          # just the commands
 ```
 
-The default data location is `~/notes`. For another clone, set `NOTES_DIR` in your shell:
+Keep the checkout: installation links the commands to its `bin/` directory. To use a different location, pass `--prefix /path/to/prefix` (commands go in its `bin/`). Existing commands are preserved unless you explicitly pass `--force`. Without a terminal (in a script or CI) nothing is asked and the remaining steps are printed instead.
+
+The default data location is `~/notes`. For another clone, set `NOTES_DIR` before running the installer and in your shell:
 
 ```sh
 export NOTES_DIR="$HOME/my-notes"
