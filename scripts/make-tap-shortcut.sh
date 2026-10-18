@@ -20,8 +20,11 @@ SECRET=${DAYBOOK_SECRET:-}
 # Kinds of place, checked in this order against the merchant's name ON THE IPHONE; only the label is sent.
 # First match wins, so "TeKu Tavern + Cafe" is a bar. Edit or add lines to suit your usual spots
 # (label|regular expression); add a label to Daybook's "Kinds of place" if it should log drinks or food.
+# The first rule that matches wins. Shops come first so that a "Smoke Lounge" or "Wine & Spirits" shop
+# is not counted as a bar. If a guess is wrong, tap the payment in Daybook (Today → Spending) to fix it.
 RULES=(
-  'bar|(?i)\b(bar|pub|tavern|tap ?room|brewing|brewery|brewhouse|saloon|lounge|cantina|beer|wine|cocktails?|spirits|distillery|cidery)\b'
+  'other|(?i)\b(smoke|vape|tobacco|cigars?|hookah|cannabis|dispensary|weed|420)\b'
+  'bar|(?i)\b(bar|pub|tavern|tap ?room|brewing|brewery|brewhouse|saloon|cantina|cocktails?|distillery|cidery)\b'
   'coffee|(?i)\b(espresso|coffee|cafe|café|caffe|roasters?|roastery|starbucks|peet|dutch bros|tea)\b'
   'food|(?i)\b(taqueria|tacos?|restaurant|kitchen|grill|pizza|pizzeria|burgers?|ramen|pho|sushi|deli|bakery|bagels?|diner|bbq|thai|noodles?|bistro|eatery|chipotle|mcdonald|subway|teriyaki|dumplings?)\b'
   'gas|(?i)\b(shell|chevron|arco|76|exxon|mobil|bp|texaco|valero|fuel|gas station)\b'

@@ -162,3 +162,11 @@ test("seven-day trend ends today, and last week is compared up to the same momen
   // Last week (Mon Oct 5 to now-7d, Thu Oct 8 18:00): $20 at that moment and $30 on Tue; the $99 an hour later doesn't count yet.
   assert.equal(t.lastWeekToDate, 50);
 });
+
+test("a payment's log line follows its kind, so correcting the kind can swap it", async () => {
+  const { paymentLogLine, DEFAULT_SIGNAL_SETTINGS: d } = await import("../src/signals.ts");
+  assert.equal(paymentLogLine("bar", d), "Tap to pay: bar #drink #spend");
+  assert.equal(paymentLogLine("fast-food", d), "Tap to pay: fast food #food #spend");
+  assert.equal(paymentLogLine("other", d), null);
+  assert.equal(paymentLogLine("smoke-shop", d), null);
+});

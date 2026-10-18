@@ -138,13 +138,19 @@ const dollars = (n: number) => "$" + (Number.isInteger(n) ? String(n) : n.toFixe
  * What one new payment means, given the payments already stored (including it). Suggestions are
  * deduplicated by key, so a retry or a later tap never repeats one already made today or this week.
  */
+/** The log line a payment of this kind adds ("drink" and "food" kinds only), or null. */
+export function paymentLogLine(category: string, settings: SignalSettings): string | null {
+  const action = settings.payment.categories[category] ?? "none";
+  const what = "Tap to pay: " + category.replace(/-/g, " ");
+  return action === "drink" ? what + " #drink #spend" : action === "food" ? what + " #food #spend" : null;
+}
+
 export function paymentOutcome(payment: Payment, stored: readonly Payment[], settings: SignalSettings, timeZone: string): PaymentOutcome {
   const summary = spendSummary(stored, settings, payment.at, timeZone);
   const counted = !settings.payment.ignoredCards.some(c => c.toLowerCase() === payment.card.toLowerCase());
   if (!counted) return { counted, log: null, suggestions: [], summary };
   const action = settings.payment.categories[payment.category] ?? "none";
-  const log = action === "drink" ? "Tap to pay: " + payment.category.replace(/-/g, " ") + " #drink #spend"
-    : action === "food" ? "Tap to pay: " + payment.category.replace(/-/g, " ") + " #food #spend" : null;
+  const log = paymentLogLine(payment.category, settings);
   const hide = settings.hideAmounts;
   const createdAt = new Date(payment.at).toISOString();
   const suggestion = (ruleId: SignalSuggestion["ruleId"], key: string, reason: string, days: number): SignalSuggestion => ({

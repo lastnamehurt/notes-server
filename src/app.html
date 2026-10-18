@@ -459,7 +459,11 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
 .promised-today .spend-meter-track span{display:block;height:100%;border-radius:99px;background:var(--mark)}
 .promised-today .spend-meter.over .spend-meter-track span{background:#d9822b}
 .promised-today .spend-chart{position:relative}
-.promised-today .spend-target-line{position:absolute;left:0;right:0;border-top:1.5px dashed color-mix(in srgb,var(--ink-2) 60%,transparent);pointer-events:none}
+.promised-today .tap-row { all: unset; box-sizing: border-box; display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; min-height: 44px; cursor: pointer; }
+.tap-row:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; border-radius: 8px; }
+.kind-choices { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 16px; }
+.kind-choices .btn { min-height: 44px; text-transform: capitalize; }
+.spend-target-line{position:absolute;left:0;right:0;border-top:1.5px dashed color-mix(in srgb,var(--ink-2) 60%,transparent);pointer-events:none}
 .promised-today .spend-day.over .spend-bar{background:color-mix(in srgb,#d9822b 55%,transparent)}
 .promised-today .spend-day.today.over .spend-bar{background:#d9822b}
 .promised-today .today-top-heading a{flex:none;display:inline-flex;align-items:center;min-height:44px;color:var(--mark);font-size:14px;font-weight:600;text-decoration:none}
@@ -2775,6 +2779,24 @@ const SIGNAL_HELP = {
   "invalid": "To fix: open the Shortcut. In Get Contents of URL, set Request Body to JSON. Make sure kind is payment and amount is Shortcut Input → Amount.",
   "off": "To fix: below, select Count my Apple Pay payments. Then tap Save."
 };
+/* The Shortcut guesses a payment's kind from the store's name, and can guess wrong (a smoke shop
+   "Lounge" is not a bar). Tap a payment to correct it; Daybook also fixes the #drink / #food log line. */
+const PAYMENT_KINDS = ["bar", "coffee", "food", "gas", "grocery", "parking", "other"];
+function wireTaps() {
+  main.querySelectorAll("[data-tap]").forEach(button => button.onclick = () => {
+    const kinds = [...new Set([...PAYMENT_KINDS, button.dataset.kind])];
+    openSheet(h`<form method="dialog" novalidate><h2 id="sheet-title">What kind of place was it?</h2>
+        <div class="kind-choices">${raw(kinds.map(k => h`<button type="button" class="btn${k === button.dataset.kind ? "" : " quiet"}" data-pick="${k}">${k.replace(/-/g, " ")}</button>`).join(""))}</div>
+        <div class="sheet-actions"><span class="spacer"></span><button type="button" class="btn quiet" data-close>Cancel</button></div></form>`, el => {
+      el.querySelector("[data-close]").onclick = closeSheet;
+      el.querySelectorAll("[data-pick]").forEach(pick => pick.onclick = async () => {
+        if (pick.dataset.pick === button.dataset.kind) return closeSheet();
+        try { await api("/signals/payment", { method: "PUT", body: { id: button.dataset.tap, category: pick.dataset.pick } }); closeSheet(); toast("Changed to " + pick.dataset.pick.replace(/-/g, " ")); await renderSpending(true); }
+        catch (err) { if (err instanceof Locked) { closeSheet(); return unlockSheet(); } sheetError(err.message); }
+      });
+    });
+  });
+}
 async function renderSpending(refreshOnly = false) {
   const data = await api("/signals/today");
   const money = n => "$" + Number(n).toFixed(2);
@@ -2791,7 +2813,7 @@ async function renderSpending(refreshOnly = false) {
         : h`<p class="apple-state warn"><b>The payment at ${fmtWhen(last.at)} did not count.</b> ${last.detail}</p>
             <p class="muted">${SIGNAL_HELP[last.outcome] || ""}${last.fields && last.fields.length ? " Fields received: " + last.fields.join(", ") + "." : ""}</p>`)}</div>`;
   const taps = data.taps.length
-    ? '<ul class="today-focus-list">' + data.taps.map(t => h`<li class="today-focus-row"><div class="today-focus-content"><b>${money(t.amount)}</b> <span class="muted">${t.category === "other" ? "" : t.category.replace(/-/g, " ") + " · "}${t.card}${t.counted ? "" : " · left out"}</span></div><span class="today-focus-priority">${fmtTime(t.at)}</span></li>`).join("") + "</ul>"
+    ? '<ul class="today-focus-list">' + data.taps.map(t => h`<li class="today-focus-row"><button type="button" class="tap-row" data-tap="${t.id}" data-kind="${t.category}" aria-label="Change the kind of the ${money(t.amount)} payment"><span class="today-focus-content"><b>${money(t.amount)}</b> <span class="muted">${t.category.replace(/-/g, " ")} · ${t.card}${t.counted ? "" : " · left out"}</span></span><span class="today-focus-priority">${fmtTime(t.at)}</span></button></li>`).join("") + "</ul>"
     : h`<p class="muted">No payments today.</p>`;
   const trend = data.trend;
   // Targets are one list, so more kinds can be added later. Each is a bar with a one-word label;
@@ -2831,8 +2853,8 @@ async function renderSpending(refreshOnly = false) {
     </section>`;
   // After a settings change, redraw only the chart part so the form keeps its focus and scroll.
   const current = main.querySelector(".today-dashboard");
-  if (refreshOnly) { if (current) current.outerHTML = top; return; }
-  main.innerHTML = top;
+  if (refreshOnly) { if (current) { current.outerHTML = top; wireTaps(); } return; }
+  main.innerHTML = top; wireTaps();
   try { main.append(await renderSignalSettings(() => main.querySelector("#signals-settings") ? renderSpending(true) : undefined)); }
   catch (error) { console.warn("Signal settings unavailable", error); }
 }
