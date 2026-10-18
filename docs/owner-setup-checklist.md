@@ -36,11 +36,10 @@ Briefings shipped in #62 and are off by default.
 
 You can also ask Claude: "turn on my morning briefing at 7:30".
 
-## 4. Backfill your journal and refresh Claude (5 minutes)
+## 4. Refresh Claude (2 minutes)
 
-Since #59, new log entries also appear in your daily journal notes, but older days don't until you backfill them.
+Each day's log and writing now show together on one **Day** page (**Notes → Day**). You do not need to backfill anything.
 
-- [ ] Logs → **Backfill journal history**: tap Preview, check the days listed, then confirm. It does 10 days per run, so repeat until the preview shows nothing left. Existing reflections are kept.
 - [ ] In Claude, start a new chat and ask "what's on today?". It should use the new briefing tool. If Claude doesn't find it, disconnect and reconnect the Daybook connector so it picks up the two new tools (`prepare_briefing`, `configure_briefings`).
 
 ## 5. Decide and tidy up
@@ -62,7 +61,7 @@ Newest first.
 | --- | --- | --- |
 | #62 | Morning and evening briefings; Claude tools to narrate and configure them | Section 3 |
 | #61 | Original AI scheduling spec (rewritten in #62) | No |
-| #60 | Logs → Backfill journal history | Section 4 |
+| #60 | Logs → Backfill journal history (retired: the Day page shows the log and writing together) | No |
 | #59 | New log entries also update the daily journal | Covered by #60 |
 | Direct to main | Today timeline spacing fixed | No |
 | #58 | Two-way Apple Reminders sync; task IDs | Section 2 |

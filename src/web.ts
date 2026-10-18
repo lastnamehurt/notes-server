@@ -8,7 +8,7 @@ import { checkForUpdate, parseRepo, resetOwnRepo, runUpdate } from "./updates";
 // Unlocked with MCP_BEARER_TOKEN; the session is an HMAC-signed, HttpOnly, SameSite=Strict cookie.
 
 import { GithubNotes, CATEGORIES, type Category, type Env } from "./github";
-import { appendLog, recentLogs, editLog, journalPath, journalWithActivity, LOG_PREFIX } from "./log";
+import { appendLog, recentLogs, editLog, journalPath, dayWriting, maybeNote, LOG_PREFIX } from "./log";
 import { scheduler, scheduleNote, loadSettings, saveSettings, rescan, checkPassword, completeReminder, addReminder, addTask, startOfToday, effectiveEnv } from "./core";
 import { applySettings, cleanName, notesConfigured, type Settings } from "./settings";
 import { listRepos, prepareRepo, startDeviceFlow, pollDeviceFlow, ensureNotesRepo, githubClientId, githubLogin, ownsNotesRepo, moveAppNotesToGithub } from "./setup";
@@ -744,49 +744,24 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
         return json(await appendLog(notes, entry, { date, time, timeZone: env.NOTES_TIMEZONE }));
       }
       case "GET /logs": return json(await recentLogs(notes, Number(url.searchParams.get("days") ?? 7), env.NOTES_TIMEZONE));
-      case "GET /journal/backfill": {
-        const logs = (await notes.all(undefined, LOG_PREFIX))
-          .filter(n => /^journal\/log\/\d{4}-\d{2}-\d{2}\.md$/.test(n.name))
-          .sort((a, b) => a.name.localeCompare(b.name));
-        const journals = new Map((await notes.all(undefined, "journal/daily/")).map(n => [n.name, n.content]));
-        const pending = logs.filter(n => {
-          const date = n.name.slice(LOG_PREFIX.length, -3);
-          const current = journals.get(journalPath(date)) ?? null;
-          return current !== journalWithActivity(current, date, n.content);
-        });
-        return json({ total: logs.length, pending: pending.length, dates: pending.map(n => n.name.slice(LOG_PREFIX.length, -3)) });
+      // One day in one place: the log lines and anything written about the day (journal/daily/DATE.md).
+      // Old copies of log lines inside that file (from the retired backfill) are left out of the writing.
+      case "GET /day": {
+        const date = url.searchParams.get("date") ?? "";
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return fail("date must be YYYY-MM-DD");
+        const [log, page] = await Promise.all([maybeNote(notes, LOG_PREFIX + date + ".md"), maybeNote(notes, journalPath(date))]);
+        return json({ date, log: log?.content ?? "", writing: dayWriting(page?.content ?? ""), sha: page?.sha ?? null });
       }
-      case "POST /journal/backfill": {
-        const { dates } = await request.json<{ dates?: string[] }>();
-        if (!Array.isArray(dates) || dates.length === 0 || dates.length > 10 ||
-            dates.some(d => typeof d !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(d)) ||
-            new Set(dates).size !== dates.length) return fail("Choose 1–10 distinct journal dates", 400);
-        const results: { date: string; status: string; error?: string }[] = [];
-        for (const date of dates) {
-          try {
-            const source = await notes.get(LOG_PREFIX + date + ".md");
-            const path = journalPath(date);
-            let status = "unchanged";
-            for (let attempt = 0; attempt < 3; attempt++) {
-              let current: { content: string; sha: string } | null = null;
-              try { current = await notes.get(path); }
-              catch (e) { if (!(e instanceof Error && e.message.startsWith("Note or notes repository not found"))) throw e; }
-              const next = journalWithActivity(current?.content ?? null, date, source.content);
-              if (current?.content === next) break;
-              try {
-                await notes.put(path, next, current?.sha);
-                status = current ? "updated" : "created";
-                break;
-              } catch (e) {
-                if (!(e instanceof Error && e.message.startsWith("GitHub conflict")) || attempt === 2) throw e;
-              }
-            }
-            results.push({ date, status });
-          } catch (e) {
-            results.push({ date, status: "failed", error: e instanceof Error ? e.message : "Unknown error" });
-          }
-        }
-        return json({ results });
+      case "PUT /day": {
+        const { date, writing, sha } = await request.json<{ date?: string; writing?: string; sha?: string | null }>();
+        if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return fail("date must be YYYY-MM-DD");
+        if (typeof writing !== "string" || writing.length > 100_000) return fail("Send the writing as text");
+        const path = journalPath(date);
+        const current = await maybeNote(notes, path);
+        if (current && sha !== undefined && sha !== current.sha) return fail("This day changed since you opened it. Refresh and try again.", 409);
+        if (!writing.trim()) { if (current) await notes.delete(path); return json({ date, sha: null }); }
+        await notes.put(path, "# " + date + "\n\n" + writing.trim() + "\n", current?.sha);
+        return json({ date, sha: (await maybeNote(notes, path))?.sha ?? null });
       }
 
       case "GET /reminders": {

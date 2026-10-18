@@ -134,6 +134,14 @@ main { padding: 22px 0 calc(170px + env(safe-area-inset-bottom)); }
 
 /* Logs: mobile-first, full-width capture with quieter secondary actions. */
 .logs-page { display: grid; gap: 18px; }
+.day-nav { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; text-align: center; }
+.day-nav h2 { margin: 0; font-size: 20px; }
+.day-nav a { display: flex; align-items: center; justify-content: center; min-height: 44px; font-size: 26px; text-decoration: none; }
+.day-page .rail { margin: 0 0 14px; }
+.day-page .log-duration select { flex: 1; min-width: 120px; width: auto; }
+.day-page .log-duration input[type=time] { width: 130px; }
+.day-page #day-saved { margin: 6px 0 0; font-size: 13px; }
+.day-page .log-create { display: flex; gap: 8px; margin-top: 10px; }
 .logs-page .step { margin: 0; }
 .logs-page .log-fields { display: grid; gap: 12px; }
 .logs-page .log-fields label { display: block; margin: 0 0 5px; }
@@ -665,10 +673,10 @@ appearance.addEventListener("keydown", e => {
 const SECTIONS = {
   today: [["today", "Today"], ["spending", "Spending"], ["awareness", "Suggestions"]],
   reminders: [["reminders", "Tasks"], ["goals", "Goals"]],
-  notes: [["notes", "Notes"], ["journal", "Journal"], ["logs", "Logs"]]
+  notes: [["notes", "Notes"]]
 };
 function sectionOf(view, arg) {
-  if (view === "inbox") return ["notes", "notes"];
+  if (view === "inbox" || view === "day") return ["notes", "notes"];
   if (view === "new-goal") return ["reminders", "goals"];
   if (view === "note" || view === "new") return arg.startsWith("goals") ? ["reminders", "goals"] : ["notes", "notes"];
   for (const [section, pages] of Object.entries(SECTIONS)) if (pages.some(([id]) => id === view)) return [section, view];
@@ -681,7 +689,7 @@ function drawNav(view, arg) {
   mark($("#settingsTab"), view === "settings" || view === "setup");
   const sub = $("#subtabs"), pages = section && SECTIONS[section];
   // Today's switcher only appears on the Suggestions page, to keep the main screen uncluttered.
-  const show = pages && !$("#tabs").hidden && (section !== "today" || page !== "today");
+  const show = pages && pages.length > 1 && !$("#tabs").hidden && (section !== "today" || page !== "today");
   sub.hidden = !show;
   sub.innerHTML = show ? pages.map(([id, label]) => h`<a href="#${id}" ${id === page ? raw('aria-current="page"') : ""}>${label}</a>`).join("") : "";
 }
@@ -785,7 +793,21 @@ function dateFrom(name) {
   const m = /(\d{4})-?(\d{2})-?(\d{2})/.exec(name.split("/").pop());
   return m ? shortDate(m[1] + "-" + m[2] + "-" + m[3]) : "";
 }
-const folderName = c => ({ inbox: "Inbox", goals: "Goals", projects: "Projects", decisions: "Decisions", runbooks: "Runbooks", reference: "Reference", journal: "Journal" }[c] || c);
+const folderName = c => ({ inbox: "Inbox", day: "Day", review: "Review", goals: "Goals", projects: "Projects", decisions: "Decisions", runbooks: "Runbooks", reference: "Reference", journal: "Journal" }[c] || c);
+/* One list of notes, each with a type. A day's log and its writing are one "Day" item, not two files. */
+const DAY_FILE = /^journal\/(?:log|daily)\/(\d{4}-\d{2}-\d{2})\.md$/;
+const dayTitle = date => new Date(date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+function noteItems(names) {
+  const items = [], days = new Set();
+  for (const n of names) {
+    const day = DAY_FILE.exec(n);
+    if (day) { days.add(day[1]); continue; }
+    if (n.startsWith("journal/types/")) continue; // log type settings, not notes
+    const type = n.startsWith("journal/weekly-review-") ? "review" : n.split("/")[0];
+    items.push({ key: n, href: "#note/" + n, title: titleFrom(n), type, date: dateFrom(n) });
+  }
+  return items.concat([...days].sort().reverse().map(d => ({ key: "day:" + d, href: "#day/" + d, title: dayTitle(d), type: "day", date: "" })));
+}
 /** Split a note into its "# Title" line and the rest. */
 function splitTitle(content) {
   const m = /^\s*#\s+(.*)\n?/.exec(content);
@@ -992,7 +1014,7 @@ function logEntrySheet(date, original, time, text) {
     </form>`, el => {
     el.querySelector("[data-close]").onclick = closeSheet;
     const go = async body => {
-      try { await api("/log/edit", { method: "POST", body: { date, original, ...body } }); closeSheet(); toast(body.remove ? "Entry deleted" : "Entry saved"); views.today(); }
+      try { await api("/log/edit", { method: "POST", body: { date, original, ...body } }); closeSheet(); toast(body.remove ? "Entry deleted" : "Entry saved"); route(); }
       catch (err) { if (err instanceof Locked) { closeSheet(); return unlockSheet(); } sheetError(err.message); }
     };
     $("#l-del").onclick = () => go({ remove: true });
@@ -1346,98 +1368,91 @@ views.today = async () => {
 };
 
 let allNotes = null;
-views.journal = async () => {
-  $("#composer").hidden = true;
-  main.innerHTML = '<section class="notes-browser"><div class="notes-heading"><div><h2>Journal</h2><p class="muted">Your daily activities and reflections.</p></div><a class="btn" href="#logs">+ Log activity</a></div><div id="journal-days"><p class="empty">Loading journal…</p></div></section>';
-  const names = (await api("/notes")).filter(n => /^journal\/daily\/\d{4}-\d{2}-\d{2}\.md$/.test(n)).sort().reverse();
-  if (!names.length) { $("#journal-days").innerHTML = '<p class="empty">No daily entries yet. Log an activity to begin your journal.</p>'; return; }
-  const days = await Promise.all(names.slice(0, 30).map(async name => ({name, ...(await api("/note?name=" + encodeURIComponent(name)))})));
-  $("#journal-days").innerHTML = days.map(day => {
-    const date = day.name.slice("journal/daily/".length, -3);
-    const activities = day.content.split("\n").filter(line => /^- \d{2}:\d{2} /.test(line));
-    const reflection = day.content.replace(/<!-- daybook:activity:start -->[\s\S]*?<!-- daybook:activity:end -->/g, "").replace(/^# .*\n?/, "").trim();
-    // Nested markup goes through raw(h`…`) so it renders as HTML while the note's text stays escaped.
-    return h`<article class="journal-day"><div class="journal-day-heading"><h3>${date}</h3><a href="#note/${day.name}">Open entry →</a></div>${reflection ? raw(h`<p class="journal-reflection">${reflection}</p>`) : ""}${activities.length ? raw(h`<ul class="journal-activities">${raw(activities.map(line => h`<li>${line.slice(2)}</li>`).join(""))}</ul>`) : raw('<p class="muted">No activities recorded.</p>')}</article>`;
+// The old Journal and Logs pages are now the Day page and the "Day" type in Notes.
+views.journal = async () => { location.replace("#notes/day"); };
+views.logs = async () => { location.replace("#day"); };
+
+views.day = async () => {
+  const today = dayKey(Date.now());
+  const asked = decodeURIComponent(location.hash.slice(1)).split("/")[1] || today;
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(asked) ? asked : today;
+  const shift = n => { const d = new Date(date + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+  main.innerHTML = '<p class="empty">Loading the day…</p>';
+  const [day, allTypes] = await Promise.all([api("/day?date=" + date), api("/log-types")]);
+  const types = allTypes.filter(t => t.name !== "done");
+  const lines = day.log.split("\n").map(line => [line, /^- (\d{2}:\d{2}) (.*)$/.exec(line)]).filter(([, m]) => m);
+  const rows = lines.map(([line, m]) => {
+    const tags = (m[2].match(/#[\w-]+/g) || []).join(" "), what = m[2].replace(/\s*#[\w-]+/g, "").trim();
+    return h`<li class="ev${/^✓/.test(what) ? " done-ev" : ""}"><time>${fmt12(m[1])}</time><button class="entry" data-line="${line}" aria-label="Edit ${what} at ${fmt12(m[1])}"><span class="what">${what}</span> <span class="tags">${tags}</span></button></li>`;
   }).join("");
-};
-views.logs = async () => {
-  $("#composer").hidden = true;
-  main.innerHTML = h`<div class="setup logs-page">
-    <div><h2>Logs</h2><p class="lede">See how you spend your time, one entry at a time.</p></div>
-    <section class="step"><h3>Record activity</h3>
-      <div class="log-fields">
-        <div><label for="log-type">Category</label><select id="log-type"></select></div>
-        <div><label for="typed-entry">What did you do?</label><textarea id="typed-entry" rows="2" placeholder="e.g. Walked around the neighborhood"></textarea></div>
-        <div><label for="duration-minutes">Time spent (optional)</label><div class="log-duration"><input id="duration-minutes" type="number" min="1" max="1440" step="1" inputmode="numeric" placeholder="Minutes"><p class="muted">Leave blank for a simple entry. Timed activities end now.</p></div></div>
-      </div>
-      <div class="log-submit"><button class="btn" id="save-typed-log" type="button">Save activity</button></div>
+  const isToday = date === today;
+  main.innerHTML = h`<div class="setup logs-page day-page">
+    <div class="day-nav"><a class="link" href="#day/${shift(-1)}" aria-label="Day before">‹</a><h2>${dayTitle(date)}</h2>${date < today ? raw(h`<a class="link" href="#day/${shift(1)}" aria-label="Next day">›</a>`) : raw("<span></span>")}</div>
+    <section class="step"><h3>Log</h3>
+      ${rows ? raw('<ol class="rail">' + rows + "</ol>") : raw('<p class="muted">Nothing logged on this day.</p>')}
+      <form id="day-add" class="log-fields" novalidate>
+        <div><label for="day-entry">Add to the log</label><input id="day-entry" placeholder="Walked to the park #exercise" autocomplete="off"></div>
+        <div class="log-duration">
+          <select id="day-type" aria-label="Type (optional)"><option value="">No type</option>${raw(types.map(t => h`<option value="${t.name}">${t.name}</option>`).join(""))}</select>
+          <input id="day-time" type="time" aria-label="Time" value="${isToday ? hhmm(Date.now()) : "12:00"}">
+          ${isToday ? raw('<input id="day-minutes" type="number" min="1" max="1440" step="1" inputmode="numeric" placeholder="Minutes" aria-label="Minutes spent (optional)">') : ""}
+        </div>
+        <div class="log-submit"><button class="btn" type="submit">Add</button></div>
+      </form>
     </section>
-    <section class="step"><h3>Last 7 days</h3><div id="time-summary"></div></section>
-    <section class="step"><h3>My logs</h3><div id="log-type-list" class="log-types">Loading…</div></section>
-    <details class="step"><summary>Backfill journal history</summary>
-      <p class="muted">Create daily journal entries from older logs. Existing reflections are preserved. Preview changes before applying.</p>
-      <button class="btn quiet" type="button" id="journal-backfill-preview">Preview backfill</button>
-      <p id="journal-backfill-status" role="status" aria-live="polite"></p>
-      <button class="btn" type="button" id="journal-backfill-run" hidden>Backfill journals</button>
+    <section class="step"><h3>Writing</h3>
+      <label class="sr-only" for="day-writing">Writing about this day</label>
+      <textarea id="day-writing" rows="6" placeholder="How did the day go?">${day.writing}</textarea>
+      <p class="muted" id="day-saved" aria-live="polite">Changes save automatically.</p>
+    </section>
+    <details class="step"><summary>Types and time</summary>
+      <div id="time-summary"></div>
+      <div id="log-type-list" class="log-types"></div>
+      <div class="log-create"><input id="new-log-type" placeholder="New type, for example cardio" aria-label="New type"><button class="btn quiet" id="add-log-type" type="button">Add type</button></div>
     </details>
-    <details class="step"><summary>+ Create a log type</summary><div class="log-create"><input id="new-log-type" placeholder="e.g. cardio, food, sleep" aria-label="New log type"><button class="btn quiet" id="add-log-type" type="button">Create</button></div></details>
   </div>`;
-  const refresh = async () => {
-    const [allTypes, summary] = await Promise.all([api("/log-types"), api("/time-summary")]);
-    const types = allTypes.filter(t => t.name !== "done");
-     $("#time-summary").innerHTML = h`<p><strong>${(summary.trackedMinutes/60).toFixed(1)} hours tracked</strong> across ${summary.sessionCount} sessions</p>${raw(summary.byType.map(t => h`<div class="log-type-row"><span>${t.type}</span><strong>${(t.minutes/60).toFixed(1)}h</strong></div>`).join(""))}`;
-    $("#log-type").innerHTML = types.map(t => h`<option value="${t.name}">${t.name}</option>`).join("");
-    $("#log-type-list").innerHTML = types.length ? types.map(t => h`<div class="log-type-row"><strong>${t.name}</strong><span>${t.count} entries</span></div>`).join("") : "<p>No logs yet. Create your first type above.</p>";
-  };
-  let backfillDates = [];
-  $("#journal-backfill-preview").onclick = async () => {
+  main.querySelectorAll(".entry[data-line]").forEach(b => b.onclick = () => {
+    const m = /^- (\d{2}:\d{2}) (.*)$/.exec(b.dataset.line);
+    logEntrySheet(date, b.dataset.line, m[1], m[2]);
+  });
+  $("#day-add").onsubmit = async event => {
+    event.preventDefault();
+    const entry = $("#day-entry").value.trim(), type = $("#day-type").value, time = $("#day-time").value || undefined;
+    const minutesField = $("#day-minutes"), minutes = minutesField ? Number(minutesField.value) : 0;
     try {
-      const result = await api("/journal/backfill");
-      backfillDates = result.dates;
-      $("#journal-backfill-status").textContent = result.pending
-        ? result.pending + " of " + result.total + " logged days need journal updates."
-        : "All " + result.total + " logged days are already synchronized.";
-      $("#journal-backfill-run").hidden = !result.pending;
+      if (!entry) throw new Error("Write what happened first");
+      if (minutesField && minutesField.value) {
+        if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440) throw new Error("Minutes must be 1–1440");
+        if (!type) throw new Error("Pick a type for timed entries");
+        const end = new Date(), start = new Date(end.getTime() - minutes * 60000);
+        await api("/time-session", { method: "POST", body: { type, entry, start: start.toISOString(), end: end.toISOString() } });
+      } else if (type) await api("/typed-log", { method: "POST", body: { type, entry, date, time } });
+      else await api("/log", { method: "POST", body: { entry, date, time } });
+      nextToast = "Logged"; route();
     } catch (e) { handle(e); }
   };
-  $("#journal-backfill-run").onclick = async () => {
-    const button = $("#journal-backfill-run");
-    if (!backfillDates.length || !confirm("Backfill " + backfillDates.length + " daily journals? Existing reflections will be preserved.")) return;
-    button.disabled = true;
-    let completed = 0, failed = [];
-    try {
-      for (let i = 0; i < backfillDates.length; i += 10) {
-        const batch = backfillDates.slice(i, i + 10);
-        const response = await api("/journal/backfill", { method: "POST", body: { dates: batch } });
-        completed += response.results.filter(r => r.status !== "failed").length;
-        failed.push(...response.results.filter(r => r.status === "failed").map(r => r.date));
-        $("#journal-backfill-status").textContent = "Processed " + Math.min(i + 10, backfillDates.length) + "/" + backfillDates.length + " days…";
-      }
-      $("#journal-backfill-status").textContent = completed + " journal days synchronized." +
-        (failed.length ? " Failed dates: " + failed.join(", ") + ". You can retry the backfill." : "");
-      button.hidden = true;
-      backfillDates = [];
-      toast("Journal backfill finished");
-    } catch (e) { handle(e); $("#journal-backfill-status").textContent = "Backfill interrupted. Preview again to resume safely."; }
-    finally { button.disabled = false; }
+  // Writing saves as you go, like Spending settings: no button to miss.
+  let sha = day.sha, timer = 0, saving = Promise.resolve(), saved = day.writing;
+  const writing = $("#day-writing"), state = $("#day-saved");
+  const save = () => (saving = saving.then(async () => {
+    if (writing.value === saved) return;
+    const text = writing.value;
+    try { sha = (await api("/day", { method: "PUT", body: { date, writing: text, sha } })).sha; saved = text; state.textContent = "Saved."; state.classList.remove("err"); }
+    catch (e) { if (e instanceof Locked) return handle(e); state.textContent = "Not saved: " + e.message; state.classList.add("err"); }
+  }));
+  writing.oninput = () => { clearTimeout(timer); timer = setTimeout(save, 900); };
+  writing.onchange = () => { clearTimeout(timer); save(); };
+  const refreshTypes = async () => {
+    const [list, summary] = await Promise.all([api("/log-types"), api("/time-summary")]);
+    const shown = list.filter(t => t.name !== "done");
+    $("#time-summary").innerHTML = h`<p><strong>${(summary.trackedMinutes / 60).toFixed(1)} hours</strong> timed in the last 7 days</p>${raw(summary.byType.map(t => h`<div class="log-type-row"><span>${t.type}</span><strong>${(t.minutes / 60).toFixed(1)}h</strong></div>`).join(""))}`;
+    $("#log-type-list").innerHTML = shown.length ? shown.map(t => h`<div class="log-type-row"><strong>${t.name}</strong><span>${t.count} entries</span></div>`).join("") : '<p class="muted">No types yet.</p>';
   };
+  main.querySelector("details.step").addEventListener("toggle", e => { if (e.target.open) refreshTypes().catch(handle); }, { once: true });
   $("#add-log-type").onclick = async () => {
-    try { await api("/log-types", {method:"POST",body:{name:$("#new-log-type").value}}); $("#new-log-type").value=""; await refresh(); toast("Log type created"); }
-    catch(e) { handle(e); }
+    try { await api("/log-types", { method: "POST", body: { name: $("#new-log-type").value } }); $("#new-log-type").value = ""; await refreshTypes(); toast("Type added"); }
+    catch (e) { handle(e); }
   };
-  $("#save-typed-log").onclick = async () => {
-    try {
-      const minutes = Number($("#duration-minutes").value);
-      if ($("#duration-minutes").value && (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440)) throw new Error("Duration must be 1–1440 minutes");
-      if ($("#duration-minutes").value) {
-        const end = new Date(), start = new Date(end.getTime()-minutes*60000);
-        await api("/time-session", {method:"POST",body:{type:$("#log-type").value,entry:$("#typed-entry").value,start:start.toISOString(),end:end.toISOString()}});
-      } else await api("/typed-log", {method:"POST",body:{type:$("#log-type").value,entry:$("#typed-entry").value}});
-      $("#duration-minutes").value = "";
-      $("#typed-entry").value=""; await refresh(); toast("Logged");
-    } catch(e) { handle(e); }
-  };
-  await refresh();
 };
 
 views.inbox = async () => {
@@ -1470,6 +1485,7 @@ views.inbox = async () => {
   });
 };
 views.notes = async () => {
+  const preset = decodeURIComponent(location.hash.slice(1)).split("/")[1] || "all";
   main.innerHTML = h`<section class="notes-browser">
     <div class="notes-heading"><div><h2>Notes</h2><p class="muted">Everything you've captured, searchable and yours.</p></div><a class="btn" href="#new">+ New</a></div>
     <label class="notes-search-wrap"><span class="sr-only">Search notes</span><input class="search" id="q" type="search" placeholder="Search titles and contents…" autocomplete="off"></label>
@@ -1477,20 +1493,24 @@ views.notes = async () => {
     <p class="notes-result-count muted" id="notes-count" aria-live="polite"></p>
     <div id="nl"><p class="empty">Loading notes…</p></div>
   </section>`;
-  allNotes = (await api("/notes")).filter(n => !n.startsWith("journal/log/"));
-  const folders = [...new Set(allNotes.map(n => n.split("/")[0]))].sort((a,b) => (a === "inbox" ? -1 : b === "inbox" ? 1 : a.localeCompare(b)));
-  let active = "all", query = "", searchMatches = null, requestId = 0, timer;
-  const chips = [["all","All"],...folders.map(f => [f,folderName(f)])];
+  allNotes = await api("/notes");
+  const items = noteItems(allNotes);
+  const order = ["inbox", "day"];
+  const types = [...new Set(items.map(i => i.type))].sort((a, b) => {
+    const x = order.indexOf(a), y = order.indexOf(b);
+    return x >= 0 || y >= 0 ? (x < 0 ? 99 : x) - (y < 0 ? 99 : y) : folderName(a).localeCompare(folderName(b));
+  });
+  let active = types.includes(preset) ? preset : "all", query = "", searchMatches = null, requestId = 0, timer;
+  const chips = [["all","All"],...types.map(f => [f,folderName(f)])];
   $("#notes-filters").innerHTML = chips.map(([key,label]) => h`<button type="button" data-folder="${key}" aria-pressed="${key === active}">${label}</button>`).join("");
   const draw = () => {
-    const matching = (searchMatches || allNotes).filter(n => active === "all" || n.startsWith(active + "/"))
-      .filter(n => !query || searchMatches || n.toLowerCase().includes(query.toLowerCase()));
+    const matching = (searchMatches || items).filter(i => active === "all" || i.type === active)
+      .filter(i => !query || searchMatches || (i.key + " " + i.title).toLowerCase().includes(query.toLowerCase()));
     $("#notes-count").textContent = matching.length + (matching.length === 1 ? " note" : " notes") + (active !== "all" ? " · " + folderName(active) : "");
     $("#notes-filters").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed",String(b.dataset.folder === active)));
-    $("#nl").innerHTML = matching.length ? '<ul class="notes-results">' + matching.map(n => {
-      const folder = n.split("/")[0], title = titleFrom(n), date = dateFrom(n);
-      return h`<li class="notes-result"><a href="#note/${n}"><span class="notes-result-icon" aria-hidden="true">▤</span><span class="notes-result-body"><strong>${title}</strong><span class="notes-result-meta">${folderName(folder)}${date ? " · " + date : ""}</span></span><span class="notes-result-arrow" aria-hidden="true">›</span></a></li>`;
-    }).join("") + "</ul>" : '<p class="empty">No notes match these filters.</p>';
+    $("#nl").innerHTML = matching.length ? '<ul class="notes-results">' + matching.map(i =>
+      h`<li class="notes-result"><a href="${i.href}"><span class="notes-result-icon" aria-hidden="true">${i.type === "day" ? "◷" : "▤"}</span><span class="notes-result-body"><strong>${i.title}</strong><span class="notes-result-meta">${folderName(i.type)}${i.date ? " · " + i.date : ""}</span></span><span class="notes-result-arrow" aria-hidden="true">›</span></a></li>`
+    ).join("") + "</ul>" : '<p class="empty">No notes match these filters.</p>';
   };
   $("#notes-filters").onclick = event => {
     const button = event.target.closest("[data-folder]");
@@ -1509,7 +1529,7 @@ views.notes = async () => {
       try {
         const results = await api("/search?q=" + encodeURIComponent(query));
         if (current !== requestId) return;
-        searchMatches = results.filter(n => !n.startsWith("journal/log/"));
+        searchMatches = noteItems(results);
         draw();
       } catch (err) {
         if (current === requestId) handle(err);
@@ -2836,6 +2856,7 @@ async function route() {
     if (!cfg.configured) { $("#tabs").hidden = true; $("#subtabs").hidden = true; $("#composer").hidden = true; await views.setup(); }
     else if (view === "awareness") await renderAwareness();
     else if (view === "spending") await renderSpending();
+    else if (view === "note" && DAY_FILE.test(arg)) location.replace("#day/" + DAY_FILE.exec(arg)[1]);
     else if (view === "note") await editor(arg);
     else if (view === "new") await editor(null, arg || "inbox");
     else await (views[view] || views.today)();

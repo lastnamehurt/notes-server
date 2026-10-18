@@ -33,3 +33,11 @@ test("sessions expire and can't be forged", async () => {
   assert.equal(await equalSecret("a", "a"), true);
   assert.equal(await equalSecret("a", "b"), false);
 });
+
+test("a day's writing leaves out the heading and old copies of log lines", async () => {
+  const { dayWriting } = await import("../src/log.ts");
+  const old = "# 2026-10-10\n\nGood day.\n\n<!-- daybook:activity:start -->\n## Activity\n- 09:12 coffee #drink\n<!-- daybook:activity:end -->\n";
+  assert.equal(dayWriting(old), "Good day.");
+  assert.equal(dayWriting("# 2026-10-10\n\n<!-- daybook:activity:start -->\n## Activity\n_No activity recorded._\n<!-- daybook:activity:end -->\n"), "");
+  assert.equal(dayWriting("Ran 5k.\n\nFelt great."), "Ran 5k.\n\nFelt great.");
+});
