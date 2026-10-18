@@ -27,4 +27,19 @@ git -C "$SB/data" commit -q -m 'Add app-style goal'
 [[ "$(NOTES_DIR="$SB/data" "$prefix/bin/notes" ls goals --ids)" == 'goals/run.md' ]]
 [[ "$(NOTES_DIR="$SB/data" "$prefix/bin/note" find training --ids)" == 'goals/run.md' ]]
 NOTES_DIR="$SB/data" "$prefix/bin/notes" show goals/run.md | grep -q 'Run a 5k'
+# One-step setup: the installer clones the notes repository when it's missing, and leaves it alone after.
+git clone -q --bare "$SB/data" "$SB/remote.git"
+out=$(NOTES_DIR="$SB/fresh" bash "$ROOT/scripts/install-cli.sh" --prefix "$prefix" --notes-repo "$SB/remote.git" --no-shell)
+grep -q "Cloned" <<<"$out"
+[[ -f "$SB/fresh/goals/run.md" ]]
+out=$(NOTES_DIR="$SB/fresh" bash "$ROOT/scripts/install-cli.sh" --prefix "$prefix" --notes-repo "$SB/remote.git" --no-shell)
+grep -q "Using your notes in $SB/fresh" <<<"$out"
+# A non-Git folder in the way is reported, never overwritten; nothing is asked without a terminal.
+mkdir -p "$SB/occupied"; printf 'keep me\n' > "$SB/occupied/file"
+out=$(NOTES_DIR="$SB/occupied" bash "$ROOT/scripts/install-cli.sh" --prefix "$prefix" --notes-repo "$SB/remote.git" --no-shell </dev/null)
+grep -q "isn't a Git clone" <<<"$out"
+[[ "$(cat "$SB/occupied/file")" == 'keep me' && ! -d "$SB/occupied/.git" ]]
+out=$(NOTES_DIR="$SB/none" bash "$ROOT/scripts/install-cli.sh" --prefix "$prefix" --no-shell </dev/null)
+grep -q -- "--notes-repo OWNER/REPO" <<<"$out"
+[[ ! -e "$SB/none" ]]
 echo 'Passed installer, alias, collision protection, empty-clone capture, and app goals checks.'
