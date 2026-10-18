@@ -157,19 +157,19 @@ export function paymentOutcome(payment: Payment, stored: readonly Payment[], set
   const limit = settings.payment.bigPurchase;
   if (limit !== null && payment.currency === summary.currency && payment.amount >= limit)
     out.push(suggestion("payment-big-purchase", "payment-big-purchase:" + payment.id,
-      hide ? "A bigger purchase just went through. Was it planned?"
-        : `A ${dollars(payment.amount)} purchase just went through, over your ${dollars(limit)} limit. Was it planned?`, 3));
+      hide ? "You made a big payment. Was it planned?"
+        : `You paid ${dollars(payment.amount)}. Your limit for one payment is ${dollars(limit)}. Was it planned?`, 3));
   const goal = settings.payment.drinkGoalPerWeek;
   if (action === "drink" && goal !== null && summary.drinksThisWeek > goal)
     out.push(suggestion("payment-drink-goal", `payment-drink-goal:${summary.week}:${summary.drinksThisWeek}`,
-      `That's ${summary.drinksThisWeek} bar tabs this week. Your goal is ${goal}.`, 2));
+      `You made ${summary.drinksThisWeek} bar payments this week. Your limit is ${goal}.`, 2));
   const daily = settings.payment.dailyTarget, weekly = settings.payment.weeklyTarget;
   if (daily !== null && summary.today > daily && summary.today - payment.amount <= daily)
     out.push(suggestion("payment-spend-target", "payment-spend-target:day:" + summary.date,
-      hide ? "You've gone over today's spending target." : `Today's spending is ${dollars(summary.today)}, over your ${dollars(daily)} target.`, 1));
+      hide ? "You spent more than your daily target." : `You spent ${dollars(summary.today)} today. Your daily target is ${dollars(daily)}.`, 1));
   if (weekly !== null && summary.weekTotal > weekly && summary.weekTotal - payment.amount <= weekly)
     out.push(suggestion("payment-spend-target", "payment-spend-target:week:" + summary.week,
-      hide ? "You've gone over this week's spending target." : `This week's spending is ${dollars(summary.weekTotal)}, over your ${dollars(weekly)} target.`, 7));
+      hide ? "You spent more than your weekly target." : `You spent ${dollars(summary.weekTotal)} this week. Your weekly target is ${dollars(weekly)}.`, 7));
   return { counted, log, suggestions: out, summary };
 }
 

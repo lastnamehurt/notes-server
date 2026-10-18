@@ -168,13 +168,13 @@ export function buildBriefing({ kind, notes, done, now, timeZone, preview, name,
     title = (who ? "Evening" + who : "Evening wrap-up") + " · " + day;
     empty = !doneToday.length && !dueToday.length && !overdue.length && !dueTomorrow.length && !spend?.count;
     const usd = (n: number) => "$" + n.toFixed(2);
-    const spent = spend && spend.count ? (spend.hidden ? `Spent today: ${spend.count} tap${spend.count === 1 ? "" : "s"}`
+    const spent = spend && spend.count ? (spend.hidden ? `Spent today: ${spend.count} payment${spend.count === 1 ? "" : "s"}`
       : `Spent today: ${usd(spend.today)} across ${spend.count} · week ${usd(spend.week)}`) : null;
     lines = [doneToday.length ? `Done today: ${doneToday.length}` : null, listLine("Still open", dueToday.map(label)),
       listLine("Overdue", overdue.map(i => clean(i.text))), listLine("Tomorrow", dueTomorrow.map(label)), spent];
     counts = [doneToday.length && `${doneToday.length} done`, dueToday.length && `${dueToday.length} still open`,
       overdue.length && `${overdue.length} overdue`, dueTomorrow.length && `${dueTomorrow.length} tomorrow`,
-      spend?.count && `${spend.count} tap${spend.count === 1 ? "" : "s"}`].filter(Boolean) as string[];
+      spend?.count && `${spend.count} payment${spend.count === 1 ? "" : "s"}`].filter(Boolean) as string[];
   }
   let message = empty ? (kind === "morning" ? "Nothing due today." : "Nothing to wrap up today.")
     : preview === "counts" ? counts.join(" · ") : lines.filter(Boolean).join("\n");

@@ -1,144 +1,193 @@
-# Daybook Signals: Shortcuts for tap to pay and parking
+# Daybook: tap to pay and errands
 
-Daybook can track what you spend when you tap Apple Pay, log bar tabs as drinks, and ask about big purchases. An iPhone Shortcuts automation tells Daybook about each tap. It sends **the amount, the card's name and a kind of place** (like `bar` or `coffee`). The store's name stays on your phone, and your location is never used.
+Daybook can count what you spend with Apple Pay in stores. It can also count bar payments as drinks, and ask you about big payments. To do this, a Shortcut on your iPhone sends Daybook a message each time you pay.
 
-It covers taps with Apple Pay only. Physical-card swipes, online purchases, cash and scheduled payments (rent, bills) are not included, so the totals show what you chose to spend that day.
+The Shortcut sends three things: the **amount**, the **card name** and a **kind of place**, for example `coffee` or `bar`. It does not send the store's name. It does not send your location.
 
-## 1. Turn it on in Daybook
+Daybook counts only Apple Pay payments in stores, when you hold your iPhone or Apple Watch near the reader. It does not count these:
 
-1. Open Daybook → **Today → Spending**, scroll to **Signals: tap to pay and parked**.
-2. Check **Turn on the tap-to-pay signal**. Set any targets you want (all optional) and save.
-3. Open **Settings → Shortcuts**. It has the two things your Shortcut needs to talk to Daybook:
-   - **Address**: the **Tap to pay** address (ends in `/app/shortcuts/signal`).
-   - **Secret**: a password so only your phone can send taps. Every Daybook Shortcut shares it, so if you set up Apple Reminders sync it's the same one. It's hidden until you tap **Show** or **Copy**; if there isn't one yet, tap **Make my Shortcut secret**.
-
-Suggestions (big purchase, drink goal, spending targets) also need **Awareness** on and not paused.
-
-## 2. Build the Shortcut
-
-**Faster, with a Mac:** run `bash scripts/make-tap-shortcut.sh` (or download it from this repo first). It asks for the Address and Secret, builds the full version (it labels each tap `bar`, `coffee`, `food`, `gas`, `grocery`, `parking` or `other` from words in the store's name, on the phone), and signs it. To change the words, edit the `RULES` list at the top of the script; the first rule that matches wins, so "TeKu Tavern + Cafe" is a bar. Open the file it makes to add **Daybook Tap** to Shortcuts; it syncs to your iPhone. Then on the iPhone make only the trigger: **Automation → + → Wallet →** your payment cards **→ Run Immediately → Next →** pick **Daybook Tap**. Your secret stays in the file on your Mac and is never uploaded.
-
-**By hand on the iPhone:** written for iOS 26. Build the simple version first, check that it works, then add the extras.
-
-### The trigger
-
-1. **Shortcuts** app → **Automation** tab → **+**.
-2. Tap **Wallet** ("When I tap a Wallet Card or Pass"). In iOS 17 this was called **Transaction**.
-3. Select **only your payment cards**. Leave boarding passes, store cards and other passes off: they have no amount, and Daybook rejects those taps. The screen title shows how many you picked ("When I tap any of 2 Wallet passes or payment cards").
-4. Leave categories and merchants on *Any*.
-5. Choose **Run Immediately** (so it doesn't ask each time) and tap **Next**.
-6. On the next screen, tap the first tile, **Create New Shortcut**. (Ignore the suggestions like "Add Row to Top or Bottom of Table".)
-
-**Picking a property of Shortcut Input:** where a step says *Shortcut Input → Amount* (or *Merchant*, or *Card or Pass*), tap the field, choose **Shortcut Input**, then tap the blue *Shortcut Input* bubble that appears and pick the property from its list.
-
-### Simple version: one action
-
-1. **Add Action** → search **Get Contents of URL** → add it.
-2. Tap the blue URL placeholder and paste the **Address** from step 1.3.
-3. Tap the **›** on the action to show its options:
-   - **Method:** **POST**
-   - **Headers:** **Add new header**. Key `Authorization`, value `Bearer ` (with the space) followed by the **Secret** from step 1.3.
-   - **Request Body:** **JSON**. Add two **Text** fields:
-     - `kind`: type `payment`
-     - `amount`: *Shortcut Input → Amount*
-4. Tap **Done**.
-
-Now go to **3. Try it** below. Come back here once a tap shows up in Daybook.
-
-### Full version: card name, bar detection, no double counting
-
-Open the automation again and add these **above** Get Contents of URL (drag to reorder):
-
-1. **Text**: type `other`. Then **Set Variable**, named **Kind**, set to that Text.
-2. **If** *Shortcut Input → Merchant* **contains** `bar` → inside it, **Set Variable** *Kind* to a new **Text** `bar`. Add **Otherwise If** branches for the words your usual spots use: `pub`, `tavern`, `brewing`, `taproom` → `bar`; `coffee`, `cafe` → `coffee`. The matching happens on your phone; the merchant's name is never sent.
-3. **Format Date**: *Current Date*, **Custom** format `yyyyMMdd-HHmmss`. Then **Set Variable** **TapId** to it.
-
-Then add three more **Text** fields to the JSON body of Get Contents of URL:
-
-- `card`: *Shortcut Input → Card or Pass* (the card's name, so you can leave a work card out)
-- `category`: the **Kind** variable
-- `id`: the **TapId** variable (so a retried tap is counted once)
-
-Optional, at the end: **Get Dictionary Value** `message` from *Contents of URL* → **Show Notification** with it. It reads like "Today $24.50 across 3 · this week $112.00".
-
-## 3. Try it
-
-Only in-person payments count: tapping your iPhone or Watch at a register. Apple Pay inside apps and on websites doesn't run the automation.
-
-If you used the Mac script, first check the imported **Daybook Tap** in Shortcuts:
-
-- The **Match** action's input reads **Merchant** (not the whole *Shortcut Input*).
-- **Get Contents of URL** is **POST**, has an `Authorization` header starting `Bearer `, and a JSON body with `kind`, `amount`, `card` and `category`.
-
-Then tap Apple Pay in a store and open **Today → Spending**: today's total updates, and **Shortcut status** says whether the tap arrived and, if not, what to fix. A tap whose kind is mapped to `drink` adds a `#drink` line to today's log.
-
-## What each kind of place does
-
-Spending shows this week **by kind** (for example "gas $38.10 · food $16.40 · coffee $9.75"). In the settings card, **Kinds of place** maps each `category` your Shortcut sends:
-
-- `drink`: logs `#drink` and counts toward your weekly bar-tab goal
-- `food`: logs `#food`
-- `none`: counts toward spending only
-
-Any kind not listed only counts toward spending.
-
-## Privacy
-
-- Stored: amount, currency, card name, kind of place, time. Kept 90 days; **Erase stored taps** removes them all.
-- Never stored or sent: the store's name, your location.
-- Suggestion notifications leave out amounts unless you uncheck **Keep amounts off the lock screen**.
-- Cards listed under **Cards to leave out** (a work card, say) are ignored entirely.
-
-## Troubleshooting
-
-| Result | Meaning |
-| --- | --- |
-| `401 Unauthorized` | The `Authorization` header doesn't match your Shortcut secret. |
-| `404 Shortcut sync is not configured` | Make a Shortcut secret first: Settings → Shortcuts. |
-| `reason: "off"` | Turn on the tap-to-pay signal in Daybook. |
-| `reason: "duplicate"` | The same tap was sent twice; it was counted once. |
-| `Send the amount, like 12.50` | The `amount` field was empty: pick *Amount* from Shortcut Input. Also happens when a non-payment pass (boarding pass, store card) is selected in the trigger. |
+- Card swipes
+- Payments in apps or on websites
+- Cash
+- Bills and other scheduled payments
 
 ---
 
-# Parked: errands near where you stop
+# Part 1: Count Apple Pay payments
 
-Tag a task with a kind of place, and Daybook tells you about it when you park near one:
+## Step 1: Turn it on in Daybook
+
+1. In Daybook, go to **Today → Spending**.
+2. Scroll down to **Tap to pay and errands**.
+3. Select **Count my Apple Pay payments**. Targets are optional. Then tap **Save**.
+4. Go to **Settings → Shortcuts**. Keep this page open. You need two things from it:
+   - **Address:** the **Tap to pay** address. It ends in `/app/shortcuts/signal`.
+   - **Secret:** a password that only your phone knows. All your Daybook Shortcuts use the same secret. To see it, tap **Show**. To copy it, tap **Copy**. If you do not have a secret, tap **Make my Shortcut secret**.
+
+Daybook can also send you suggestions, for example "Was this planned?". For suggestions, **Awareness** must be on, and **Pause suggestions** must be off. You find these settings in **Today → Suggestions**.
+
+## Step 2: Make the Shortcut
+
+There are two ways to make the Shortcut. With a Mac, it is faster.
+
+### With a Mac (recommended)
+
+1. On your Mac, open Terminal. Go to your copy of this repository.
+2. Run this command:
+
+   ```sh
+   bash scripts/make-tap-shortcut.sh
+   ```
+
+3. When the script asks, paste the **Address** and the **Secret**.
+4. The script makes a file named **Daybook Tap.shortcut**. Double-click it. Then click **Add Shortcut**. The Shortcut syncs to your iPhone through iCloud.
+5. On your iPhone, open the **Shortcuts** app. Then:
+   1. Tap **Automation**, then tap **+**.
+   2. Tap **Wallet**.
+   3. Select your payment cards. Do not select boarding passes, store cards or other passes.
+   4. Select **Run Immediately**. Tap **Next**.
+   5. Select **Daybook Tap** from your Shortcuts.
+6. If you have an older Wallet automation for Daybook, delete it. Swipe left on it and tap **Delete**. If you keep two, Daybook counts each payment two times.
+
+The Shortcut finds the kind of place from words in the store's name, for example "espresso" or "tavern". This happens on your iPhone. The kinds are `bar`, `coffee`, `food`, `gas`, `grocery`, `parking` and `other`. The first kind that matches is used. For example, "TeKu Tavern + Cafe" is a `bar`. To change the words, edit the `RULES` list at the top of the script. Then run the script again.
+
+If the script says that signing failed, make sure of these things. Then run the script again.
+
+- You are signed in to iCloud on the Mac.
+- The Mac is connected to the internet.
+- You opened the Shortcuts app on the Mac one time.
+
+### On the iPhone only
+
+These steps are for iOS 26.
+
+**Make the automation**
+
+1. Open the **Shortcuts** app. Tap **Automation**, then tap **+**.
+2. Tap **Wallet**. In iOS 17, this item has the name **Transaction**.
+3. Select only your payment cards. Do not select boarding passes, store cards or other passes. These have no amount, and Daybook does not accept them.
+4. Keep **Any** for categories and merchants.
+5. Select **Run Immediately**. Tap **Next**.
+6. Tap **Create New Shortcut**.
+
+**How to select a detail of the payment.** Some steps below say *Shortcut Input → Amount*. To do this, tap the field and select **Shortcut Input**. A blue *Shortcut Input* item shows. Tap it, then select **Amount** from the list. Do the same for **Merchant** and **Card or Pass**.
+
+**Add the action**
+
+1. Tap **Add Action**. Search for **Get Contents of URL** and add it.
+2. Tap the blue URL field. Paste the **Address**.
+3. Tap **›** on the action to see more options. Then set these:
+   - **Method:** **POST**
+   - **Headers:** tap **Add new header**. For the key, type `Authorization`. For the value, type `Bearer`, a space, and then paste the **Secret**.
+   - **Request Body:** **JSON**. Add two **Text** fields:
+     - `kind`: type `payment`
+     - `amount`: select *Shortcut Input → Amount*
+4. Tap **Done**.
+
+Go to Step 3 and test the Shortcut. When it works, you can add the extra steps below.
+
+**Optional: add the kind of place, the card name and a payment ID**
+
+Add these actions **above** Get Contents of URL. To move an action, drag it.
+
+1. Add a **Text** action. Type `other`. Then add **Set Variable**. Name the variable **Kind**, and set it to the Text.
+2. Add an **If** action: *Shortcut Input → Merchant* **contains** `bar`. In the If, add **Set Variable**: set **Kind** to a new **Text** `bar`. For other words, add **Otherwise If**. For example: `pub`, `tavern`, `brewing` and `taproom` give `bar`. `coffee` and `cafe` give `coffee`. The store's name stays on your iPhone.
+3. Add **Format Date**: *Current Date*, **Custom** format `yyyyMMdd-HHmmss`. Then add **Set Variable**. Name it **TapId**.
+
+Then, in the JSON of Get Contents of URL, add three more **Text** fields:
+
+- `card`: select *Shortcut Input → Card or Pass*. With the card name, you can leave out a work card.
+- `category`: select the **Kind** variable.
+- `id`: select the **TapId** variable. If the Shortcut sends the same payment again, Daybook counts it only one time.
+
+To see a message after each payment, add these at the end: **Get Dictionary Value** `message` from *Contents of URL*, then **Show Notification**. The message looks like this: "Today $24.50 across 3 · this week $112.00".
+
+## Step 3: Test the Shortcut
+
+1. If you used the Mac script, open **Daybook Tap** in the Shortcuts app and check it:
+   - The **Match** action uses **Merchant**. It must not use all of *Shortcut Input*.
+   - **Get Contents of URL** uses **POST**. It has an `Authorization` header that starts with `Bearer`. Its JSON has `kind`, `amount`, `card` and `category`.
+2. Pay with Apple Pay in a store.
+3. In Daybook, go to **Today → Spending**. Today's total includes the payment.
+4. Look at the line under the total:
+   - **Shortcut works** means that the payment came in.
+   - If there is a problem, a box tells you what to fix.
+
+## Kinds of place
+
+The Spending page shows this week's total for each kind, for example "gas $38.10 · food $16.40 · coffee $9.75".
+
+In **Tap to pay and errands**, **Kinds of place** tells Daybook what to do with each kind:
+
+- `drink`: adds a `#drink` line to your log. It also counts toward your weekly limit for bar payments.
+- `food`: adds a `#food` line to your log.
+- `none`: counts only toward spending.
+
+A kind that is not in the list counts only toward spending.
+
+## Privacy
+
+- **What Daybook keeps:** the amount, the currency, the card name, the kind of place and the time. Daybook keeps each payment for 90 days. To delete all payments, tap **Delete all payments**.
+- **What Daybook never gets:** the store's name and your location.
+- **Lock screen:** suggestion notifications do not show amounts. To show amounts, clear **Do not show amounts on the lock screen**.
+- **Cards to leave out:** Daybook ignores payments with these cards, for example a work card.
+
+## If something does not work
+
+Look at **Today → Spending**. It tells you what happened to the last payment. The table below shows the replies that the Shortcut can get.
+
+| Reply | What to do |
+| --- | --- |
+| `401 Unauthorized` | The secret is not correct. In the `Authorization` header, type `Bearer`, a space, then the secret from **Settings → Shortcuts**. |
+| `404 Shortcut sync is not configured` | You do not have a secret. Make one in **Settings → Shortcuts**. |
+| `reason: "off"` | Counting is off. In **Today → Spending**, select **Count my Apple Pay payments**. |
+| `reason: "duplicate"` | The Shortcut sent the same payment two times. Daybook counted it one time. You do not need to do anything. |
+| `Send the amount, like 12.50` | No amount came in. Set the `amount` field to *Shortcut Input → Amount*. This also happens if you selected a pass that is not a payment card. |
+
+---
+
+# Part 2: Errand reminders when you park (optional)
+
+Add a kind of place to a task. When you park near that kind of place, your iPhone shows the task.
 
 ```
 - [ ] Buy batteries @at:grocery
 - [ ] Pick up prescription @at:pharmacy @2026-10-20
 ```
 
-The tag can sit anywhere in the task and works with dates and priorities. Use one word per kind of place (letters, digits, dashes): `grocery`, `pharmacy`, `hardware`, `post-office`.
+You can put the tag anywhere in the task. It works with dates and priorities. Use one word for each kind of place. You can use letters, numbers and dashes, for example `grocery`, `pharmacy`, `hardware` or `post-office`.
 
-**Nothing about where you are is stored or sent.** Your phone looks up what's nearby; Daybook only receives the kinds of place it found and answers with the matching tasks. Your Shortcut shows the notification.
+**Daybook does not get your location.** Your iPhone finds what is near you. Then it sends Daybook only the kinds of place, for example `grocery`. Daybook sends back the tasks for those places. Your iPhone shows them.
 
-## 1. Turn it on
+## Step 1: Turn it on
 
-Daybook → **Today → Spending** → **Signals: tap to pay and parked** → check **Turn on the parked signal** and save. It uses the same address and secret as tap to pay (Settings → Shortcuts).
+1. In Daybook, go to **Today → Spending**.
+2. In **Tap to pay and errands**, select **Remind me of errands when I park**. Tap **Save**.
 
-## 2. Build the Shortcut
+This Shortcut uses the same address and secret as tap to pay. You find them in **Settings → Shortcuts**.
 
-Shortcuts → **Automation** → **+** → **CarPlay** → **Disconnects** (or **Bluetooth** → your car → **Disconnects** if you don't use CarPlay) → **Run Immediately**.
+## Step 2: Make the Shortcut
 
-1. **Get Current Location**.
-2. For each kind of place you tag tasks with (start with `grocery`):
-   1. **Search Local Businesses** for `grocery store` near *Current Location*.
-   2. **Get Item from List** → *First Item*.
-   3. **Get Distance** from *Current Location* to that business.
-   4. **If** *Distance* **is less than** `0.15` (miles) → **Add** `grocery` **to Variable** *Places*.
-3. **If** *Places* **has any value**:
-   - **Get Contents of URL** → POST to the same address, header `Authorization: Bearer <secret>`, JSON body:
-     - `kind` (Text): `parked`
-     - `places` (Text): *Places* (a list or comma-separated text both work)
-   - **Get Dictionary Value** `message` from the result.
-   - **If** *message* **has any value** → **Show Notification** with *message*.
+1. Open the **Shortcuts** app. Tap **Automation**, then tap **+**.
+2. Tap **CarPlay**, then **Disconnects**. If your car does not have CarPlay, tap **Bluetooth**, select your car, then **Disconnects**.
+3. Select **Run Immediately**.
+4. Add **Get Current Location**.
+5. Do these steps for each kind of place that you use in tasks. Start with `grocery`:
+   1. Add **Search Local Businesses**. Search for `grocery store` near *Current Location*.
+   2. Add **Get Item from List**. Select *First Item*.
+   3. Add **Get Distance** from *Current Location* to that business.
+   4. Add **If** *Distance* **is less than** `0.15` (miles). In the If, add **Add to Variable**: add `grocery` to a variable named *Places*.
+6. Add **If** *Places* **has any value**. In this If, add these actions:
+   1. **Get Contents of URL**: **POST** to the same address. Add the header `Authorization`: `Bearer`, a space, then the secret. Set **Request Body** to **JSON** with two **Text** fields:
+      - `kind`: type `parked`
+      - `places`: select the *Places* variable
+   2. **Get Dictionary Value**: get `message` from the result.
+   3. **If** *message* **has any value**: add **Show Notification** with *message*.
 
-The reply looks like `Near grocery: Buy batteries, Coffee filters`. When no tagged tasks match, `message` is empty and nothing is shown.
+The notification looks like this: "Near grocery: Buy batteries, Coffee filters". If no task matches, nothing shows.
 
 ## Limits
 
-- It only runs when your phone disconnects from the car, so walking trips don't trigger it.
-- "Nearest business" can be wrong: parking beside a grocery store you're not going into will still match.
-- The parked signal is stateless: Daybook keeps no record of where or when you parked.
+- The Shortcut runs only when your iPhone disconnects from your car. It does not run when you walk.
+- The nearest store is not always the store that you go to. If you park near a grocery store, the Shortcut shows your grocery tasks.
+- Daybook does not keep a record of where or when you park.

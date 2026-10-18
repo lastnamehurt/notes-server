@@ -167,12 +167,12 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
     const denied = await shortcutAuth(request, env);
     if (denied) {
       await note(denied.status === 401 ? "wrong-secret" : "not-set-up",
-        denied.status === 401 ? "The Authorization header didn't match your Shortcut secret." : "No Shortcut secret has been made yet.");
+        denied.status === 401 ? "The secret in the Shortcut is not correct." : "You do not have a Shortcut secret yet.");
       return denied;
     }
-    if (Number(request.headers.get("Content-Length") || 0) > 10_000) { await note("invalid", "The request was too large."); return fail("Request too large", 413); }
+    if (Number(request.headers.get("Content-Length") || 0) > 10_000) { await note("invalid", "The Shortcut sent too much data."); return fail("Request too large", 413); }
     let body: Record<string, unknown>;
-    try { body = await request.json(); } catch { await note("invalid", "The request body wasn't JSON. Set Request Body to JSON."); return fail("Send the signal as JSON", 400); }
+    try { body = await request.json(); } catch { await note("invalid", "The Shortcut did not send JSON."); return fail("Send the signal as JSON", 400); }
     if (body && typeof body === "object" && !Array.isArray(body)) fields = Object.keys(body).slice(0, 20).map(k => k.slice(0, 40));
     const kind = body && typeof body === "object" ? body.kind ?? "payment" : undefined;
     if (kind === "parked") {
@@ -185,12 +185,12 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
       const tasks = tasksForPlaces(await notesFor(configured).all(LOG_PREFIX), places, configured.NOTES_TIMEZONE || "America/Los_Angeles");
       return json({ matched: tasks.length, message: parkedMessage(tasks), tasks: tasks.map(t => ({ place: t.place, title: t.title })) });
     }
-    if (kind !== "payment") { await note("invalid", `"kind" was "${String(kind).slice(0, 20)}"; it should be "payment".`); return fail('Unknown signal kind; send "payment" or "parked"', 400); }
+    if (kind !== "payment") { await note("invalid", `The Shortcut sent kind "${String(kind).slice(0, 20)}". It must send "payment".`); return fail('Unknown signal kind; send "payment" or "parked"', 400); }
     let payment;
     try { payment = parsePayment(body, Date.now()); }
     catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      await note("invalid", /amount/.test(message) ? "No amount arrived. Check the \"amount\" field is set to Shortcut Input → Amount." : message);
+      await note("invalid", /amount/.test(message) ? "The Shortcut did not send an amount." : message);
       return fail(message, 400);
     }
     const result = await scheduler(configured).recordPayment(payment);
@@ -198,12 +198,12 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
       await appendLog(notesFor(configured), result.log, { timeZone: configured.NOTES_TIMEZONE })
         .catch(e => console.error("Signal log failed", e instanceof Error ? e.message : "unknown"));
     }
-    if (result.recorded) await note("recorded", "Counted.");
-    else if (result.reason === "off") await note("off", "Arrived, but the tap-to-pay signal is turned off.");
-    else await note("duplicate", "Arrived twice; counted once.");
+    if (result.recorded) await note("recorded", "Daybook counted it.");
+    else if (result.reason === "off") await note("off", "It came in, but counting is off.");
+    else await note("duplicate", "It came in two times. Daybook counted it one time.");
     const s = result.summary;
     const money = (n: number) => "$" + n.toFixed(2);
-    const message = !result.recorded && result.reason === "off" ? "Tap-to-pay signal is off in Daybook settings."
+    const message = !result.recorded && result.reason === "off" ? "Counting is off. Turn it on in Daybook: Today → Spending."
       : s ? `Today ${money(s.today)} across ${s.todayCount} · this week ${money(s.weekTotal)}` : "Recorded";
     return json({ recorded: result.recorded, ...(result.reason ? { reason: result.reason } : {}), message,
       ...(s ? { today: s.today, week: s.weekTotal } : {}) });
