@@ -1,4 +1,5 @@
 import { localStamp } from "./reminder-parse";
+import { buildGlance } from "./glance";
 import { calendarTasks, dayStart, noteRevision, editCalendarTask } from "./calendar";
 import { timedEntry, readSessions, timeSummary } from "./time-tracking";
 import { normalizeLogType, typePath, withLogType, parseLogTypes } from "./log-types";
@@ -222,6 +223,23 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
     return new Response(buildIcs(tasks.map(t => ({ id: t.id, title: t.title, dueAt: t.dueAt!, note: t.sourceNote })), Date.now()), {
       headers: { "Content-Type": "text/calendar; charset=utf-8", "Cache-Control": "no-store", "Content-Disposition": 'inline; filename="daybook.ics"' },
     });
+  }
+
+  // Lock screen widget (Scriptable): today's spending and a glance at notes. Read-only, same secret.
+  if (path === "/app/shortcuts/glance" && request.method === "GET") {
+    const denied = await shortcutAuth(request, env);
+    if (denied) return denied;
+    const configured = await effectiveEnv(env);
+    const now = Date.now();
+    const zone = configured.NOTES_TIMEZONE || "America/Los_Angeles";
+    const s = scheduler(configured);
+    const settings = await s.signalSettings();
+    const [spend, notes] = await Promise.all([
+      settings.payment.enabled ? s.signalSpend(now) : Promise.resolve(null),
+      notesConfigured(configured) ? notesFor(configured).all() : Promise.resolve([])
+    ]);
+    return json(buildGlance({ now, date: localStamp(now, zone).date, spend, hideAmounts: settings.hideAmounts,
+      dailyTarget: settings.payment.dailyTarget, weeklyTarget: settings.payment.weeklyTarget, notes }));
   }
 
   // Read-only Shortcut feed. A separate secret avoids exposing the app/MCP password to Shortcuts.
@@ -541,7 +559,7 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
         const secret = await shortcutSecret(env);
         const origin = new URL(request.url).origin;
         return json({ hasSecret: Boolean(secret), fromDeploy: Boolean(secret?.fromDeploy),
-          syncUrl: origin + "/app/shortcuts/sync", signalUrl: origin + "/app/shortcuts/signal" });
+          syncUrl: origin + "/app/shortcuts/sync", signalUrl: origin + "/app/shortcuts/signal", glanceUrl: origin + "/app/shortcuts/glance" });
       }
       case "GET /shortcuts/secret": {
         // Shown to the signed-in owner, including a deployment secret: Cloudflare can't show it again.
