@@ -19,7 +19,7 @@ Daybook counts only Apple Pay payments in stores, when you hold your iPhone or A
 
 1. In Daybook, go to **Today → Spending**.
 2. Scroll down to **Tap to pay and errands**.
-3. Select **Count my Apple Pay payments**. Targets are optional. Then tap **Save**.
+3. Select **Count my Apple Pay payments**. Targets are optional. Changes save automatically.
 4. Go to **Settings → Shortcuts**. Keep this page open. You need two things from it:
    - **Address:** the **Tap to pay** address. It ends in `/app/shortcuts/signal`.
    - **Secret:** a password that only your phone knows. All your Daybook Shortcuts use the same secret. To see it, tap **Show**. To copy it, tap **Copy**. If you do not have a secret, tap **Make my Shortcut secret**.
@@ -162,7 +162,7 @@ You can put the tag anywhere in the task. It works with dates and priorities. Us
 ## Step 1: Turn it on
 
 1. In Daybook, go to **Today → Spending**.
-2. In **Tap to pay and errands**, select **Remind me of errands when I park**. Tap **Save**.
+2. In **Tap to pay and errands**, select **Remind me of errands when I park**. The change saves automatically.
 
 This Shortcut uses the same address and secret as tap to pay. You find them in **Settings → Shortcuts**.
 

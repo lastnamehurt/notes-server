@@ -2595,7 +2595,7 @@ async function renderAwarenessPreferences() {
 }
 
 /* ---------- Signals: tap to pay (#147) ---------- */
-async function renderSignalSettings() {
+async function renderSignalSettings(onSaved) {
   const [settings, spend] = await Promise.all([api("/signals/settings"), api("/signals/spend")]);
   const p = settings.payment;
   const section = document.createElement("section"); section.className = "awareness-card"; section.id = "signals-settings";
@@ -2628,11 +2628,14 @@ async function renderSignalSettings() {
   const catsWrap = document.createElement("label"); catsWrap.style.display = "block"; catsWrap.style.margin = "12px 0";
   catsWrap.textContent = "Kinds of place. Write one per line: name = drink, food or none. “drink” and “food” also add a line to your log. ";
   catsWrap.append(cats); form.append(catsWrap);
-  const save = document.createElement("button"); save.className = "btn"; save.type = "submit"; save.textContent = "Save";
-  form.append(save);
+  // Each change saves at once. A Save button at the bottom sat under Safari's toolbar on a phone, and
+  // leaving the page before tapping it lost every value without a word.
+  const state = document.createElement("p"); state.className = "muted"; state.setAttribute("aria-live", "polite");
+  state.textContent = "Changes save automatically.";
+  form.append(state);
   const num = input => input.value.trim() === "" ? null : Number(input.value);
-  form.onsubmit = async event => {
-    event.preventDefault(); save.disabled = true;
+  let saving = Promise.resolve();
+  const saveNow = (quiet = false) => (saving = saving.then(async () => {
     try {
       const categories = {};
       for (const line of cats.value.split("\n").map(l => l.trim()).filter(Boolean)) {
@@ -2645,9 +2648,19 @@ async function renderSignalSettings() {
         enabled: enabled.checked, bigPurchase: num(big), dailyTarget: num(daily), weeklyTarget: num(weekly),
         drinkGoalPerWeek: goal === null ? null : Math.round(goal),
         ignoredCards: cards.value.split(",").map(c => c.trim()).filter(Boolean), categories } } });
-      toast("Saved");
-    } catch (error) { toast(error.message); } finally { save.disabled = false; }
-  };
+      state.textContent = "Saved."; state.classList.remove("err");
+      if (onSaved) await onSaved();
+    } catch (error) {
+      if (error instanceof Locked) throw error;
+      state.textContent = "Not saved: " + error.message; state.classList.add("err");
+      if (!quiet) toast("Not saved: " + error.message);
+    }
+  }));
+  // Typing saves after a short pause too, so switching apps mid-edit keeps the value.
+  let typing = 0;
+  form.addEventListener("input", () => { clearTimeout(typing); typing = setTimeout(() => saveNow(true), 900); });
+  form.addEventListener("change", () => { clearTimeout(typing); saveNow(); });
+  form.onsubmit = event => { event.preventDefault(); saveNow(); };
   const setup = document.createElement("p"); setup.className = "muted";
   setup.innerHTML = 'To set up the Shortcut, get the address and the secret in <a href="#settings/shortcuts">Settings → Shortcuts</a>.';
   const erase = document.createElement("button"); erase.type = "button"; erase.className = "btn quiet"; erase.textContent = "Delete all payments";
@@ -2742,7 +2755,7 @@ const SIGNAL_HELP = {
   "invalid": "To fix: open the Shortcut. In Get Contents of URL, set Request Body to JSON. Make sure kind is payment and amount is Shortcut Input → Amount.",
   "off": "To fix: below, select Count my Apple Pay payments. Then tap Save."
 };
-async function renderSpending() {
+async function renderSpending(refreshOnly = false) {
   const data = await api("/signals/today");
   const money = n => "$" + Number(n).toFixed(2);
   const fmtTime = at => new Intl.DateTimeFormat(undefined, { timeZone: data.timeZone, hour: "numeric", minute: "2-digit" }).format(new Date(at));
@@ -2783,7 +2796,7 @@ async function renderSpending() {
   const chart = trend && peak > 0 ? h`<div class="spend-chart" role="img" aria-label="${"Last 7 days: " + trend.days.map(d => dayName(d.date) + " " + money(d.total)).join(", ") + (t.daily != null ? ". Daily target " + money(t.daily) : "")}">
       ${raw(line)}${raw(trend.days.map((d, i) => h`<div class="spend-day${i === 6 ? " today" : ""}${t.daily != null && d.total > t.daily ? " over" : ""}" title="${dayName(d.date) + " " + money(d.total)}"><span class="spend-val">${d.total ? "$" + Math.round(d.total) : ""}</span><span class="spend-bar" style="height:${Math.max(d.total ? 6 : 2, Math.round(d.total / max * BAR))}px"></span><span class="spend-dlabel">${i === 6 ? "Today" : dayName(d.date).slice(0, 2)}</span></div>`).join(""))}
     </div>` : "";
-  main.innerHTML = h`<section class="today-dashboard promised-today">
+  const top = h`<section class="today-dashboard promised-today">
       <div class="today-top-heading"><h2>Spending</h2></div>
       ${data.enabled ? "" : raw(h`<p class="apple-state warn"><b>Counting is off.</b> To turn it on, select Count my Apple Pay payments below.</p>`)}
       <div class="today-focus-card">
@@ -2796,7 +2809,12 @@ async function renderSpending() {
       ${raw(status)}
       <p class="muted">Daybook counts only Apple Pay payments in stores. It does not count card swipes, online or in-app payments, cash or bills.</p>
     </section>`;
-  try { main.append(await renderSignalSettings()); } catch (error) { console.warn("Signal settings unavailable", error); }
+  // After a settings change, redraw only the chart part so the form keeps its focus and scroll.
+  const current = main.querySelector(".today-dashboard");
+  if (refreshOnly) { if (current) current.outerHTML = top; return; }
+  main.innerHTML = top;
+  try { main.append(await renderSignalSettings(() => main.querySelector("#signals-settings") ? renderSpending(true) : undefined)); }
+  catch (error) { console.warn("Signal settings unavailable", error); }
 }
 
 /* ---------- Router ---------- */
