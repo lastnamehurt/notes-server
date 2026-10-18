@@ -27,8 +27,13 @@
 #
 # Text that includes the path of an existing note is refused as a mistyped command; use note -- <text>.
 #
+# Web app:
+#   note web                         open your app in the browser (needs NOTES_APP_URL)
+#   note web --dev                   run the app from this checkout at https://localhost:8787/app
+#
 # Environment:
 #   NOTES_DIR                        your notes clone (default ~/notes)
+#   NOTES_APP_URL                    your app's address, e.g. https://personal-notes-mcp.<you>.workers.dev
 #   VISUAL, EDITOR                   editor for note edit (default vi on a terminal)
 #
 # Other commands in this repo (not part of note):
@@ -198,6 +203,26 @@ cmd_pick() {
   exec "$SELF" edit "$id"
 }
 
+cmd_web() {
+  local root url
+  if [[ "${1:-}" == "--dev" ]]; then
+    shift
+    [[ $# -eq 0 ]] || { echo "note: web --dev takes no other arguments" >&2; exit 2; }
+    root="$(cd -P "$(dirname "$SELF")/.." && pwd)"
+    [[ -x "$root/node_modules/.bin/wrangler" ]] || { echo "note: run npm ci in $root first" >&2; exit 1; }
+    # HTTPS, because the app's session cookie is Secure and browsers drop it over plain http.
+    echo "Serving the app from $root at https://localhost:8787/app (Ctrl-C stops it; accept the self-signed certificate warning)"
+    cd "$root"
+    exec node_modules/.bin/wrangler dev --local-protocol https
+  fi
+  [[ $# -eq 0 ]] || { echo "note: web takes only --dev" >&2; exit 2; }
+  url="${NOTES_APP_URL:-}"
+  [[ -n "$url" ]] || { echo "note: set NOTES_APP_URL to your app's address, e.g. https://personal-notes-mcp.<you>.workers.dev" >&2; exit 1; }
+  url="${url%/}/app"
+  if command -v open >/dev/null 2>&1; then open "$url"; elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$url"; fi
+  echo "$url"
+}
+
 if [[ $# -eq 0 ]] && is_tty; then set -- pick; fi
 case "${1:-}" in
   ls|list)                     shift; backend ls "$@"; exit $? ;;
@@ -206,6 +231,7 @@ case "${1:-}" in
   edit)                        shift; cmd_edit "$@"; exit $? ;;
   rm|remove|delete|del)        shift; cmd_rm "$@"; exit $? ;;
   pick|browse)                 shift; cmd_pick "$@"; exit $? ;;
+  web)                         shift; cmd_web "$@"; exit $? ;;
 esac
 
 while [[ $# -gt 0 ]]; do

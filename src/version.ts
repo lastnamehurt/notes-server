@@ -1,5 +1,5 @@
 // Version of this app's code. Bump VERSION (YYYY.MM.DD, or YYYY.MM.DD.N for a second change that day) and
 // write a one-line VERSION_NOTE in plain words whenever src/ changes: people's own copies compare against
 // the published value to show "An update is available". CI checks it was bumped.
-export const VERSION = "2026.10.17.7";
-export const VERSION_NOTE = "The MCP server is now named notes instead of personal-notes, so connected assistants show it under that name.";
+export const VERSION = "2026.10.17.8";
+export const VERSION_NOTE = "Signing in to the app works on a local http address; the session cookie is only marked secure over https.";

@@ -56,8 +56,9 @@ function cookie(request: Request, name: string): string {
   return "";
 }
 
-const sessionCookie = (value: string, maxAge: number) =>
-  `${COOKIE}=${encodeURIComponent(value)}; Path=/app; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAge}`;
+// Secure only over https: browsers drop Secure cookies on plain http, which breaks local development.
+const sessionCookie = (value: string, maxAge: number, request: Request) =>
+  `${COOKIE}=${encodeURIComponent(value)}; Path=/app; HttpOnly;${new URL(request.url).protocol === "https:" ? " Secure;" : ""} SameSite=Strict; Max-Age=${maxAge}`;
 
 const HTML_HEADERS = {
   "Content-Type": "text/html; charset=utf-8",
@@ -249,7 +250,7 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
     const problem = await checkPassword(env, key ?? "");
     if (problem) return fail(problem, 401);
     const value = await signSession(env.MCP_BEARER_TOKEN, Date.now() + SESSION_DAYS * 86_400_000);
-    return new Response(null, { status: 204, headers: { "Set-Cookie": sessionCookie(value, SESSION_DAYS * 86_400) } });
+    return new Response(null, { status: 204, headers: { "Set-Cookie": sessionCookie(value, SESSION_DAYS * 86_400, request) } });
   }
   // Sign in with GitHub, as the owner of the notes repository. The token only proves who approved; it is not kept.
   if (path === "/app/login/github/start" && request.method === "POST") {
@@ -278,11 +279,11 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
     }
     const value = await signSession(env.MCP_BEARER_TOKEN, Date.now() + SESSION_DAYS * 86_400_000);
     return new Response(JSON.stringify({ state: "done" }), {
-      headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "Set-Cookie": sessionCookie(value, SESSION_DAYS * 86_400) }
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "Set-Cookie": sessionCookie(value, SESSION_DAYS * 86_400, request) }
     });
   }
   if (path === "/app/logout" && request.method === "POST")
-    return new Response(null, { status: 204, headers: { "Set-Cookie": sessionCookie("", 0) } });
+    return new Response(null, { status: 204, headers: { "Set-Cookie": sessionCookie("", 0, request) } });
 
   if (!path.startsWith("/app/api/")) return fail("Not found", 404);
   if (!(await verifySession(env.MCP_BEARER_TOKEN, cookie(request, COOKIE)))) return fail("Locked", 401);
