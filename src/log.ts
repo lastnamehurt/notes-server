@@ -20,44 +20,19 @@ export function insertLogLine(existing: string | null, date: string, line: strin
 }
 
 
-/**
- * Daily journal is a readable projection of the canonical timestamped log.
- * Generated content is bounded by markers so user-authored reflections survive
- * subsequent log edits and deletes.
- */
+/** Writing about a day lives in journal/daily/YYYY-MM-DD.md, next to that day's log. */
 export const journalPath = (date: string) => "journal/daily/" + date + ".md";
-const JOURNAL_START = "<!-- daybook:activity:start -->";
-const JOURNAL_END = "<!-- daybook:activity:end -->";
 
-export function journalWithActivity(existing: string | null, date: string, logContent: string): string {
-  const activity = logContent.split("\n").filter(line => /^- \d{2}:\d{2} /.test(line));
-  const section = JOURNAL_START + "\n## Activity\n" +
-    (activity.length ? activity.join("\n") + "\n" : "_No activity recorded._\n") +
-    JOURNAL_END;
-  if (existing === null) return "# " + date + "\n\n" + section + "\n";
-  const start = existing.indexOf(JOURNAL_START);
-  const end = existing.indexOf(JOURNAL_END);
-  if (start >= 0 && end > start) {
-    return existing.slice(0, start) + section + existing.slice(end + JOURNAL_END.length);
-  }
-  return existing.trimEnd() + "\n\n" + section + "\n";
+/** The day's own writing: no "# date" heading, and no old copy of the log lines (the retired backfill). */
+export function dayWriting(content: string): string {
+  return content.replace(/<!-- daybook:activity:start -->[\s\S]*?<!-- daybook:activity:end -->/g, "")
+    .replace(/^# \d{4}-\d{2}-\d{2}\s*\n?/, "").trim();
 }
 
-/** Rebuild journal activity from the canonical log; safe to retry after partial failure. */
-export async function syncDailyJournal(notes: Notes, date: string): Promise<void> {
-  const source = await notes.get(logPath(date));
-  const path = journalPath(date);
-  for (let attempt = 0; attempt < 3; attempt++) {
-    let existing: { content: string; sha: string } | null = null;
-    try { existing = await notes.get(path); }
-    catch (e) { if (!(e instanceof Error && e.message.startsWith("Note or notes repository not found"))) throw e; }
-    const next = journalWithActivity(existing?.content ?? null, date, source.content);
-    if (existing?.content === next) return;
-    try { await notes.put(path, next, existing?.sha); return; }
-    catch (e) {
-      if (!(e instanceof Error && e.message.startsWith("GitHub conflict")) || attempt === 2) throw e;
-    }
-  }
+/** A note, or null when it does not exist. */
+export async function maybeNote(notes: Notes, name: string): Promise<{ content: string; sha: string } | null> {
+  try { return await notes.get(name); }
+  catch (e) { if (e instanceof Error && e.message.startsWith("Note or notes repository not found")) return null; throw e; }
 }
 
 export interface LogOptions { date?: string; time?: string; timeZone?: string; now?: number; }
@@ -77,7 +52,6 @@ export async function appendLog(notes: Notes, entry: string, opts: LogOptions = 
     catch (e) { if (!(e instanceof Error && e.message.startsWith("Note or notes repository not found"))) throw e; }
     try {
       await notes.put(name, insertLogLine(existing?.content ?? null, date, line), existing?.sha);
-      await syncDailyJournal(notes, date);
       return { name, line };
     } catch (e) {
       // Concurrent append (e.g. Done button and chat at once): re-read and retry.
@@ -87,7 +61,6 @@ export async function appendLog(notes: Notes, entry: string, opts: LogOptions = 
   throw new Error("unreachable");
 }
 
-/** Daily logs from the last `days` calendar days (including today), newest first. */
 export async function recentLogs(notes: Notes, days: number, timeZone = DEFAULT_TIMEZONE, now = Date.now()): Promise<{ date: string; content: string }[]> {
   const span = Math.max(1, Math.min(Math.floor(days), 90));
   const cutoff = logPath(localStamp(now - (span - 1) * 86_400_000, timeZone).date);
@@ -116,6 +89,5 @@ export async function editLog(notes: Notes, edit: LogEdit): Promise<{ name: stri
     next = insertLogLine(next, edit.date, line);
   }
   await notes.put(name, next, sha);
-  await syncDailyJournal(notes, edit.date);
   return { name, line };
 }
