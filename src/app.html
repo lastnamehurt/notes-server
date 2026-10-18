@@ -543,6 +543,10 @@ button.today-focus-dot:disabled{color:var(--mark)}
 .awareness-card summary { cursor: pointer; min-height: 44px; padding: 9px 0; color: var(--mark); }
 .awareness-muted { color: var(--ink-2); }
 .sc-row { margin: 14px 0; }
+.cli-tools { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--rule); }
+.cli-tools h4 { margin: 0 0 6px; font-size: 15px; }
+.cli-tool { margin: 12px 0; }
+.cli-tool code { overflow-wrap: anywhere; }
 .sc-row h4 { margin: 0 0 6px; font-size: 15px; }
 .sc-row code { overflow-wrap: anywhere; }
 </style>
@@ -1803,17 +1807,31 @@ const connectButtons = mcpUrl => h`<div class="connect-grid">
     <a class="connect-btn" data-connect="chatgpt" href="${CONNECT_TARGETS.chatgpt.url}" target="_blank" rel="noopener"><b>ChatGPT</b><span>Copies your address and opens ChatGPT's plugins</span></a>
     <a class="connect-btn" data-connect="gemini" href="${CONNECT_TARGETS.gemini.url}" target="_blank" rel="noopener"><b>Gemini</b><span>Copies your address and opens Gemini; set up under Connected Apps</span></a>
     <a class="connect-btn" data-connect="cursor" href="${cursorInstallUrl(mcpUrl)}" target="_blank" rel="noopener"><b>Cursor</b><span>Adds Daybook to Cursor in one step</span></a>
-    <button class="connect-btn" data-connect="codex" type="button"><b>Codex</b><span>Copies a setup command for your computer</span></button>
   </div>
-  <p class="muted connect-note">Claude, ChatGPT, Gemini, and Cursor may prompt you to authorize Daybook. Gemini custom apps currently require an eligible personal Google account, US access, and Keep Activity enabled; connect through Gemini web first. For Codex, run the copied command first and complete sign-in when prompted.</p>`;
+  <p class="muted connect-note">Claude, ChatGPT, Gemini, and Cursor may prompt you to authorize Daybook. Gemini custom apps currently require an eligible personal Google account, US access, and Keep Activity enabled; connect through Gemini web first.</p>
+  ${raw(terminalTools(mcpUrl))}`;
+/*
+ * Claude Code and Codex run in a terminal and have no connector screen: one command adds Daybook, a second
+ * signs in. Both identify themselves with a client metadata document, so no registration step is needed.
+ */
+const CLI_TOOLS = [
+  { id: "claude-code", name: "Claude Code", add: url => "claude mcp add --transport http --scope user daybook " + url,
+    signIn: h`Then start <code>claude</code>, type <code>/mcp</code>, pick <b>daybook</b> and choose <b>Authenticate</b>.`,
+    note: "--scope user makes Daybook available in every project." },
+  { id: "codex", name: "Codex CLI", add: url => "codex mcp add daybook --url " + url,
+    signIn: "Then sign in:", login: "codex mcp login daybook" }
+];
+const terminalTools = mcpUrl => h`<div class="cli-tools"><h4>Coding tools in a terminal</h4>
+    <p class="muted">Run the command once on each computer, then sign in. A browser page asks for your Daybook password and says the request <i>redirects to your local computer</i>; that's expected for these tools.</p>
+    ${raw(CLI_TOOLS.map(t => h`<div class="cli-tool"><b>${t.name}</b>
+      <div class="copyrow"><code>${t.add(mcpUrl)}</code><button class="btn quiet" type="button" data-cli-copy="${t.add(mcpUrl)}">Copy</button></div>
+      <p class="muted">${raw(t.signIn)}${t.note ? " " + t.note : ""}</p>
+      ${t.login ? raw(h`<div class="copyrow"><code>${t.login}</code><button class="btn quiet" type="button" data-cli-copy="${t.login}">Copy</button></div>`) : ""}</div>`).join(""))}
+  </div>`;
 /** Copy happens in the same tap as opening the page, so phones allow both. */
 function wireConnectButtons(root, mcpUrl) {
+  root.querySelectorAll("[data-cli-copy]").forEach(b => b.onclick = e => copy(b.dataset.cliCopy, e.target));
   root.querySelectorAll("[data-connect]").forEach(a => a.onclick = () => {
-    if (a.dataset.connect === "codex") {
-      const command = "codex mcp add daybook --url " + mcpUrl;
-      navigator.clipboard.writeText(command).then(() => toast("Codex command copied. Run it in your terminal, then complete sign-in."), () => toast("Copy this command: " + command));
-      return;
-    }
     const target = CONNECT_TARGETS[a.dataset.connect];
     if (!target) return; // Cursor: the link itself does everything
     try { navigator.clipboard.writeText(mcpUrl).then(() => toast(target.toast), () => toast("Copy this address first: " + mcpUrl)); }
@@ -1840,7 +1858,7 @@ const instructionsBlock = () => h`<section class="step" id="use-daybook"><h3>Mak
         <li><b>ChatGPT</b>: <b>Settings → Personalization → Custom instructions</b>.</li>
         <li><b>Claude Code</b>: add it to <code>~/.claude/CLAUDE.md</code> (all projects).</li>
         <li><b>Cursor</b>: <b>Settings → Rules</b>, under your user rules.</li>
-        <li><b>Codex and other coding agents</b>: add it to an <code>AGENTS.md</code> file in your project.</li>
+        <li><b>Codex</b>: add it to <code>~/.codex/AGENTS.md</code> (all projects). Other coding agents: an <code>AGENTS.md</code> file in your project.</li>
       </ul></details></section>`;
 // Copy works wherever the block appears (finish screen, Settings, Connect).
 main.addEventListener("click", e => {
@@ -2314,7 +2332,7 @@ function showDone(mcpUrl) {
     <section class="step ok"><h3><span class="n">✓</span>${cfg.storage === "app" ? "Your notes are saved in this app" : "Notes are saving to your private repository"}</h3>
       ${raw(cfg.push ? `<p>Send yourself a test reminder to check your phone gets it.</p><button class="btn quiet" id="test" type="button">Send test notification</button>` : `<p class="muted">Phone notifications are off. You can turn them on in Settings.</p>`)}</section>
     <section class="step"><h3><span class="n">2</span>Connect your AI assistant</h3>
-      <p>Tap the one you use. Claude, ChatGPT, and Gemini open with your address copied; Cursor installs it directly; Codex copies a setup command.</p>
+      <p>Tap the one you use. Claude, ChatGPT, and Gemini open with your address copied; Cursor installs it directly. For Claude Code and Codex in a terminal, copy the command below.</p>
       ${raw(connectButtons(mcpUrl))}
       <p><a href="#assistants">See all connected assistants →</a></p>
       <div class="copyrow"><code>${mcpUrl}</code><button class="btn quiet" id="copymcp" type="button">Copy</button></div>

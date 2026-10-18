@@ -10,7 +10,8 @@ Status distinguishes confirmed Daybook connections from documented provider supp
 | ChatGPT | Confirmed (ChatGPT Pro, 2026-10-11) | Added as a custom MCP server under Plugins, using OAuth. Requires the `/mcp` address. |
 | Gemini (gemini.google.com) | Documented by Google, not tested; may ask for credentials | Web only to connect. Personal accounts only, 18+, US only, Keep Activity on. See below. |
 | Cursor | Documented by Cursor, not tested end-to-end | Use the Daybook install button or add a remote server to `~/.cursor/mcp.json`. See below. |
-| Codex | Documented setup, not tested end-to-end | Use the Daybook copy-command button or `codex mcp add daybook --url https://your-worker.workers.dev/mcp`. |
+| Claude Code (terminal) | Documented by Anthropic, not tested end-to-end | `claude mcp add --transport http --scope user daybook https://your-worker.workers.dev/mcp`, then `/mcp` → Authenticate. See below. |
+| Codex CLI (terminal) | Documented by OpenAI, not tested end-to-end | `codex mcp add daybook --url https://your-worker.workers.dev/mcp`, then `codex mcp login daybook`. See below. |
 | Microsoft Copilot | Not evaluated | |
 | Perplexity | Not evaluated | |
 
@@ -80,15 +81,30 @@ Known issue: a Cursor forum report says **Connect** does nothing for URL servers
 
 If the install link does not work, use the config-file fallback above.
 
-## Connecting Codex (not yet tested end-to-end)
+## Connecting Claude Code and Codex (terminal)
 
-From a terminal with Codex installed, run:
+Coding tools in a terminal have no connector screen: one command adds Daybook, a second step signs in. Daybook's app shows both commands, filled in with your address, under **Connect an assistant → Coding tools in a terminal**. Run them once on each computer.
+
+Both tools identify themselves to Daybook with an OAuth client metadata document, so Daybook needs no extra registration setting. The sign-in page asks for your Daybook password and says the request **redirects to your local computer**: that's the tool's sign-in listener on `localhost`, and it's expected.
+
+### Claude Code
+
+```sh
+claude mcp add --transport http --scope user daybook https://your-worker.workers.dev/mcp
+```
+
+`--scope user` makes Daybook available in every project (the default, `local`, is only the current folder). Then start `claude`, type `/mcp`, pick **daybook** and choose **Authenticate**; or run `claude mcp login daybook` from the shell. To have Claude Code use Daybook unprompted, add the instruction from **Make your assistant use Daybook** to `~/.claude/CLAUDE.md`.
+
+### Codex CLI
 
 ```sh
 codex mcp add daybook --url https://your-worker.workers.dev/mcp
+codex mcp login daybook
 ```
 
-Replace the example URL with your own Daybook `/mcp` address. Then follow any OAuth login prompt. The installed Daybook app can copy this command for you. Verify by asking Codex to list your Daybook notes.
+The same server also appears in the Codex IDE extension, which shares `~/.codex/config.toml`. For standing instructions, add the snippet to `~/.codex/AGENTS.md`.
+
+Verify either one by asking: *"List my latest Daybook notes."*
 
 ## Sources
 
@@ -97,6 +113,8 @@ Google and OpenAI links below are official documentation; Cursor documentation i
 - [OpenAI: MCP developer docs](https://developers.openai.com/api/docs/mcp) (ChatGPT steps; checked against the live flow)
 - [Gemini Apps Help: connect custom apps](https://support.google.com/gemini/answer/17209137?hl=en) (consumer app)
 - [Cursor docs: MCP](https://cursor.com/docs/mcp)
+- [Claude Code docs: MCP](https://code.claude.com/docs/en/mcp)
+- [Codex docs: MCP](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)
 - [Cursor forum: Connect button does nothing](https://forum.cursor.com/t/remote-mcp-server-connect-button-produces-zero-network-requests-oauth-flow-never-starts/150962)
 - [Codex MCP documentation](https://developers.openai.com/codex/mcp/) (CLI setup)
 - [Google Cloud: custom MCP servers for Gemini Enterprise](https://docs.cloud.google.com/gemini/enterprise/docs/connectors/custom-mcp-server/set-up-custom-mcp-server) (enterprise product, not the consumer app)
