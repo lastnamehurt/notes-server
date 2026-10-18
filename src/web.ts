@@ -1,3 +1,4 @@
+import { localStamp } from "./reminder-parse";
 import { calendarTasks, dayStart, noteRevision, editCalendarTask } from "./calendar";
 import { timedEntry, readSessions, timeSummary } from "./time-tracking";
 import { normalizeLogType, typePath, withLogType, parseLogTypes } from "./log-types";
@@ -27,7 +28,7 @@ import { taskDeferrals } from "./awareness-deferrals";
 import { ensureTaskIds } from "./task-id-assign";
 import { awarenessTasks } from "./awareness-tasks";
 import { VERSION } from "./version";
-import { parsePayment, parsePlaces, tasksForPlaces, parkedMessage } from "./signals";
+import { parsePayment, parsePlaces, tasksForPlaces, parkedMessage, categoryLabel } from "./signals";
 import { buildIcs, parseIcs } from "./ics";
 import { b64url } from "./web-push";
 
@@ -300,6 +301,23 @@ export async function handleApp(request: Request, env: Env): Promise<Response> {
       case "PUT /signals/settings": {
         try { return json(await scheduler(env).setSignalSettings(await request.json())); }
         catch (e) { return fail(e instanceof Error ? e.message : String(e)); }
+      }
+      case "PUT /signals/payment": {
+        const { id, category } = await request.json<{ id?: unknown; category?: unknown }>();
+        if (typeof id !== "string" || !/^[\w-]{8,100}$/.test(id)) return fail("Pick a payment");
+        const kind = categoryLabel(category);
+        try {
+          const r = await scheduler(env).setPaymentKind(id, kind);
+          // Swap the #drink / #food line the old kind added for the new kind's, at the payment's time.
+          if (r.oldLog !== r.newLog && notesConfigured(env)) {
+            const zone = env.NOTES_TIMEZONE || "America/Los_Angeles";
+            const { date, time } = localStamp(r.at, zone);
+            const notes = notesFor(env);
+            if (r.oldLog) await editLog(notes, { date, original: "- " + time + " " + r.oldLog, remove: true }).catch(() => undefined);
+            if (r.newLog) await appendLog(notes, r.newLog, { date, time, timeZone: zone });
+          }
+          return json({ id, category: kind });
+        } catch (e) { return fail(e instanceof Error ? e.message : String(e), 404); }
       }
       case "GET /signals/spend": return json(await scheduler(env).signalSpend());
       case "GET /signals/today": return json(await scheduler(env).signalToday());

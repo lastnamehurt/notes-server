@@ -49,7 +49,9 @@ There are two ways to make the Shortcut. With a Mac, it is faster.
    5. Select **Daybook Tap** from your Shortcuts.
 6. If you have an older Wallet automation for Daybook, delete it. Swipe left on it and tap **Delete**. If you keep two, Daybook counts each payment two times.
 
-The Shortcut finds the kind of place from words in the store's name, for example "espresso" or "tavern". This happens on your iPhone. The kinds are `bar`, `coffee`, `food`, `gas`, `grocery`, `parking` and `other`. The first kind that matches is used. For example, "TeKu Tavern + Cafe" is a `bar`. To change the words, edit the `RULES` list at the top of the script. Then run the script again.
+The Shortcut finds the kind of place from words in the store's name, for example "espresso" or "tavern". This happens on your iPhone. The kinds are `bar`, `coffee`, `food`, `gas`, `grocery`, `parking` and `other`. The first kind that matches is used. For example, "TeKu Tavern + Cafe" is a `bar`. Smoke, vape and cannabis shops are `other`. To change the words, edit the `RULES` list at the top of the script. Then run the script again.
+
+The kind is a guess. If it is wrong, go to **Today → Spending** and tap the payment. Then select the correct kind. Daybook also corrects the `#drink` or `#food` line in your log.
 
 If the script says that signing failed, make sure of these things. Then run the script again.
 

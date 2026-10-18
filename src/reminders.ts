@@ -2,7 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import { AwarenessInbox, type InboxCandidate } from "./awareness-inbox";
 import { threeDeferrals, type DeferralEvidence } from "./awareness-rules";
 import { deadlineSuggestions } from "./awareness-deadlines";
-import { DEFAULT_SIGNAL_SETTINGS, parseSignalSettings, paymentOutcome, spendSummary, spendByKind, spendTrend, type Payment, type SignalSettings, type SpendSummary } from "./signals";
+import { DEFAULT_SIGNAL_SETTINGS, parseSignalSettings, paymentOutcome, paymentLogLine, spendSummary, spendByKind, spendTrend, type Payment, type SignalSettings, type SpendSummary } from "./signals";
 import { AwarenessHistory } from "./awareness-history";
 import { interruptionDecision } from "./awareness-interruption";
 import { DEFAULT_AWARENESS_PREFERENCES, parseAwarenessPreferences, type AwarenessPreferences } from "./awareness-preferences";
@@ -342,11 +342,25 @@ export class ReminderScheduler extends DurableObject<ReminderEnv> {
     const day = localStamp(now, zone).date;
     const ignored = new Set(settings.payment.ignoredCards.map(c => c.toLowerCase()));
     const taps = all.filter(p => localStamp(p.at, zone).date === day).sort((a, b) => b.at - a.at).slice(0, 50)
-      .map(p => ({ at: p.at, amount: p.amount, currency: p.currency, card: p.card, category: p.category, counted: !ignored.has(p.card.toLowerCase()) }));
+      .map(p => ({ id: p.id, at: p.at, amount: p.amount, currency: p.currency, card: p.card, category: p.category, counted: !ignored.has(p.card.toLowerCase()) }));
     return { enabled: settings.payment.enabled, summary: spendSummary(all, settings, now, zone), byKind: spendByKind(all, settings, now, zone), trend: spendTrend(all, settings, now, zone),
       targets: { daily: settings.payment.dailyTarget, weekly: settings.payment.weeklyTarget, drinksPerWeek: settings.payment.drinkGoalPerWeek },
       taps,
       last: (await this.ctx.storage.get("signal:last")) ?? null, timeZone: zone };
+  }
+  /**
+   * Correct the kind of one payment (the Shortcut guesses it from the store's name). Returns the log
+   * lines to swap: the one the old kind added and the one the new kind adds, so the caller fixes the log.
+   */
+  async setPaymentKind(id: string, category: string): Promise<{ at: number; oldLog: string | null; newLog: string | null }> {
+    const key = PAYMENT + id;
+    const payment = await this.ctx.storage.get<Payment>(key);
+    if (!payment) throw new Error("That payment is not in Daybook any more.");
+    const settings = await this.signalSettings();
+    const counted = !settings.payment.ignoredCards.some(c => c.toLowerCase() === payment.card.toLowerCase());
+    const oldLog = counted ? paymentLogLine(payment.category, settings) : null;
+    await this.ctx.storage.put(key, { ...payment, category });
+    return { at: payment.at, oldLog, newLog: counted ? paymentLogLine(category, settings) : null };
   }
   /** The evening briefing's spend line, or null when the payment signal is off. */
   private async briefingSpend(now: number): Promise<{ today: number; count: number; week: number; hidden: boolean } | null> {
