@@ -203,7 +203,8 @@ try {
   // 5. Settings later: checks work when Settings is opened directly
   const later = await ctx.newPage();
   later.on("pageerror", e => errors.push(String(e.stack || e).slice(0, 500)));
-  await later.goto(BASE + "/app#settings");
+  // Settings folds its extras into one-line rows; a link to a row opens it.
+  await later.goto(BASE + "/app#settings/diagnostics");
   await later.waitForSelector("#run-diagnostics");
   await later.click("#run-diagnostics");
   await later.waitForFunction(() => { const o = document.querySelector("#diagnostics-results"); return o && !/Checking/.test(o.textContent) && o.textContent.trim(); });
