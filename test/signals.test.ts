@@ -70,7 +70,7 @@ test("big purchases ask once per payment; amounts stay off the lock screen when 
   const p = pay("1", 150);
   const shown = paymentOutcome(p, [p], on(), zone).suggestions;
   assert.deepEqual(shown.map(s => s.ruleId), ["payment-big-purchase"]);
-  assert.match(shown[0].reason, /\$150 purchase.*\$150 limit/);
+  assert.match(shown[0].reason, /You paid \$150\. Your limit for one payment is \$150\./);
   const hiddenReason = paymentOutcome(p, [p], { ...on(), hideAmounts: true }, zone).suggestions[0].reason;
   assert.doesNotMatch(hiddenReason, /\$/);
   assert.deepEqual(paymentOutcome(pay("2", 149.99), [pay("2", 149.99)], on(), zone).suggestions, []);
@@ -84,7 +84,7 @@ test("the drink goal speaks up past the goal, once per new tab", () => {
   const third = pay("3", 10, "bar");
   const r = paymentOutcome(third, [...tabs, third], settings, zone).suggestions;
   assert.equal(r.length, 1);
-  assert.equal(r[0].reason, "That's 3 bar tabs this week. Your goal is 2.");
+  assert.equal(r[0].reason, "You made 3 bar payments this week. Your limit is 2.");
   assert.equal(r[0].dedupeKey, "payment-drink-goal:2026-10-12:3");
 });
 
@@ -101,8 +101,8 @@ test("the evening briefing adds a spend line; hidden amounts show only the count
   const base = { kind: "evening" as const, notes: [], done: [], now: T, timeZone: zone, preview: "full" as const };
   assert.equal(buildBriefing(base).message, "Nothing to wrap up today.");
   assert.match(buildBriefing({ ...base, spend: { today: 24.5, count: 3, week: 112, hidden: false } }).message, /Spent today: \$24\.50 across 3 · week \$112\.00/);
-  assert.match(buildBriefing({ ...base, spend: { today: 24.5, count: 3, week: 112, hidden: true } }).message, /Spent today: 3 taps$/);
-  assert.equal(buildBriefing({ ...base, preview: "counts", spend: { today: 9, count: 1, week: 9, hidden: false } }).message, "1 tap");
+  assert.match(buildBriefing({ ...base, spend: { today: 24.5, count: 3, week: 112, hidden: true } }).message, /Spent today: 3 payments$/);
+  assert.equal(buildBriefing({ ...base, preview: "counts", spend: { today: 9, count: 1, week: 9, hidden: false } }).message, "1 payment");
   assert.equal(buildBriefing({ ...base, spend: { today: 0, count: 0, week: 0, hidden: false } }).message, "Nothing to wrap up today.");
   assert.equal(buildBriefing({ ...base, kind: "morning", spend: { today: 24.5, count: 3, week: 112, hidden: false } }).message, "Nothing due today.");
 });

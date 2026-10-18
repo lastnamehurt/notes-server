@@ -8,14 +8,14 @@
 # trigger: Automation → + → Wallet → your payment cards → Run Immediately → pick "Daybook Tap".
 set -euo pipefail
 
-command -v shortcuts >/dev/null || { echo "This needs macOS 12 or later (the 'shortcuts' command)."; exit 1; }
+command -v shortcuts >/dev/null || { echo "You need macOS 12 or later. The 'shortcuts' command is not on this Mac."; exit 1; }
 
 URL=${DAYBOOK_URL:-}
 SECRET=${DAYBOOK_SECRET:-}
-[[ -n "$URL" ]] || read -r -p "Tap to pay address from Settings → Shortcuts (ends in /app/shortcuts/signal): " URL
-[[ -n "$SECRET" ]] || { read -r -s -p "Shortcut secret from Settings → Shortcuts (hidden as you type): " SECRET; echo; }
-[[ "$URL" == https://*"/app/shortcuts/signal" ]] || { echo "That address should start with https:// and end with /app/shortcuts/signal"; exit 1; }
-[[ ${#SECRET} -ge 32 ]] || { echo "That secret looks too short (it's at least 32 characters)."; exit 1; }
+[[ -n "$URL" ]] || read -r -p "Paste the Tap to pay address from Daybook → Settings → Shortcuts: " URL
+[[ -n "$SECRET" ]] || { read -r -s -p "Paste the secret from Daybook → Settings → Shortcuts (it does not show): " SECRET; echo; }
+[[ "$URL" == https://*"/app/shortcuts/signal" ]] || { echo "This address is not correct. It must start with https:// and end with /app/shortcuts/signal."; exit 1; }
+[[ ${#SECRET} -ge 32 ]] || { echo "This secret is too short. A secret has 32 or more characters. Copy it again from Settings → Shortcuts."; exit 1; }
 
 # Kinds of place, checked in this order against the merchant's name ON THE IPHONE; only the label is sent.
 # First match wins, so "TeKu Tavern + Cafe" is a bar. Edit or add lines to suit your usual spots
@@ -131,18 +131,18 @@ $(field category "<dict><key>Value</key><dict><key>attachmentsByRange</key><dict
 </array></dict></plist>
 EOF
 
-plutil -lint "$RAW" >/dev/null || { echo "Built an invalid file; please report this."; exit 1; }
+plutil -lint "$RAW" >/dev/null || { echo "The script made a file that is not correct. Please report this problem."; exit 1; }
 if ! shortcuts sign --mode anyone --input "$RAW" --output "$SIGNED" 2>/tmp/daybook-sign.err || [[ ! -s "$SIGNED" ]]; then
-  echo "Signing failed: $(tr '\n' ' ' </tmp/daybook-sign.err)"
-  echo "Signing needs you signed in to iCloud on this Mac, a network connection, and Shortcuts opened once."
-  echo "Check those and run this again. Nothing was installed."
+  echo "Signing did not work: $(tr '\n' ' ' </tmp/daybook-sign.err)"
+  echo "Make sure that you are signed in to iCloud, the Mac is online, and you opened the Shortcuts app one time."
+  echo "Then run this script again. The script did not install anything."
   rm -f /tmp/daybook-sign.err; exit 1
 fi
 rm -f /tmp/daybook-sign.err
 echo
-echo "Done: $SIGNED"
-echo "1. Open it (double-click) and tap Add Shortcut. It syncs to your iPhone through iCloud."
-echo "2. On the iPhone: Shortcuts → Automation → + → Wallet → your payment cards → Run Immediately → Next"
-echo "   → pick \"Daybook Tap\" under My Shortcuts."
-echo "3. Delete any older Wallet automation, so a tap isn't counted twice."
-echo "4. Tap Apple Pay in a store, then check Today → Spending → Shortcut status."
+echo "Done. The script made: $SIGNED"
+echo "1. Double-click the file. Click Add Shortcut. The Shortcut syncs to your iPhone through iCloud."
+echo "2. On your iPhone, open Shortcuts. Tap Automation, then +, then Wallet. Select your payment cards."
+echo "   Select Run Immediately. Tap Next. Select \"Daybook Tap\"."
+echo "3. Delete any older Wallet automation for Daybook. If you keep two, each payment counts two times."
+echo "4. Pay with Apple Pay in a store. Then look at Today → Spending in Daybook."

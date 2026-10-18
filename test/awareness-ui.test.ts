@@ -27,3 +27,8 @@ test("an app left open reloads after a deploy instead of redrawing with old code
   assert.match(web, /case "GET \/config": return json\(\{[\s\S]{0,200}version: VERSION/);
   assert.match(html, /latest\.version !== cfg\.version\) \{ location\.reload\(\)/);
 });
+test("Settings folds the extras into one-line rows and opens the one a link points to", () => {
+  for (const id of ["briefings", "shortcuts", "apple-reminders", "calendar", "updates", "diagnostics"]) assert.match(html, new RegExp('\\["' + id + '", "'));
+  assert.match(html, /foldSettings\(target\)/);
+  assert.match(html, /if \(id === open\) fold\.open = true/);
+});
