@@ -435,7 +435,6 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
 .promised-today .today-spend{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;min-height:44px;padding:12px 16px;margin:0 0 16px;border:1px solid var(--rule);border-radius:14px;background:var(--sheet);color:inherit;text-decoration:none}
 .promised-today .today-spend b{font-size:20px}
 .promised-today .spend-kinds{margin:0 0 12px;font-size:14px;color:var(--ink)}
-.promised-today .spend-week{margin:0 0 8px;font-size:14px}
 .promised-today .spend-ok{margin:4px 2px 12px;font-size:13px;color:var(--ink-2)}
 .promised-today .spend-ok::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:#3fa36b;margin-right:7px;vertical-align:1px}
 .promised-today .spend-chart{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;align-items:end;height:108px;margin:4px 0 12px}
@@ -445,12 +444,16 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
 .promised-today .spend-dlabel{font-size:11px;color:var(--ink-2)}
 .promised-today .spend-val{font-size:10.5px;color:var(--ink-2);font-variant-numeric:tabular-nums;min-height:13px}
 .promised-today .spend-day.today .spend-dlabel{color:var(--ink);font-weight:650}
-.promised-today .spend-meter{margin:0 0 12px}
-.promised-today .spend-meter-top{display:flex;justify-content:space-between;font-size:13px;color:var(--ink-2);margin-bottom:5px}
-.promised-today .spend-meter-track{height:6px;border-radius:99px;background:color-mix(in srgb,var(--ink-2) 18%,transparent);overflow:hidden}
+.promised-today .spend-meters{display:grid;gap:8px;margin:2px 0 14px}
+.promised-today .spend-meter{display:grid;grid-template-columns:44px 1fr;align-items:center;gap:10px}
+.promised-today .spend-meter-label{font-size:12px;color:var(--ink-2)}
+.promised-today .spend-meter-track{height:8px;border-radius:99px;background:color-mix(in srgb,var(--ink-2) 18%,transparent);overflow:hidden}
 .promised-today .spend-meter-track span{display:block;height:100%;border-radius:99px;background:var(--mark)}
 .promised-today .spend-meter.over .spend-meter-track span{background:#d9822b}
-.promised-today .spend-meter.over .spend-meter-top span:last-child{color:#d9822b;font-weight:650}
+.promised-today .spend-chart{position:relative}
+.promised-today .spend-target-line{position:absolute;left:0;right:0;border-top:1.5px dashed color-mix(in srgb,var(--ink-2) 60%,transparent);pointer-events:none}
+.promised-today .spend-day.over .spend-bar{background:color-mix(in srgb,#d9822b 55%,transparent)}
+.promised-today .spend-day.today.over .spend-bar{background:#d9822b}
 .promised-today .today-top-heading a{flex:none;display:inline-flex;align-items:center;min-height:44px;color:var(--mark);font-size:14px;font-weight:600;text-decoration:none}
 .promised-today .today-focus-card{background:var(--sheet);border-radius:20px;padding:16px;border:1px solid var(--rule)}
 .promised-today .today-focus-heading{display:flex;justify-content:space-between;align-items:center;margin:0 0 10px}
@@ -2757,39 +2760,36 @@ async function renderSpending() {
   const taps = data.taps.length
     ? '<ul class="today-focus-list">' + data.taps.map(t => h`<li class="today-focus-row"><div class="today-focus-content"><b>${money(t.amount)}</b> <span class="muted">${t.category === "other" ? "" : t.category.replace(/-/g, " ") + " · "}${t.card}${t.counted ? "" : " · left out"}</span></div><span class="today-focus-priority">${fmtTime(t.at)}</span></li>`).join("") + "</ul>"
     : h`<p class="muted">No payments today.</p>`;
-  // This week, with bar tabs only when there's a goal or a tab, and last week at this same point.
-  const goal = data.targets ? data.targets.drinksPerWeek : null;
-  const weekBits = [money(s.weekTotal) + " this week", s.weekCount + " " + (s.weekCount === 1 ? "payment" : "payments")];
-  if (goal !== null || s.drinksThisWeek) weekBits.push("bar payments " + s.drinksThisWeek + (goal !== null ? " of " + goal : ""));
   const trend = data.trend;
-  const diff = trend ? Math.round((s.weekTotal - trend.lastWeekToDate) * 100) / 100 : 0;
-  const compare = !trend || (!trend.lastWeekToDate && !s.weekTotal) ? ""
-    : !trend.lastWeekToDate ? "Nothing spent by this point last week."
-    : diff === 0 ? "Same as this point last week."
-    : money(Math.abs(diff)) + (diff < 0 ? " less" : " more") + " than this point last week (" + money(trend.lastWeekToDate) + ").";
-  // Seven-day bars, today highlighted; amounts in the accessible label and on hover.
+  // Targets are one list, so more kinds can be added later. Each is a bar with a one-word label;
+  // the amounts are in the bar's accessible label and tooltip, not in page text.
+  const t = data.targets || {};
+  const targetList = [
+    t.daily != null ? { label: "Day", spent: s.today, target: t.daily } : null,
+    t.weekly != null ? { label: "Week", spent: s.weekTotal, target: t.weekly } : null
+  ].filter(Boolean);
+  const meters = targetList.map(m => {
+    const pct = Math.min(100, Math.round(m.spent / m.target * 100));
+    const said = m.label + ": " + money(m.spent) + " of " + money(m.target);
+    return h`<div class="spend-meter${m.spent > m.target ? " over" : ""}" title="${said}"><span class="spend-meter-label">${m.label}</span>
+      <div class="spend-meter-track" role="progressbar" aria-label="${said}" aria-valuemin="0" aria-valuemax="${m.target}" aria-valuenow="${m.spent}"><span style="width:${pct}%"></span></div></div>`;
+  }).join("");
+  // Seven-day bars, today highlighted. A daily target shows as a dashed line across the chart.
   const dayName = date => new Intl.DateTimeFormat(undefined, { weekday: "short", timeZone: "UTC" }).format(new Date(date + "T12:00:00Z"));
-  const max = trend ? Math.max(...trend.days.map(d => d.total), 0) : 0;
-  const chart = trend && max > 0 ? h`<div class="spend-chart" role="img" aria-label="${"Last 7 days: " + trend.days.map(d => dayName(d.date) + " " + money(d.total)).join(", ")}">
-      ${raw(trend.days.map((d, i) => h`<div class="spend-day${i === 6 ? " today" : ""}" title="${dayName(d.date) + " " + money(d.total)}"><span class="spend-val">${d.total ? "$" + Math.round(d.total) : ""}</span><span class="spend-bar" style="height:${Math.max(d.total ? 6 : 2, Math.round(d.total / max * 64))}px"></span><span class="spend-dlabel">${i === 6 ? "Today" : dayName(d.date).slice(0, 2)}</span></div>`).join(""))}
+  const peak = trend ? Math.max(...trend.days.map(d => d.total), 0) : 0;
+  const max = Math.max(peak, t.daily != null && peak > 0 ? t.daily : 0);
+  const BAR = 64;
+  const line = t.daily != null && max > 0 ? h`<span class="spend-target-line" style="bottom:${Math.round(t.daily / max * BAR) + 20}px" title="${"Daily target " + money(t.daily)}"></span>` : "";
+  const chart = trend && peak > 0 ? h`<div class="spend-chart" role="img" aria-label="${"Last 7 days: " + trend.days.map(d => dayName(d.date) + " " + money(d.total)).join(", ") + (t.daily != null ? ". Daily target " + money(t.daily) : "")}">
+      ${raw(line)}${raw(trend.days.map((d, i) => h`<div class="spend-day${i === 6 ? " today" : ""}${t.daily != null && d.total > t.daily ? " over" : ""}" title="${dayName(d.date) + " " + money(d.total)}"><span class="spend-val">${d.total ? "$" + Math.round(d.total) : ""}</span><span class="spend-bar" style="height:${Math.max(d.total ? 6 : 2, Math.round(d.total / max * BAR))}px"></span><span class="spend-dlabel">${i === 6 ? "Today" : dayName(d.date).slice(0, 2)}</span></div>`).join(""))}
     </div>` : "";
-  // Targets as thin progress bars; over target turns the bar to the warning colour.
-  const meter = (label, spent, target) => {
-    const pct = Math.min(100, Math.round(spent / target * 100));
-    return h`<div class="spend-meter${spent > target ? " over" : ""}"><div class="spend-meter-top"><span>${label}</span><span>${money(spent)} of ${money(target)}</span></div>
-      <div class="spend-meter-track" role="progressbar" aria-label="${label}" aria-valuemin="0" aria-valuemax="${target}" aria-valuenow="${spent}"><span style="width:${pct}%"></span></div></div>`;
-  };
-  const targets = data.targets ? [data.targets.daily !== null ? meter("Today's target", s.today, data.targets.daily) : "",
-    data.targets.weekly !== null ? meter("This week's target", s.weekTotal, data.targets.weekly) : ""].join("") : "";
   main.innerHTML = h`<section class="today-dashboard promised-today">
       <div class="today-top-heading"><h2>Spending</h2></div>
       ${data.enabled ? "" : raw(h`<p class="apple-state warn"><b>Counting is off.</b> To turn it on, select Count my Apple Pay payments below.</p>`)}
       <div class="today-focus-card">
         <div class="today-focus-heading"><h3>${money(s.today)} today</h3><span class="muted">${s.todayCount} ${s.todayCount === 1 ? "payment" : "payments"}</span></div>
-        ${raw(targets)}
+        ${meters ? raw(h`<div class="spend-meters">${raw(meters)}</div>`) : ""}
         ${raw(chart)}
-        <p class="muted spend-week">${weekBits.join(" · ")}</p>
-        ${compare ? raw(h`<p class="muted spend-week">${compare}</p>`) : ""}
         ${data.byKind && data.byKind.length > 1 ? raw(h`<p class="spend-kinds">${data.byKind.map(k => k.kind.replace(/-/g, " ") + " " + money(k.total)).join(" · ")}</p>`) : ""}
         ${raw(taps)}
       </div>
