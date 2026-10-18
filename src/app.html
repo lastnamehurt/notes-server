@@ -73,6 +73,8 @@ button { cursor: pointer; }
 [hidden] { display: none !important; }
 
 .shell { max-width: 680px; margin: 0 auto; padding: env(safe-area-inset-top) 20px 0; }
+/* On a phone the page scrolls under the status bar (clock, battery): keep that strip solid so nothing collides. */
+body::before { content: ""; position: fixed; z-index: 30; top: 0; left: 0; right: 0; height: env(safe-area-inset-top); background: var(--paper); pointer-events: none; }
 
 /* Masthead: the date is the title of every page. */
 .mast { padding: 22px 0 14px; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
@@ -432,7 +434,23 @@ details.more summary { min-height: 44px; padding: 10px 0; cursor: pointer; color
 .promised-today .today-top-heading h2{font-size:26px;margin:0}
 .promised-today .today-spend{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;min-height:44px;padding:12px 16px;margin:0 0 16px;border:1px solid var(--rule);border-radius:14px;background:var(--sheet);color:inherit;text-decoration:none}
 .promised-today .today-spend b{font-size:20px}
-.promised-today .spend-kinds{margin:-6px 0 12px;font-size:14px;color:var(--ink)}
+.promised-today .spend-kinds{margin:0 0 12px;font-size:14px;color:var(--ink)}
+.promised-today .spend-week{margin:0 0 8px;font-size:14px}
+.promised-today .spend-ok{margin:4px 2px 12px;font-size:13px;color:var(--ink-2)}
+.promised-today .spend-ok::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:#3fa36b;margin-right:7px;vertical-align:1px}
+.promised-today .spend-chart{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;align-items:end;height:108px;margin:4px 0 12px}
+.promised-today .spend-day{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;height:100%}
+.promised-today .spend-bar{width:100%;max-width:28px;border-radius:5px 5px 2px 2px;background:color-mix(in srgb,var(--mark) 38%,transparent)}
+.promised-today .spend-day.today .spend-bar{background:var(--mark)}
+.promised-today .spend-dlabel{font-size:11px;color:var(--ink-2)}
+.promised-today .spend-val{font-size:10.5px;color:var(--ink-2);font-variant-numeric:tabular-nums;min-height:13px}
+.promised-today .spend-day.today .spend-dlabel{color:var(--ink);font-weight:650}
+.promised-today .spend-meter{margin:0 0 12px}
+.promised-today .spend-meter-top{display:flex;justify-content:space-between;font-size:13px;color:var(--ink-2);margin-bottom:5px}
+.promised-today .spend-meter-track{height:6px;border-radius:99px;background:color-mix(in srgb,var(--ink-2) 18%,transparent);overflow:hidden}
+.promised-today .spend-meter-track span{display:block;height:100%;border-radius:99px;background:var(--mark)}
+.promised-today .spend-meter.over .spend-meter-track span{background:#d9822b}
+.promised-today .spend-meter.over .spend-meter-top span:last-child{color:#d9822b;font-weight:650}
 .promised-today .today-top-heading a{flex:none;display:inline-flex;align-items:center;min-height:44px;color:var(--mark);font-size:14px;font-weight:600;text-decoration:none}
 .promised-today .today-focus-card{background:var(--sheet);border-radius:20px;padding:16px;border:1px solid var(--rule)}
 .promised-today .today-focus-heading{display:flex;justify-content:space-between;align-items:center;margin:0 0 10px}
@@ -2514,9 +2532,9 @@ async function renderSignalSettings() {
   const heading = document.createElement("h3"); heading.textContent = "Signals: tap to pay and parked";
   const description = document.createElement("p");
   description.textContent = "Off by default. An iPhone Shortcut tells Daybook when you tap Apple Pay: the amount, the card and the kind of place. Never the store's name or where you are.";
-  const totals = document.createElement("p"); totals.className = "awareness-muted"; totals.id = "signals-totals";
+
   const money = n => "$" + Number(n).toFixed(2);
-  totals.textContent = `Today ${money(spend.today)} across ${spend.todayCount} · this week ${money(spend.weekTotal)} · bar tabs this week ${spend.drinksThisWeek}`;
+
   const form = document.createElement("form");
   const row = (label, input) => {
     const wrap = document.createElement("label"); wrap.style.display = "block"; wrap.style.margin = "12px 0"; wrap.style.minHeight = "44px";
@@ -2565,10 +2583,10 @@ async function renderSignalSettings() {
   const erase = document.createElement("button"); erase.type = "button"; erase.className = "btn quiet"; erase.textContent = "Erase stored taps";
   erase.onclick = async () => {
     if (!confirm("Erase every stored tap? Totals start again from zero.")) return;
-    try { const r = await api("/signals/erase", { method: "POST", body: {} }); toast(`Erased ${r.deleted} taps`); totals.textContent = "Today $0.00 across 0 · this week $0.00 · bar tabs this week 0"; }
+    try { const r = await api("/signals/erase", { method: "POST", body: {} }); toast(`Erased ${r.deleted} taps`); route(); }
     catch (error) { toast(error.message); }
   };
-  section.append(heading, description, totals, form, setup, erase);
+  section.append(heading, description, form, setup, erase);
   return section;
 }
 
@@ -2661,25 +2679,55 @@ async function renderSpending() {
   const fmtWhen = at => new Intl.DateTimeFormat(undefined, { timeZone: data.timeZone, weekday: "short", hour: "numeric", minute: "2-digit" }).format(new Date(at));
   const s = data.summary;
   const last = data.last;
-  const lastLine = !last ? h`<p class="muted">No tap has reached Daybook yet. After your next Apple Pay tap, this shows whether it arrived.</p>`
-    : last.outcome === "recorded" || last.outcome === "duplicate"
-      ? h`<p class="apple-state ok"><b>Last tap arrived ${fmtWhen(last.at)}.</b> ${last.detail}</p>`
-      : h`<p class="apple-state warn"><b>Last attempt ${fmtWhen(last.at)} didn't count.</b> ${last.detail}</p>
-         <p class="muted">${SIGNAL_HELP[last.outcome] || ""}${last.fields && last.fields.length ? " Fields received: " + last.fields.join(", ") + "." : ""}</p>`;
+  const ok = last && (last.outcome === "recorded" || last.outcome === "duplicate");
+  // All good: one quiet line. Something wrong (or nothing yet): the full box with what to fix.
+  const status = ok
+    ? h`<p class="spend-ok">Shortcut working · last tap ${fmtWhen(last.at)}</p>`
+    : h`<div class="today-focus-card"><div class="today-focus-heading"><h3>Shortcut status</h3></div>${raw(!last
+        ? h`<p class="muted">No tap has reached Daybook yet. After your next Apple Pay tap, this shows whether it arrived.</p>`
+        : h`<p class="apple-state warn"><b>Last attempt ${fmtWhen(last.at)} didn't count.</b> ${last.detail}</p>
+            <p class="muted">${SIGNAL_HELP[last.outcome] || ""}${last.fields && last.fields.length ? " Fields received: " + last.fields.join(", ") + "." : ""}</p>`)}</div>`;
   const taps = data.taps.length
     ? '<ul class="today-focus-list">' + data.taps.map(t => h`<li class="today-focus-row"><div class="today-focus-content"><b>${money(t.amount)}</b> <span class="muted">${t.category === "other" ? "" : t.category.replace(/-/g, " ") + " · "}${t.card}${t.counted ? "" : " · left out"}</span></div><span class="today-focus-priority">${fmtTime(t.at)}</span></li>`).join("") + "</ul>"
     : h`<p class="muted">No taps today yet.</p>`;
+  // This week, with bar tabs only when there's a goal or a tab, and last week at this same point.
+  const goal = data.targets ? data.targets.drinksPerWeek : null;
+  const weekBits = [money(s.weekTotal) + " this week", s.weekCount + " " + (s.weekCount === 1 ? "tap" : "taps")];
+  if (goal !== null || s.drinksThisWeek) weekBits.push("bar tabs " + s.drinksThisWeek + (goal !== null ? " of " + goal : ""));
+  const trend = data.trend;
+  const diff = trend ? Math.round((s.weekTotal - trend.lastWeekToDate) * 100) / 100 : 0;
+  const compare = !trend || (!trend.lastWeekToDate && !s.weekTotal) ? ""
+    : !trend.lastWeekToDate ? "Nothing spent by this point last week."
+    : diff === 0 ? "Same as this point last week."
+    : money(Math.abs(diff)) + (diff < 0 ? " less" : " more") + " than this point last week (" + money(trend.lastWeekToDate) + ").";
+  // Seven-day bars, today highlighted; amounts in the accessible label and on hover.
+  const dayName = date => new Intl.DateTimeFormat(undefined, { weekday: "short", timeZone: "UTC" }).format(new Date(date + "T12:00:00Z"));
+  const max = trend ? Math.max(...trend.days.map(d => d.total), 0) : 0;
+  const chart = trend && max > 0 ? h`<div class="spend-chart" role="img" aria-label="${"Last 7 days: " + trend.days.map(d => dayName(d.date) + " " + money(d.total)).join(", ")}">
+      ${raw(trend.days.map((d, i) => h`<div class="spend-day${i === 6 ? " today" : ""}" title="${dayName(d.date) + " " + money(d.total)}"><span class="spend-val">${d.total ? "$" + Math.round(d.total) : ""}</span><span class="spend-bar" style="height:${Math.max(d.total ? 6 : 2, Math.round(d.total / max * 64))}px"></span><span class="spend-dlabel">${i === 6 ? "Today" : dayName(d.date).slice(0, 2)}</span></div>`).join(""))}
+    </div>` : "";
+  // Targets as thin progress bars; over target turns the bar to the warning colour.
+  const meter = (label, spent, target) => {
+    const pct = Math.min(100, Math.round(spent / target * 100));
+    return h`<div class="spend-meter${spent > target ? " over" : ""}"><div class="spend-meter-top"><span>${label}</span><span>${money(spent)} of ${money(target)}</span></div>
+      <div class="spend-meter-track" role="progressbar" aria-label="${label}" aria-valuemin="0" aria-valuemax="${target}" aria-valuenow="${spent}"><span style="width:${pct}%"></span></div></div>`;
+  };
+  const targets = data.targets ? [data.targets.daily !== null ? meter("Today's target", s.today, data.targets.daily) : "",
+    data.targets.weekly !== null ? meter("This week's target", s.weekTotal, data.targets.weekly) : ""].join("") : "";
   main.innerHTML = h`<section class="today-dashboard promised-today">
       <div class="today-top-heading"><h2>Spending</h2></div>
       ${data.enabled ? "" : raw(h`<p class="apple-state warn"><b>Tap-to-pay signal is off.</b> Turn it on in the settings below.</p>`)}
       <div class="today-focus-card">
         <div class="today-focus-heading"><h3>${money(s.today)} today</h3><span class="muted">${s.todayCount} ${s.todayCount === 1 ? "tap" : "taps"}</span></div>
-        <p class="muted" style="margin:0 0 12px">This week ${money(s.weekTotal)} · ${s.weekCount} ${s.weekCount === 1 ? "tap" : "taps"} · bar tabs ${s.drinksThisWeek}</p>
-        ${data.byKind && data.byKind.length ? raw(h`<p class="spend-kinds">${data.byKind.map(k => (k.kind === "other" ? "other" : k.kind.replace(/-/g, " ")) + " " + money(k.total)).join(" · ")}</p>`) : ""}
+        ${raw(targets)}
+        ${raw(chart)}
+        <p class="muted spend-week">${weekBits.join(" · ")}</p>
+        ${compare ? raw(h`<p class="muted spend-week">${compare}</p>`) : ""}
+        ${data.byKind && data.byKind.length > 1 ? raw(h`<p class="spend-kinds">${data.byKind.map(k => k.kind.replace(/-/g, " ") + " " + money(k.total)).join(" · ")}</p>`) : ""}
         ${raw(taps)}
       </div>
-      <div class="today-focus-card"><div class="today-focus-heading"><h3>Shortcut status</h3></div>${raw(lastLine)}</div>
-      <p class="muted">Counts Apple Pay taps only: not card swipes, online purchases, cash or scheduled bills.</p>
+      ${raw(status)}
+      <p class="muted">Counts Apple Pay taps in stores only: not card swipes, online or in-app purchases, cash or scheduled bills.</p>
     </section>`;
   try { main.append(await renderSignalSettings()); } catch (error) { console.warn("Signal settings unavailable", error); }
 }

@@ -231,3 +231,30 @@ export function spendByKind(payments: readonly Payment[], settings: SignalSettin
   return [...kinds].map(([kind, k]) => ({ kind, total: Math.round(k.total * 100) / 100, count: k.count }))
     .sort((a, b) => b.total - a.total || a.kind.localeCompare(b.kind));
 }
+
+export interface SpendTrend {
+  /** The last seven local days, oldest first, ending today. */
+  days: { date: string; total: number }[];
+  /** Counted spending from the start of last week up to this moment's weekday and time, a week ago. */
+  lastWeekToDate: number;
+}
+
+/** A seven-day trend and last week's total at the same point, for the Spending page. */
+export function spendTrend(payments: readonly Payment[], settings: SignalSettings, now: number, timeZone: string): SpendTrend {
+  const ignored = new Set(settings.payment.ignoredCards.map(c => c.toLowerCase()));
+  const counted = payments.filter(p => !ignored.has(p.card.toLowerCase()) && p.currency === "USD");
+  const byDate = new Map<string, number>();
+  for (const p of counted) { const d = dayAndWeek(p.at, timeZone).date; byDate.set(d, (byDate.get(d) ?? 0) + p.amount); }
+  const today = dayAndWeek(now, timeZone).date;
+  const days: SpendTrend["days"] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() - i);
+    const date = d.toISOString().slice(0, 10);
+    days.push({ date, total: Math.round((byDate.get(date) ?? 0) * 100) / 100 });
+  }
+  const aWeekAgo = now - 7 * 86_400_000;
+  const lastWeek = dayAndWeek(aWeekAgo, timeZone).week;
+  const lastWeekToDate = counted.filter(p => p.at <= aWeekAgo && dayAndWeek(p.at, timeZone).week === lastWeek)
+    .reduce((sum, p) => sum + p.amount, 0);
+  return { days, lastWeekToDate: Math.round(lastWeekToDate * 100) / 100 };
+}

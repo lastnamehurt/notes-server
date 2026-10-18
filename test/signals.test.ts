@@ -4,7 +4,7 @@ import { parseReminders } from "../src/reminder-parse.ts";
 import assert from "node:assert/strict";
 import {
   DEFAULT_SIGNAL_SETTINGS, parseSignalSettings, parsePlaces, tasksForPlaces, parkedMessage, parsePayment, parseAmount, categoryLabel,
-  dayAndWeek, spendSummary, spendByKind, paymentOutcome, type Payment, type SignalSettings
+  dayAndWeek, spendSummary, spendByKind, spendTrend, paymentOutcome, type Payment, type SignalSettings
 } from "../src/signals.ts";
 
 const zone = "America/Los_Angeles";
@@ -150,4 +150,15 @@ test("the new kinds count as spending only by default", () => {
   for (const kind of ["gas", "grocery", "parking"]) assert.equal(DEFAULT_SIGNAL_SETTINGS.payment.categories[kind], "none");
   assert.equal(DEFAULT_SIGNAL_SETTINGS.payment.categories.food, "food");
   assert.equal(paymentOutcome(pay("1", 40, "gas"), [pay("1", 40, "gas")], on({ bigPurchase: null }), zone).log, null);
+});
+
+test("seven-day trend ends today, and last week is compared up to the same moment", () => {
+  const day = 86_400_000;
+  const stored = [pay("1", 10), pay("2", 5, "coffee", T - day), pay("3", 7, "coffee", T - 6 * day),
+    pay("4", 20, "gas", T - 7 * day), pay("5", 99, "gas", T - 7 * day + 3600_000), pay("6", 30, "food", T - 9 * day), pay("7", 50, "x", T, "Work")];
+  const t = spendTrend(stored, on({ ignoredCards: ["work"] }), T, zone);
+  assert.deepEqual(t.days.map(d => d.date), ["2026-10-09","2026-10-10","2026-10-11","2026-10-12","2026-10-13","2026-10-14","2026-10-15"]);
+  assert.deepEqual(t.days.map(d => d.total), [7, 0, 0, 0, 0, 5, 10]);
+  // Last week (Mon Oct 5 to now-7d, Thu Oct 8 18:00): $20 at that moment and $30 on Tue; the $99 an hour later doesn't count yet.
+  assert.equal(t.lastWeekToDate, 50);
 });
