@@ -543,6 +543,13 @@ button.today-focus-dot:disabled{color:var(--mark)}
 .awareness-card summary { cursor: pointer; min-height: 44px; padding: 9px 0; color: var(--mark); }
 .awareness-muted { color: var(--ink-2); }
 .sc-row { margin: 14px 0; }
+details.fold > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: center; min-height: 44px; }
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary::after { content: "›"; grid-row: 1 / span 2; grid-column: 2; font-size: 22px; color: var(--ink-2); transition: transform .15s ease; }
+details.fold[open] > summary::after { transform: rotate(90deg); }
+details.fold[open] > summary { margin-bottom: 10px; }
+.fold-title { font-weight: 650; font-size: 17px; }
+.fold-hint { grid-column: 1; font-size: 13px; color: var(--ink-2); }
 .cli-tools { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--rule); }
 .cli-tools h4 { margin: 0 0 6px; font-size: 15px; }
 .cli-tool { margin: 12px 0; }
@@ -1900,8 +1907,41 @@ const TAP_SCRIPT = "https://github.com/lastnamehurt/notes-server/blob/main/scrip
 /** Links inside Settings that scroll to another section (the router would otherwise jump to the top). */
 function wireJumps(root) {
   root.querySelectorAll("[data-jump]").forEach(a => a.onclick = e => {
-    e.preventDefault(); document.getElementById(a.dataset.jump)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    e.preventDefault();
+    const to = document.getElementById(a.dataset.jump);
+    if (to?.tagName === "DETAILS") to.open = true;
+    to?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
+}
+
+/*
+ * Settings opens with the everyday settings (name, notes, time zone, phone reminders, assistants) and folds
+ * the rest into one-line rows that expand in place, so the page reads as a short list.
+ */
+const SETTINGS_FOLDS = [
+  ["briefings", "A push each morning and evening with what's due"],
+  ["shortcuts", "Address and secret for your iPhone Shortcuts"],
+  ["apple-reminders", "See and check off tasks in the Reminders app"],
+  ["calendar", "Show events here, or tasks in your calendar app"],
+  ["updates", "Your Daybook version"],
+  ["diagnostics", "Check that notes, sign-in and notifications work"]
+];
+function foldSettings(open) {
+  for (const [id, hint] of SETTINGS_FOLDS) {
+    const section = document.getElementById(id);
+    if (!section || section.tagName !== "SECTION") continue;
+    const fold = document.createElement("details");
+    fold.className = "step fold"; fold.id = id;
+    const summary = document.createElement("summary");
+    const heading = section.querySelector("h3");
+    const title = document.createElement("span"); title.className = "fold-title"; title.textContent = heading ? heading.textContent : id;
+    const sub = document.createElement("span"); sub.className = "fold-hint"; sub.textContent = hint;
+    summary.append(title, sub);
+    heading?.remove();
+    fold.append(summary, ...section.childNodes);
+    section.replaceWith(fold);
+    if (id === open) fold.open = true;
+  }
 }
 
 /**
@@ -2140,6 +2180,7 @@ views.setup = async () => {
       <select id="tz">${raw(zones().map(z => h`<option ${z === tz ? "selected" : ""}>${z}</option>`).join(""))}</select></section>
 
     <section class="step" id="s4"><h3><span class="n">${n.push}</span>Phone reminders (optional)</h3>
+      ${raw(first ? "" : '<p class="muted">Dated tasks notify this phone on their own. Apple Reminders and Shortcuts below are extras, not needed for this.</p>')}
       ${raw(first
         ? `<p class="skip-note"><b>Not now?</b> Skip this and tap <b>Save and finish</b>. Notes, logs and tasks all work without it, and you can turn reminders on any time in Settings.</p>`
         : "")}
@@ -2158,7 +2199,7 @@ views.setup = async () => {
       <div id="shortcuts-body" aria-live="polite"><p class="muted">Loading…</p></div>
       </section>`)}
 
-    ${raw(first ? "" : `<section class="step" id="apple-reminders"><h3>Apple Reminders</h3>
+    ${raw(first ? "" : `<section class="step" id="apple-reminders"><h3>Apple Reminders (optional)</h3>
       <p class="muted">Your dated and prioritized tasks appear in a <b>Daybook</b> list in Reminders. Check them off on your phone, Watch or with Siri, and Daybook follows. Reminders handles the alerts, so they stay on your lock screen until you deal with them.</p>
       <div id="apple-status" aria-live="polite"><p class="muted">Checking…</p></div>
       </section>`)}
@@ -2283,6 +2324,7 @@ views.setup = async () => {
     // Settings is one list, so its section numbers only make sense during first-time setup.
     main.querySelectorAll(".setup h3 .n").forEach(n => n.remove());
     const target = decodeURIComponent(location.hash.slice(1)).split("/")[1];
+    foldSettings(target);
     if (target) setTimeout(() => document.getElementById(target)?.scrollIntoView({ block: "start" }), 50);
   }
   if (!first) loadUpdate().then(u => {
@@ -2290,6 +2332,13 @@ views.setup = async () => {
     box.innerHTML = u.available
       ? h`<p><b>Version ${u.latest} is available</b> (you have ${u.current}). ${u.note || ""}</p><p class="muted">Updating takes one tap and about three minutes. Your notes aren't touched.</p><div class="update-actions">${raw(updateLink(u))}</div>`
       : h`<p>You're up to date${u.current ? " (version " + u.current + ")" : ""}.</p>`;
+    // An update is worth seeing without opening the row.
+    const fold = $("#updates");
+    if (fold && fold.tagName === "DETAILS") {
+      if (u.available) fold.open = true;
+      const hint = fold.querySelector(".fold-hint");
+      if (hint) hint.textContent = u.available ? "Version " + u.latest + " is available" : "Up to date" + (u.current ? " · " + u.current : "");
+    }
   });
   loadBriefings();
   if ($("#copytopic")) $("#copytopic").onclick = e => copy(topic, e.target);
